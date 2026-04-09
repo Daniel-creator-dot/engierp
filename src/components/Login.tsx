@@ -40,7 +40,7 @@ export default function Login() {
             <Briefcase className="text-white w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-2xl font-bold tracking-tight text-[#141414]">EngiERP Portal</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight text-[#141414]">bytzforge Portal</CardTitle>
             <CardDescription className="text-[#8E9299]">
               Enter your credentials to access the terminal.
             </CardDescription>
@@ -55,7 +55,7 @@ export default function Login() {
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299] group-focus-within:text-blue-600 transition-colors" />
                 <Input 
                   type="email" 
-                  placeholder="admin@engierp.com" 
+                  placeholder="admin@bytzforge.com" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required 
