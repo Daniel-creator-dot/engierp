@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import db from './db';
 import authRoutes from './routes/auth';
 import hrRoutes from './routes/hr';
 import accountingRoutes from './routes/accounting';
@@ -35,8 +36,31 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Auto-run migrations and seed on startup
+async function bootstrap() {
+  try {
+    console.log('⏳ Running database migrations...');
+    await db.migrate.latest();
+    console.log('✅ Migrations complete.');
+
+    // Check if seed data exists (don't re-seed if users already exist)
+    const existingUsers = await db('users').count('id as count').first();
+    if (!existingUsers || Number(existingUsers.count) === 0) {
+      console.log('⏳ Seeding initial data...');
+      await db.seed.run();
+      console.log('✅ Seed data inserted.');
+    } else {
+      console.log('ℹ️  Seed skipped — data already exists.');
+    }
+  } catch (error) {
+    console.error('❌ Bootstrap error:', error);
+  }
+}
+
+bootstrap().then(() => {
+  app.listen(port, () => {
+    console.log(`🚀 Server running on port ${port}`);
+  });
 });
 
 export default app;
