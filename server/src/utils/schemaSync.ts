@@ -26,6 +26,12 @@ const DESIRED_SCHEMA: TableDefinition[] = [
       { name: 'detailed_deductions', type: 'text', nullable: true }, // JSON as text
     ],
   },
+  {
+    tableName: 'sms_configurations',
+    columns: [
+      { name: 'api_url', type: 'string', nullable: true },
+    ],
+  },
 ];
 
 export async function syncSchema(db: Knex) {

@@ -93,7 +93,7 @@ router.get('/sms', authenticateToken, authorizeRole(['admin']), async (req, res)
 
 router.post('/sms', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const { provider, api_key, api_secret, sender_id } = req.body;
+    const { provider, api_key, api_secret, sender_id, api_url } = req.body;
     const existing = await db('sms_configurations').first();
 
     if (existing) {
@@ -102,6 +102,7 @@ router.post('/sms', authenticateToken, authorizeRole(['admin']), async (req, res
         api_key,
         api_secret,
         sender_id,
+        api_url,
         updated_at: db.fn.now()
       });
     } else {
@@ -109,7 +110,8 @@ router.post('/sms', authenticateToken, authorizeRole(['admin']), async (req, res
         provider,
         api_key,
         api_secret,
-        sender_id
+        sender_id,
+        api_url
       });
     }
     res.json({ message: 'SMS configuration updated' });

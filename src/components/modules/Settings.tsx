@@ -68,7 +68,8 @@ export default function Settings() {
     provider: 'Hubtel',
     api_key: '',
     api_secret: '',
-    sender_id: ''
+    sender_id: '',
+    api_url: ''
   });
   const [payrollConfig, setPayrollConfig] = useState<any>({
     ssnit_employee: '5.5',
@@ -453,6 +454,7 @@ export default function Settings() {
                   <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                   <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>
+                <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://api.yourprovider.com/v1" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 <div className="space-y-2"><Label>API Key</Label><Input value={smsConfig.api_key} onChange={(e) => setSmsConfig({...smsConfig, api_key: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 <div className="space-y-2"><Label>API Secret</Label><Input value={smsConfig.api_secret} onChange={(e) => setSmsConfig({...smsConfig, api_secret: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
               </CardContent>
