@@ -140,7 +140,7 @@ export default function Login() {
                 <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Phone Number</Label>
                 <div className="relative"><Smartphone className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="text" placeholder="+233..." value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
-              <Button type="submit" className="w-full h-12 bg-blue-600 text-white rounded-xl font-bold" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Send Reset Code'}</Button>
+              <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Send Reset Code'}</Button>
             </form>
           )}
 
@@ -153,7 +153,7 @@ export default function Login() {
                 <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">6-Digit Code</Label>
                 <div className="relative"><KeyRound className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="text" maxLength={6} placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl text-center tracking-[1em] font-black" /></div>
               </div>
-              <Button type="submit" className="w-full h-12 bg-blue-600 text-white rounded-xl font-bold">Verify Code</Button>
+              <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all">Verify Code</Button>
               <button type="button" onClick={() => setMode('forgot_phone')} className="w-full text-sm font-bold text-[#8E9299] hover:text-[#141414]">Try a different number</button>
             </form>
           )}
@@ -184,7 +184,7 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full h-12 bg-green-600 text-white rounded-xl font-bold" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Update Password'}</Button>
+              <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Update Password'}</Button>
             </form>
           )}
 
