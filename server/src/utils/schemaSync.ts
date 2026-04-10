@@ -20,6 +20,12 @@ const DESIRED_SCHEMA: TableDefinition[] = [
       { name: 'address', type: 'text', nullable: true },
     ],
   },
+  {
+    tableName: 'payroll',
+    columns: [
+      { name: 'detailed_deductions', type: 'text', nullable: true }, // JSON as text
+    ],
+  },
 ];
 
 export async function syncSchema(db: Knex) {

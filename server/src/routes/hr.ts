@@ -122,7 +122,7 @@ router.get('/payroll', authenticateToken, async (req: AuthRequest, res) => {
 // POST to process payroll (Admin/HR/Accountant only)
 router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req, res) => {
   try {
-    const { employee_id, month, year, base_salary, allowances, deductions } = req.body;
+    const { employee_id, month, year, base_salary, allowances, deductions, detailed_deductions } = req.body;
     
     const net_pay = Number(base_salary) + Number(allowances || 0) - Number(deductions || 0);
     
@@ -133,6 +133,7 @@ router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'a
       base_salary,
       allowances,
       deductions,
+      detailed_deductions: detailed_deductions ? JSON.stringify(detailed_deductions) : null,
       net_pay,
       status: 'Paid',
       paid_at: db.fn.now()

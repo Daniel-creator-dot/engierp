@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import LogoImg from './thisone.png';
 import { Module, ParentModule } from './types';
 import { Button } from './components/ui/button';
 import { ScrollArea } from './components/ui/scroll-area';
@@ -60,7 +61,7 @@ import Login from './components/Login';
 export default function App() {
   const { user, loading, logout } = useAuth();
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set(['accounting', 'hr', 'projects', 'procurement']));
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   if (loading) {
@@ -198,8 +199,8 @@ export default function App() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-[#1e293b] text-white">
       <div className="p-6 flex items-center gap-3">
-        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
-          <Briefcase className="text-[#141414] w-5 h-5" />
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10">
+          <img src={LogoImg} className="w-full h-full object-cover" alt="Logo" />
         </div>
         <span className="font-bold text-xl tracking-tight truncate">bytzforge</span>
       </div>
@@ -288,8 +289,8 @@ export default function App() {
         } bg-[#141414] text-white transition-all duration-300 hidden lg:flex flex-col z-50`}
       >
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shrink-0">
-            <Briefcase className="text-[#141414] w-5 h-5" />
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10">
+            <img src={LogoImg} className="w-full h-full object-cover" alt="Logo" />
           </div>
           {isSidebarOpen && <span className="font-bold text-xl tracking-tight truncate">bytzforge</span>}
         </div>

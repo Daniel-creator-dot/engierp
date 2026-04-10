@@ -80,6 +80,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
+  const [isIndividualPayrollOpen, setIsIndividualPayrollOpen] = useState(false);
+  const [payrollData, setPayrollData] = useState<any>({
+    base_salary: 0,
+    allowances: 0,
+    deductions: [] as { type: string, amount: number }[],
+    month: new Date().toLocaleString('default', { month: 'long' }),
+    year: 2026
+  });
 
   const togglePeriod = (period: string) => {
     setExpandedPeriods(prev => ({ ...prev, [period]: !prev[period] }));
@@ -244,6 +252,30 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     }
   };
 
+  const handleIndividualPayroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployee) return;
+    
+    const totalDeductions = payrollData.deductions.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    
+    try {
+      await hrApi.processPayroll({
+        employee_id: selectedEmployee.id,
+        month: payrollData.month,
+        year: payrollData.year,
+        base_salary: payrollData.base_salary,
+        allowances: payrollData.allowances,
+        deductions: totalDeductions,
+        detailed_deductions: payrollData.deductions
+      });
+      toast.success(`Payroll processed for ${selectedEmployee.name}`);
+      setIsIndividualPayrollOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to process payroll');
+    }
+  };
+
   const handlePrintDocument = (title: string, content: string) => {
     const getSetting = (key: string) => companySettings.find((s: any) => s.key === key)?.value || '';
     const logo = getSetting('company_logo');
@@ -343,7 +375,10 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <TableCell className="font-bold">{e.name}</TableCell>
                       <TableCell>{e.department} / {e.role}</TableCell>
                       <TableCell><Badge className={e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>{e.status}</Badge></TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setPayrollData({...payrollData, base_salary: e.salary}); setIsIndividualPayrollOpen(true); }} className="h-8 px-2 rounded-xl hover:bg-green-50 text-green-600 gap-1 mr-2">
+                          <CreditCard className="w-3.5 h-3.5" /> Pay
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsEditEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
@@ -385,6 +420,78 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       </div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold">COMMIT UPDATES</Button></DialogFooter>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isIndividualPayrollOpen} onOpenChange={setIsIndividualPayrollOpen}>
+              <DialogContent className="max-w-xl">
+                {selectedEmployee && (
+                  <form onSubmit={handleIndividualPayroll}>
+                    <DialogHeader>
+                      <DialogTitle>Process Payroll: {selectedEmployee.name}</DialogTitle>
+                      <DialogDescription>Enter monthly earnings and detailed deductions.</DialogDescription>
+                    </DialogHeader>
+                    <div className="p-4 space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Month</Label>
+                          <Select value={payrollData.month} onValueChange={(v) => setPayrollData({...payrollData, month: v})}>
+                            <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue /></SelectTrigger>
+                            <SelectContent>{['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2"><Label>Year</Label><Input type="number" value={payrollData.year} onChange={(e) => setPayrollData({...payrollData, year: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Base Salary (GH₵)</Label><Input type="number" value={payrollData.base_salary} onChange={(e) => setPayrollData({...payrollData, base_salary: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                        <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-bold">Staff Deductions</Label>
+                          <Button type="button" variant="outline" size="sm" className="h-7 rounded-lg" onClick={() => setPayrollData({...payrollData, deductions: [...payrollData.deductions, { type: 'Loan', amount: 0 }]})}>
+                            <Plus className="w-3 h-3 mr-1" /> Add Item
+                          </Button>
+                        </div>
+                        {payrollData.deductions.map((d: any, i: number) => {
+                          const config = companySettings.find(s => s.key === 'payroll_config');
+                          const types = config ? JSON.parse(config.value).deduction_types : ['Loan', 'Staff Advance'];
+                          return (
+                            <div key={i} className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <Select value={d.type} onValueChange={(v) => {
+                                  const newD = [...payrollData.deductions];
+                                  newD[i].type = v;
+                                  setPayrollData({...payrollData, deductions: newD});
+                                }}>
+                                  <SelectTrigger className="bg-[#F5F5F5] border-none h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                                  <SelectContent>{types.map((t: string) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                </Select>
+                              </div>
+                              <div className="w-32"><Input type="number" value={d.amount} onChange={(e) => {
+                                const newD = [...payrollData.deductions];
+                                newD[i].amount = Number(e.target.value);
+                                setPayrollData({...payrollData, deductions: newD});
+                              }} placeholder="Amount" className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
+                              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 text-red-500 hover:bg-red-50 rounded-xl" onClick={() => setPayrollData({...payrollData, deductions: payrollData.deductions.filter((_: any, idx: number) => idx !== i)})}>×</Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="p-4 bg-blue-50/50 rounded-2xl flex justify-between items-center text-blue-700 border border-blue-100">
+                        <span className="font-bold">Final Net Disbursal:</span>
+                        <span className="text-xl font-black tabular-nums">
+                          GH₵{(payrollData.base_salary + payrollData.allowances - payrollData.deductions.reduce((s: number, d: any) => s + Number(d.amount), 0)).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <DialogFooter className="bg-[#F5F5F5]/30 p-6 border-t rounded-b-3xl">
+                      <Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11 shadow-lg shadow-blue-500/20">COMMIT PAYROLL DISBURSAL</Button>
+                    </DialogFooter>
                   </form>
                 )}
               </DialogContent>

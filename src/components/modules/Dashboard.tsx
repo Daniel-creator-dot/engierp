@@ -45,6 +45,7 @@ import {
   assetsApi,
   settingsApi
 } from '../../lib/api';
+import { formatCurrency, getCurrencySymbol } from '../../lib/currency';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>({
@@ -139,14 +140,14 @@ export default function Dashboard() {
         <KPI 
           icon={TrendingUp} 
           label="Gross Revenue" 
-          value={`${currency === 'USD' ? '$' : 'GH₵'}${(data.profitLoss?.income || 0).toLocaleString()}`} 
+          value={formatCurrency(data.profitLoss?.income || 0, currency)} 
           trend="+12.4%" 
           positive={true}
         />
         <KPI 
           icon={Activity} 
           label="Operating Costs" 
-          value={`${currency === 'USD' ? '$' : 'GH₵'}${(data.profitLoss?.expenses || 0).toLocaleString()}`} 
+          value={formatCurrency(data.profitLoss?.expenses || 0, currency)} 
           trend="-2.1%" 
           positive={true}
         />
@@ -190,7 +191,7 @@ export default function Dashboard() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                   <XAxis dataKey="name" stroke="#8E9299" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#8E9299" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${currency === 'USD' ? '$' : 'GH₵'}${v/1000}k`} />
+                  <YAxis stroke="#8E9299" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${getCurrencySymbol(currency)}${v/1000}k`} />
                   <Tooltip 
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
                   />
@@ -223,7 +224,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Net Position</p>
-                  <p className="text-3xl font-black text-white mt-1">{currency === 'USD' ? '$' : 'GH₵'}{(data.profitLoss?.profit || 0).toLocaleString()}</p>
+                  <p className="text-3xl font-black text-white mt-1">{formatCurrency(data.profitLoss?.profit || 0, currency)}</p>
                 </div>
                 <div className="bg-white/10 p-3 rounded-2xl">
                   <Activity className="w-6 h-6 text-blue-400" />
@@ -277,7 +278,7 @@ export default function Dashboard() {
             <ComplianceItem label="SSNIT Remittance" status="COMPLIANT" value="Month Paid" color="green" />
             <ComplianceItem label="PAYE Tax Filings" status="WARNING" value="Due in 2 days" color="yellow" />
             <ComplianceItem label="Equip Insurance" status="COMPLIANT" value="12 Units Vetted" color="green" />
-            <ComplianceItem label="Retention Held" status="ACTIVE" value={`${currency === 'USD' ? '$' : 'GH₵'}${(activeProjects.length * 52000).toLocaleString()}`} color="blue" />
+            <ComplianceItem label="Retention Held" status="ACTIVE" value={formatCurrency(activeProjects.length * 52000, currency)} color="blue" />
           </CardContent>
         </Card>
       </div>

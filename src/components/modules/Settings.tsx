@@ -81,7 +81,8 @@ export default function Settings() {
       { threshold: 16395, rate: 25 },
       { threshold: 20000, rate: 30 },
       { threshold: 999999, rate: 35 }
-    ]
+    ],
+    deduction_types: ['Loan', 'Staff Advance', 'Health Insurance']
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -321,6 +322,47 @@ export default function Settings() {
                   <p className="text-[10px] text-[#8E9299]">Standard rate in Ghana is 13%.</p>
                 </div>
               </div>
+
+              <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="font-bold text-[#141414]">Custom Deduction Types</Label>
+                    <p className="text-sm text-[#8E9299]">Define types of deductions applicable to staff salaries.</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="rounded-xl"
+                    onClick={() => {
+                      const type = prompt('Enter new deduction type:');
+                      if (type) {
+                        setPayrollConfig({
+                          ...payrollConfig,
+                          deduction_types: [...(payrollConfig.deduction_types || []), type]
+                        });
+                      }
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Add Type
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(payrollConfig.deduction_types || []).map((type: string, i: number) => (
+                    <Badge key={i} className="bg-white text-[#141414] border-[#E4E3E0] px-4 py-2 rounded-xl flex items-center gap-2">
+                      {type}
+                      <button 
+                        className="text-[#8E9299] hover:text-red-500" 
+                        onClick={() => {
+                          const newTypes = payrollConfig.deduction_types.filter((_: any, index: number) => index !== i);
+                          setPayrollConfig({...payrollConfig, deduction_types: newTypes});
+                        }}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             </CardContent>
             <CardFooter className="bg-[#F5F5F5]/30 p-8 border-t border-[#F5F5F5]">
               <Button onClick={handleSavePayroll} className="bg-blue-600 text-white gap-2 rounded-xl font-bold px-10 shadow-lg shadow-blue-500/20" disabled={isSaving}>
@@ -379,7 +421,7 @@ export default function Settings() {
               <CardHeader><CardTitle>SMS Gateway Governance</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} disabled className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                  <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                   <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>
                 <div className="space-y-2"><Label>API Key</Label><Input value={smsConfig.api_key} onChange={(e) => setSmsConfig({...smsConfig, api_key: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
