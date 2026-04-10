@@ -58,15 +58,26 @@ export async function sendSMS(to: string, message: string) {
         }
       );
     } else if (config.api_url) {
-      // Support for custom URLs like: https://sms.smsnotifygh.com/smsapi?key={key}&to={to}&msg={msg}&sender_id={sender}
-      const finalUrl = config.api_url
-        .replace('{key}', api_key)
-        .replace('{to}', normalizedTo)
-        .replace('{msg}', encodeURIComponent(message))
-        .replace('{message}', encodeURIComponent(message))
-        .replace('{sender}', sender_id || '')
-        .replace('{sender_id}', sender_id || '')
-        .replace('{secret}', api_secret || '');
+      // Support for custom URLs. 
+      // If it's SMSNotifyGH and they just provided the base URL, we'll auto-append the format they need.
+      let finalUrl = config.api_url;
+      
+      const hasPlaceholders = finalUrl.includes('{to}') || finalUrl.includes('{key}');
+      
+      if (!hasPlaceholders && finalUrl.includes('smsnotifygh.com')) {
+        const separator = finalUrl.includes('?') ? '&' : '?';
+        finalUrl = `${finalUrl}${separator}key=${api_key}&to=${normalizedTo}&msg=${encodeURIComponent(message)}&sender_id=${sender_id || ''}`;
+      } else {
+        // Standard placeholder replacement
+        finalUrl = finalUrl
+          .replace('{key}', api_key)
+          .replace('{to}', normalizedTo)
+          .replace('{msg}', encodeURIComponent(message))
+          .replace('{message}', encodeURIComponent(message))
+          .replace('{sender}', sender_id || '')
+          .replace('{sender_id}', sender_id || '')
+          .replace('{secret}', api_secret || '');
+      }
       
       console.log(`[SMS Service] Dispatching to custom URL: ${finalUrl.split('?')[0]}...`);
       await axios.get(finalUrl);
