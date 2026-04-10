@@ -14,7 +14,9 @@ import {
   Loader2,
   Calculator,
   ArrowRight,
-  Pencil
+  Pencil,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   Card, 
@@ -77,10 +79,20 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
   const [isRegisterContractOpen, setIsRegisterContractOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [settings, setSettings] = useState<any[]>([]);
+  
+  // Search & Pagination State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetchData();
+    setCurrentPage(1); // Reset page on tab change
   }, [activeSub]);
+
+  // Reset page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -197,62 +209,82 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
   }
 
   const renderContent = () => {
+    const q = searchQuery.toLowerCase();
+
+    // Mapping items per page
+    const itemsPerPage = activeSub === 'projects-active' ? 6 : 10;
+
     switch (activeSub) {
-      case 'projects-active':
+      case 'projects-active': {
+        const filtered = projects.filter(p => 
+          p.name?.toLowerCase().includes(q) || 
+          p.client?.toLowerCase().includes(q) ||
+          p.id?.toLowerCase().includes(q)
+        );
+        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+        const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
         return (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
-              <Card key={project.id} className="border-none shadow-sm overflow-hidden group hover:shadow-xl hover:shadow-blue-500/10 transition-all rounded-3xl bg-white">
-                <CardHeader className="pb-4">
-                  <div className="flex justify-between items-start">
-                    <Badge className={
-                      project.status === 'In Progress' ? 'bg-blue-100 text-blue-600 border-none' : 
-                      project.status === 'On Hold' ? 'bg-yellow-100 text-yellow-700 border-none' : 
-                      'bg-green-100 text-green-700 border-none'
-                    }>
-                      {project.status.toUpperCase()}
-                    </Badge>
-                    <Button variant="ghost" size="icon" onClick={() => { setSelectedProject(project); setIsEditProjectModalOpen(true); }} className="h-8 w-8 hover:bg-[#F5F5F5] rounded-full">
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <CardTitle className="mt-4 text-xl font-bold">{project.name}</CardTitle>
-                  <CardDescription className="font-medium text-[#8E9299]">{project.client}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[#8E9299]">
-                      <span>Budget Utilization</span>
-                      <span>{Math.round((Number(project.spent || 0) / Number(project.budget || 1)) * 100)}%</span>
+          <div className="space-y-8">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {paginated.map((project) => (
+                <Card key={project.id} className="border-none shadow-sm overflow-hidden group hover:shadow-xl hover:shadow-blue-500/10 transition-all rounded-3xl bg-white">
+                  <CardHeader className="pb-4">
+                    <div className="flex justify-between items-start">
+                      <Badge className={
+                        project.status === 'In Progress' ? 'bg-blue-100 text-blue-600 border-none' : 
+                        project.status === 'On Hold' ? 'bg-yellow-100 text-yellow-700 border-none' : 
+                        'bg-green-100 text-green-700 border-none'
+                      }>
+                        {project.status.toUpperCase()}
+                      </Badge>
+                      <Button variant="ghost" size="icon" onClick={() => { setSelectedProject(project); setIsEditProjectModalOpen(true); }} className="h-8 w-8 hover:bg-[#F5F5F5] rounded-full">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Progress value={(Number(project.spent || 0) / Number(project.budget || 1)) * 100} className="h-2 bg-[#F5F5F5]" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 py-4 border-t border-[#F5F5F5]">
-                    <div>
-                      <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Actual Spent</p>
-                      <p className="text-lg font-black text-[#141414]">{currSym}{Number(project.spent || 0).toLocaleString()}</p>
+                    <CardTitle className="mt-4 text-xl font-bold">{project.name}</CardTitle>
+                    <CardDescription className="font-medium text-[#8E9299]">{project.client}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[#8E9299]">
+                        <span>Budget Utilization</span>
+                        <span>{Math.round((Number(project.spent || 0) / Number(project.budget || 1)) * 100)}%</span>
+                      </div>
+                      <Progress value={(Number(project.spent || 0) / Number(project.budget || 1)) * 100} className="h-2 bg-[#F5F5F5]" />
                     </div>
-                    <div>
-                      <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Profitability</p>
-                      <p className="text-lg font-black text-green-600">+{project.profitability}%</p>
+                    <div className="grid grid-cols-2 gap-4 py-4 border-t border-[#F5F5F5]">
+                      <div>
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Actual Spent</p>
+                        <p className="text-lg font-black text-[#141414]">{currSym}{Number(project.spent || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Profitability</p>
+                        <p className="text-lg font-black text-green-600">+{project.profitability}%</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-[#8E9299] uppercase tracking-wider">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Handoff: {project.endDate}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-[#8E9299] uppercase tracking-wider">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Handoff: {project.endDate}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {totalPages > 1 && <PaginationControls total={totalPages} current={currentPage} setPage={setCurrentPage} />}
           </div>
         );
-      case 'projects-costing':
+      }
+      case 'projects-costing': {
+        const filtered = projects.filter(p => 
+          p.name?.toLowerCase().includes(q) || 
+          p.client?.toLowerCase().includes(q)
+        );
         return (
           <div className="grid gap-6 lg:grid-cols-4">
             <Card className="lg:col-span-1 border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardHeader className="bg-[#F5F5F5]/30"><CardTitle className="text-sm font-bold uppercase text-[#8E9299]">Target Job</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                {projects.map(p => (
+              <CardContent className="p-0 max-h-[600px] overflow-y-auto">
+                {filtered.map(p => (
                   <button 
                     key={p.id} 
                     onClick={() => { setSelectedProject(p); fetchJobCosting(p.id); }}
@@ -306,101 +338,124 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
             </Card>
           </div>
         );
-      case 'projects-contracts':
-        return (
-          <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-            <CardHeader className="bg-[#F5F5F5]/30 flex flex-row items-center justify-between">
-              <div><CardTitle>Master Service Agreements</CardTitle><CardDescription>Contractual values and retention tracking.</CardDescription></div>
-              <Dialog open={isRegisterContractOpen} onOpenChange={setIsRegisterContractOpen}>
-                <DialogTrigger asChild><Button className="bg-[#141414] text-white rounded-xl gap-2 font-bold px-6"><Plus className="w-4 h-4" /> Register contract</Button></DialogTrigger>
-                <DialogContent>
-                  <form onSubmit={handleRegisterContract}>
-                    <DialogHeader><DialogTitle>New Service Contract</DialogTitle></DialogHeader>
-                    <div className="p-4 space-y-4">
-                      <div className="grid gap-2"><Label>Contract Heading</Label><Input name="name" required /></div>
-                      <div className="grid gap-2">
-                        <Label>Project Mapping</Label>
-                        <Select name="project_id" required>
-                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Map to project..." /></SelectTrigger>
-                          <SelectContent>
-                            {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label>Value ({currSym})</Label><Input name="value" type="number" required /></div>
-                        <div className="grid gap-2"><Label>Retention %</Label><Input name="retention_pct" type="number" defaultValue="10" /></div>
-                      </div>
-                    </div>
-                    <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold">INITIALIZE SERVICE AGREEMENT</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Contract Ref</TableHead><TableHead>Project</TableHead><TableHead>Value</TableHead><TableHead>Retention ({currSym})</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {contracts.map(c => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
-                        <TableCell className="font-medium">{c.project_name}</TableCell>
-                        <TableCell className="font-bold text-[#141414]">{currSym}{Number(c.value).toLocaleString()}</TableCell>
-                        <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{currSym}{Number(c.retention_amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                    {contracts.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No executive contracts initialized.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+      }
+      case 'projects-contracts': {
+        const filtered = contracts.filter(c => 
+          c.id?.toLowerCase().includes(q) || 
+          c.name?.toLowerCase().includes(q) ||
+          c.project_name?.toLowerCase().includes(q)
         );
-      case 'projects-wip':
+        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+        const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
         return (
-          <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-            <CardHeader className="bg-[#F5F5F5]/30"><CardTitle>Work-in-Progress (WIP) Position</CardTitle><CardDescription>Earned vs Billed revenue recognition.</CardDescription></CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-[#F5F5F5]/50">
-                      <TableHead>Project</TableHead>
-                      <TableHead>Completion %</TableHead>
-                      <TableHead>Earned Revenue</TableHead>
-                      <TableHead>Billed Revenue</TableHead>
-                      <TableHead className="text-right">Net Position</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {wipReport.map((w, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-bold">{w.project_name}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={Number(w.poc)} className="w-20 h-1.5" />
-                            <span className="text-xs font-bold">{w.poc}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.earned_revenue).toLocaleString()}</TableCell>
-                        <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.billed_revenue).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                            {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
-                          </Badge>
-                          <p className="text-[10px] font-bold mt-1">{currSym}{Math.abs(w.over_under_billing).toLocaleString()}</p>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {wipReport.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active WIP data available for recording.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardHeader className="bg-[#F5F5F5]/30 flex flex-row items-center justify-between">
+                <div><CardTitle>Master Service Agreements</CardTitle><CardDescription>Contractual values and retention tracking.</CardDescription></div>
+                <Dialog open={isRegisterContractOpen} onOpenChange={setIsRegisterContractOpen}>
+                  <DialogTrigger asChild><Button className="bg-[#141414] text-white rounded-xl gap-2 font-bold px-6"><Plus className="w-4 h-4" /> Register contract</Button></DialogTrigger>
+                  <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
+                    <form onSubmit={handleRegisterContract}>
+                      <DialogHeader className="p-8 bg-blue-50"><DialogTitle>New Service Contract</DialogTitle></DialogHeader>
+                      <div className="p-8 space-y-4">
+                        <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Contract Heading</Label><Input name="name" required className="h-12 bg-[#F5F5F5] border-none rounded-xl" /></div>
+                        <div className="grid gap-2">
+                          <Label className="font-bold text-xs uppercase text-[#8E9299]">Project Mapping</Label>
+                          <Select name="project_id" required>
+                            <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue placeholder="Map to project..." /></SelectTrigger>
+                            <SelectContent className="rounded-xl border-none shadow-2xl">
+                              {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Value ({currSym})</Label><Input name="value" type="number" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-black text-blue-600" /></div>
+                          <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Retention %</Label><Input name="retention_pct" type="number" defaultValue="10" className="h-12 bg-[#F5F5F5] border-none rounded-xl" /></div>
+                        </div>
+                      </div>
+                      <DialogFooter className="p-8 bg-[#F5F5F5]/30 border-t border-[#F5F5F5]"><Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold shadow-lg shadow-blue-500/20">INITIALIZE SERVICE AGREEMENT</Button></DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader><TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none"><TableHead className="font-bold">Contract Ref</TableHead><TableHead className="font-bold">Project</TableHead><TableHead className="font-bold">Value</TableHead><TableHead className="font-bold">Retention ({currSym})</TableHead><TableHead className="font-bold">Status</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {paginated.map(c => (
+                        <TableRow key={c.id} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
+                          <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
+                          <TableCell className="font-medium">{c.project_name}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{currSym}{Number(c.value).toLocaleString()}</TableCell>
+                          <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{currSym}{Number(c.retention_amount).toLocaleString()}</TableCell>
+                          <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
+                        </TableRow>
+                      ))}
+                      {paginated.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No executive contracts found matching query.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+            {totalPages > 1 && <PaginationControls total={totalPages} current={currentPage} setPage={setCurrentPage} />}
+          </div>
         );
+      }
+      case 'projects-wip': {
+        const filtered = wipReport.filter(w => 
+          w.project_name?.toLowerCase().includes(q)
+        );
+        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+        const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+        return (
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+              <CardHeader className="bg-[#F5F5F5]/30"><CardTitle>Work-in-Progress (WIP) Position</CardTitle><CardDescription>Earned vs Billed revenue recognition.</CardDescription></CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none">
+                        <TableHead className="font-bold">Project</TableHead>
+                        <TableHead className="font-bold">Completion %</TableHead>
+                        <TableHead className="font-bold">Earned Revenue</TableHead>
+                        <TableHead className="font-bold">Billed Revenue</TableHead>
+                        <TableHead className="text-right font-bold">Net Position</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginated.map((w, i) => (
+                        <TableRow key={i} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
+                          <TableCell className="font-bold">{w.project_name}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress value={Number(w.poc)} className="w-20 h-1.5" />
+                              <span className="text-xs font-bold">{w.poc}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.earned_revenue).toLocaleString()}</TableCell>
+                          <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.billed_revenue).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                              {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
+                            </Badge>
+                            <p className="text-[10px] font-bold mt-1">{currSym}{Math.abs(w.over_under_billing).toLocaleString()}</p>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {paginated.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active WIP data found matching query.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+            {totalPages > 1 && <PaginationControls total={totalPages} current={currentPage} setPage={setCurrentPage} />}
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -503,8 +558,51 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
         </div>
       </div>
 
+      {/* Global Module Filters */}
+      <Card className="border-none shadow-sm rounded-2xl bg-white p-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" />
+          <Input 
+            placeholder="Governance lookup: name, client or reference..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-11 bg-[#F5F5F5] border-none rounded-xl font-medium"
+          />
+        </div>
+      </Card>
+
       <div className="w-full">
         {renderContent()}
+      </div>
+    </div>
+  );
+}
+
+function PaginationControls({ total, current, setPage }: any) {
+  return (
+    <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-[#F5F5F5]">
+      <div className="flex items-center gap-2">
+        <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest px-2">Page {current} of {total}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={current === 1}
+          onClick={() => setPage(current - 1)}
+          className="rounded-xl border-[#F5F5F5] hover:bg-[#F5F5F5]"
+        >
+          <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={current === total}
+          onClick={() => setPage(current + 1)}
+          className="rounded-xl border-[#F5F5F5] hover:bg-[#F5F5F5]"
+        >
+          Next <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
       </div>
     </div>
   );
