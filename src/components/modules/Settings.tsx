@@ -89,6 +89,8 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   
+  const [isDeductionModalOpen, setIsDeductionModalOpen] = useState(false);
+  const [newDeductionType, setNewDeductionType] = useState('');
   const [logo, setLogo] = useState('');
   const [signature, setSignature] = useState('');
 
@@ -333,15 +335,7 @@ export default function Settings() {
                     variant="outline" 
                     size="sm" 
                     className="rounded-xl"
-                    onClick={() => {
-                      const type = prompt('Enter new deduction type:');
-                      if (type) {
-                        setPayrollConfig({
-                          ...payrollConfig,
-                          deduction_types: [...(payrollConfig.deduction_types || []), type]
-                        });
-                      }
-                    }}
+                    onClick={() => setIsDeductionModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-2" /> Add Type
                   </Button>
@@ -363,6 +357,41 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
+
+              <Dialog open={isDeductionModalOpen} onOpenChange={setIsDeductionModalOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>New Deduction Type</DialogTitle>
+                    <DialogDescription>Add a category for payroll subtractions.</DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4">
+                    <Label>Deduction Name</Label>
+                    <Input 
+                      value={newDeductionType} 
+                      onChange={(e) => setNewDeductionType(e.target.value)}
+                      placeholder="e.g. Welfare Fund"
+                      className="bg-[#F5F5F5] border-none rounded-xl mt-2"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button 
+                      className="bg-[#141414] text-white w-full rounded-xl"
+                      onClick={() => {
+                        if (newDeductionType) {
+                          setPayrollConfig({
+                            ...payrollConfig,
+                            deduction_types: [...(payrollConfig.deduction_types || []), newDeductionType]
+                          });
+                          setNewDeductionType('');
+                          setIsDeductionModalOpen(false);
+                        }
+                      }}
+                    >
+                      Add Deduction Type
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
             <CardFooter className="bg-[#F5F5F5]/30 p-8 border-t border-[#F5F5F5]">
               <Button onClick={handleSavePayroll} className="bg-blue-600 text-white gap-2 rounded-xl font-bold px-10 shadow-lg shadow-blue-500/20" disabled={isSaving}>
