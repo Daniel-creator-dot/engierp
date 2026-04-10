@@ -143,6 +143,7 @@ export default function Dashboard() {
           value={formatCurrency(data.profitLoss?.income || 0, currency)} 
           trend="+12.4%" 
           positive={true}
+          color="red"
         />
         <KPI 
           icon={Activity} 
@@ -150,6 +151,7 @@ export default function Dashboard() {
           value={formatCurrency(data.profitLoss?.expenses || 0, currency)} 
           trend="-2.1%" 
           positive={true}
+          color="green"
         />
         <KPI 
           icon={HardHat} 
@@ -157,6 +159,7 @@ export default function Dashboard() {
           value={data.employees.length} 
           trend="8 Active Sites" 
           description="Total Payroll Personnel"
+          color="orange"
         />
         <KPI 
           icon={Monitor} 
@@ -164,6 +167,7 @@ export default function Dashboard() {
           value={`${Math.round((data.equipment.filter((e:any)=>e.status==='On Site').length / (data.equipment.length || 1)) * 100)}%`} 
           trend="Fleet Online"
           description="Machinery Availability"
+          color="blue"
         />
       </div>
 
@@ -286,12 +290,21 @@ export default function Dashboard() {
   );
 }
 
-function KPI({ icon: Icon, label, value, trend, positive, description }: any) {
+function KPI({ icon: Icon, label, value, trend, positive, description, color }: any) {
+  const colorSchemes: any = {
+    red: 'bg-red-50 text-red-600 group-hover:bg-red-600',
+    green: 'bg-green-50 text-green-600 group-hover:bg-green-600',
+    orange: 'bg-orange-50 text-orange-600 group-hover:bg-orange-600',
+    blue: 'bg-blue-50 text-blue-600 group-hover:bg-blue-600'
+  };
+
+  const currentScheme = colorSchemes[color] || 'bg-[#F5F5F5] text-[#141414] group-hover:bg-blue-600';
+
   return (
-    <Card className="border-none shadow-sm rounded-3xl overflow-hidden group hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 bg-white">
+    <Card className="border-none shadow-sm rounded-3xl overflow-hidden group hover:shadow-xl hover:shadow-black/5 transition-all duration-300 bg-white">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
-          <div className="p-3 bg-[#F5F5F5] rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+          <div className={`p-3 rounded-2xl transition-colors ${currentScheme} group-hover:text-white`}>
             <Icon className="w-6 h-6" />
           </div>
           {trend && (
