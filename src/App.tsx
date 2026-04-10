@@ -13,7 +13,8 @@ import {
   LogOut,
   User,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 import LogoImg from './thisone.png';
 import { Module, ParentModule } from './types';
@@ -471,6 +472,4 @@ export default function App() {
     </div>
   );
 }
-
-import { Loader2 } from 'lucide-react';
 

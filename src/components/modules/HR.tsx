@@ -589,8 +589,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                 </Table>
               </div>
             </div>
-          </div>
-        );
+          );
       case 'hr-payroll':
         return (
           <div className="space-y-6">
@@ -661,10 +660,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                     {payrollEntries.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No payroll records to display.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </div>
-        );
+              </div>
+            </div>
+          );
       case 'hr-performance':
         return (
           <div className="space-y-6">

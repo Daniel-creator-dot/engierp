@@ -404,10 +404,9 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </div>
-        );
+              </div>
+            </div>
+          );
 
       case 'accounting-ap':
         return (
