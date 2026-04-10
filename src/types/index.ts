@@ -6,7 +6,8 @@ export type Module =
   | 'projects-active' | 'projects-costing' | 'projects-contracts' | 'projects-wip'
   | 'procurement-pos' | 'procurement-inventory' | 'procurement-suppliers'
   | 'field-ops' | 'assets'
-  | 'settings';
+  | 'settings'
+  | 'profile';
 
 export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'field-ops' | 'settings';
 

@@ -48,6 +48,7 @@ import Projects from './components/modules/Projects';
 import Procurement from './components/modules/Procurement';
 import FieldOps from './components/modules/FieldOps';
 import SettingsView from './components/modules/Settings';
+import Profile from './components/modules/Profile';
 
 interface NavItem {
   id: ParentModule;
@@ -189,6 +190,7 @@ export default function App() {
     if (activeModule.startsWith('procurement')) return <Procurement activeSub={activeModule} />;
     if (activeModule === 'field-ops') return <FieldOps />;
     if (activeModule === 'settings') return <SettingsView />;
+    if (activeModule === 'profile') return <Profile />;
     return <Dashboard />;
   };
 
@@ -443,7 +445,7 @@ export default function App() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveModule('profile')}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
