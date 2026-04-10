@@ -67,10 +67,10 @@ router.get('/me', async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
+  const { phone } = req.body;
   try {
-    const user = await db('users').where({ email }).first();
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const user = await db('users').where({ phone }).first();
+    if (!user) return res.status(404).json({ message: 'No account associated with this phone number' });
 
     // Generate 6 digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -81,7 +81,7 @@ router.post('/forgot-password', async (req, res) => {
       reset_token_expires: expires
     });
 
-    const smsSent = await sendSMS(user.phone, `Your Engineering ERP reset code is: ${code}. It expires in 10 minutes.`);
+    const smsSent = await sendSMS(user.phone, `Your bytzforge reset code is: ${code}. Valid for 10 minutes.`);
 
     if (smsSent) {
       res.json({ message: 'Reset code sent via SMS' });
@@ -94,9 +94,9 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 router.post('/reset-password', async (req, res) => {
-  const { email, code, newPassword } = req.body;
+  const { phone, code, newPassword } = req.body;
   try {
-    const user = await db('users').where({ email, reset_token: code }).first();
+    const user = await db('users').where({ phone, reset_token: code }).first();
     
     if (!user || new Date(user.reset_token_expires) < new Date()) {
       return res.status(400).json({ message: 'Invalid or expired code' });
