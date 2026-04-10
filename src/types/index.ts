@@ -42,6 +42,10 @@ export interface Employee {
   salary: number;
   joinDate: string;
   status: 'active' | 'on-leave' | 'terminated';
+  ssnit?: string;
+  ghana_card?: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface Invoice {

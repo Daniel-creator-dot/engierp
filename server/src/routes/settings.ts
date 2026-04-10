@@ -41,21 +41,43 @@ router.get('/users', authenticateToken, authorizeRole(['admin']), async (req, re
 
 router.post('/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const { email, role, phone } = req.body;
+    const { email, role, phone, name, department } = req.body;
     const defaultPassword = 'zxcv123$$';
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
+    // 1. Create Employee first
+    const staffId = `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+    await db('employees').insert({
+      id: staffId,
+      name: name || email.split('@')[0], // Fallback if name not provided
+      role: role.toUpperCase(),
+      department: department || 'General',
+      salary: 0, // Default to 0, update later in HR
+      joinDate: new Date().toISOString().split('T')[0],
+      status: 'active',
+      phone: phone
+    });
+
+    // 2. Create User and link to Employee
     const [id] = await db('users').insert({
       email,
       role,
       phone,
-      password: hashedPassword
+      password: hashedPassword,
+      employee_id: staffId
     }).returning('id');
 
-    res.status(201).json({ id, email, role, phone, message: 'User created with default password' });
+    res.status(201).json({ 
+      id, 
+      email, 
+      role, 
+      phone, 
+      employee_id: staffId,
+      message: 'User created and linked to Employee Directory with default password' 
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error creating user' });
+    res.status(500).json({ message: 'Error creating user and employee profile' });
   }
 });
 
