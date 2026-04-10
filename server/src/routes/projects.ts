@@ -89,7 +89,7 @@ router.get('/reports/wip', authenticateToken, authorizeRole(['pm', 'accountant',
         .where('journal_entries.project_id', project.id)
         .where('chart_of_accounts.type', 'Expense')
         .select(db.raw('SUM(debit - credit) as total'))
-        .first();
+        .first() as any;
 
       const actualCost = Number(costRes?.total || 0);
       const budgetedCost = Number(project.estimated_cost_at_completion || project.budget);
@@ -105,7 +105,7 @@ router.get('/reports/wip', authenticateToken, authorizeRole(['pm', 'accountant',
       const billedRes = await db('invoices')
         .where('project_id', project.id)
         .sum('amount as total')
-        .first();
+        .first() as any;
       
       const billedRevenue = Number(billedRes?.total || 0);
 

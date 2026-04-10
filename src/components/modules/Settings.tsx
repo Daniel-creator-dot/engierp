@@ -372,7 +372,7 @@ export default function Settings() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(payrollConfig.deduction_types || []).map((d: any, i: number) => (
-                    <Badge key={i} className="bg-white text-[#141414] border-[#E4E3E0] px-4 py-2 rounded-xl flex items-center gap-2">
+                    <Badge {...({ key: i } as any)} className="bg-white text-[#141414] border-[#E4E3E0] px-4 py-2 rounded-xl flex items-center gap-2">
                       <span className="font-bold">{d.name}</span>
                       <span className="text-[10px] text-[#8E9299] bg-[#F5F5F5] px-2 py-0.5 rounded-md">
                         {d.type === 'percentage' ? `${d.value}%` : `${currency === 'USD' ? '$' : '₵'}${d.value}`}

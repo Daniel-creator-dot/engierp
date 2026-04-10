@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-let rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+let rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api';
 // Auto-append /api if the user forgot it in their environment variable
 if (rawApiUrl && !rawApiUrl.endsWith('/api')) {
   rawApiUrl = rawApiUrl.endsWith('/') ? `${rawApiUrl}api` : `${rawApiUrl}/api`;

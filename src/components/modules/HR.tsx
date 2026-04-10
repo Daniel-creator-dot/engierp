@@ -631,8 +631,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         if (!acc[period]) acc[period] = [];
                         acc[period].push(curr);
                         return acc;
-                      }, {} as Record<string, any[]>)
-                    ).map(([period, entries]) => (
+                      }, {} as Record<string, PayrollRecord[]>)
+                    ).map(([period, entries]: [string, PayrollRecord[]]) => (
                       <React.Fragment key={period}>
                         <TableRow className="bg-[#F5F5F5] hover:bg-[#F5F5F5] cursor-pointer" onClick={() => togglePeriod(period)}>
                           <TableCell colSpan={5} className="font-black text-[#141414] uppercase text-xs tracking-wider border-b border-[#E4E3E0] py-4">
@@ -660,9 +660,10 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                     {payrollEntries.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No payroll records to display.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
-              </div>
-            </div>
-          );
+              </CardContent>
+            </Card>
+          </div>
+        );
       case 'hr-performance':
         return (
           <div className="space-y-6">

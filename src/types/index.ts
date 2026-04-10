@@ -1,11 +1,11 @@
 
 export type Module = 
   | 'dashboard' 
-  | 'accounting-gl' | 'accounting-ar' | 'accounting-ap' | 'accounting-tax' | 'accounting-bank'
-  | 'hr-directory' | 'hr-payroll' | 'hr-attendance' | 'hr-leave'
+  | 'accounting-gl' | 'accounting-ar' | 'accounting-ap' | 'accounting-tax' | 'accounting-bank' | 'accounting-transactions' | 'accounting-reports'
+  | 'hr-directory' | 'hr-payroll' | 'hr-attendance' | 'hr-leave' | 'hr-performance' | 'hr-resources'
   | 'projects-active' | 'projects-costing' | 'projects-contracts' | 'projects-wip'
   | 'procurement-pos' | 'procurement-inventory' | 'procurement-suppliers'
-  | 'field-ops' 
+  | 'field-ops' | 'assets'
   | 'settings';
 
 export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'field-ops' | 'settings';
@@ -63,4 +63,39 @@ export interface TaxRecord {
   type: 'VAT' | 'PAYE' | 'SSNIT';
   amount: number;
   status: 'filed' | 'pending';
+}
+
+export interface LeaveRequest {
+  id: number;
+  employee_id: string;
+  employee_name?: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+}
+
+export interface PayrollRecord {
+  id: number;
+  employee_id: string;
+  name: string;
+  base_salary: number;
+  allowances: number;
+  deductions: number;
+  net_pay: number;
+  month: string;
+  year: number;
+  status: string;
+}
+
+export interface Appraisal {
+  id: number;
+  employee_id: string;
+  name: string;
+  year: number;
+  period: string;
+  score: number;
+  feedback: string;
+  status: string;
 }
