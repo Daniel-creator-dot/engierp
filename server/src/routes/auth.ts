@@ -81,12 +81,16 @@ router.post('/forgot-password', async (req, res) => {
       reset_token_expires: expires
     });
 
-    const smsSent = await sendSMS(user.phone, `Your bytzforge reset code is: ${code}. Valid for 10 minutes.`);
+    const smsStatus = await (sendSMS(user.phone, `Your bytzforge reset code is: ${code}. Valid for 10 minutes.`) as any);
 
-    if (smsSent) {
-      res.json({ message: 'Reset code sent via SMS' });
+    if (smsStatus.success) {
+      res.json({ 
+        message: smsStatus.mocked ? 'Reset code generated (Mock Mode)' : 'Reset code sent via SMS',
+        mocked: smsStatus.mocked,
+        diagnostic: smsStatus.mocked ? `MOCK CODE: ${code}` : undefined
+      });
     } else {
-      res.status(500).json({ message: 'Error sending SMS code' });
+      res.status(500).json({ message: 'Error sending SMS code', error: smsStatus.error });
     }
   } catch (error) {
     res.status(500).json({ message: 'Error processing request' });

@@ -38,8 +38,12 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await authApi.forgotPassword(phone);
-      toast.success('Reset code sent to your phone');
+      const response = await authApi.forgotPassword(phone) as any;
+      if (response.data.diagnostic) {
+        toast.info(response.data.message, { description: response.data.diagnostic });
+      } else {
+        toast.success(response.data.message);
+      }
       setMode('forgot_otp');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to send OTP');
@@ -76,13 +80,13 @@ export default function Login() {
       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 z-0" />
       
       <Card className="w-full max-w-md shadow-2xl z-10 border-none rounded-3xl overflow-hidden bg-white/95 backdrop-blur-xl">
-        <CardHeader className="space-y-4 pt-12 px-10 pb-8 text-center bg-[#141414] border-b border-white/10">
+        <CardHeader className="space-y-4 pt-12 px-10 pb-8 text-center bg-white border-b border-gray-100">
           <div className="mx-auto w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl transform -rotate-3 border border-blue-100 p-2">
             <img src={LogoImg} className="w-full h-full object-contain" alt="Logo" />
           </div>
           <div className="space-y-1 pt-2">
             <CardTitle className="text-3xl font-black tracking-tighter">
-              <span className="text-white">bytz</span>
+              <span className="text-[#141414]">bytz</span>
               <span className="text-orange-500">forge</span>
             </CardTitle>
             <CardDescription className="text-[#8E9299] font-medium">
