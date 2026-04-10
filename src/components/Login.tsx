@@ -116,7 +116,6 @@ export default function Login() {
                 <div className="relative"><Smartphone className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="text" placeholder="+233..." value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
               <Button type="submit" className="w-full h-12 bg-blue-600 text-white rounded-xl font-bold" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Send Reset Code'}</Button>
-              <button type="button" onClick={() => setMode('login')} className="w-full flex items-center justify-center gap-2 text-sm font-bold text-[#8E9299] hover:text-[#141414]"><ArrowLeft className="w-4 h-4" /> Back to Login</button>
             </form>
           )}
 
@@ -159,13 +158,6 @@ export default function Login() {
           )}
         </CardContent>
         
-        <CardFooter className="px-10 py-6 bg-[#F5F5F5]/30 border-t border-[#E4E3E0] flex flex-col gap-4">
-          <div className="flex items-center justify-center gap-2 text-xs text-[#8E9299]">
-            <div className="w-1 h-1 rounded-full bg-blue-600" />
-            bytzforge Infrastructure Governance
-            <div className="w-1 h-1 rounded-full bg-blue-600" />
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );
