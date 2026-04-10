@@ -31,7 +31,10 @@ export async function sendSMS(to: string, message: string) {
       return { success: true, mocked: true };
     }
 
-    const { provider, api_key, api_secret, sender_id } = config;
+    const { provider, api_key: rawKey, api_secret: rawSecret, sender_id: rawSender } = config;
+    const api_key = rawKey?.trim() || '';
+    const api_secret = rawSecret?.trim() || '';
+    const sender_id = rawSender?.trim() || '';
 
     if (provider === 'Hubtel') {
       // Hubtel modern API using POST for reliability
