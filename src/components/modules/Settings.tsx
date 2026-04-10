@@ -83,7 +83,11 @@ export default function Settings() {
       { threshold: 20000, rate: 30 },
       { threshold: 999999, rate: 35 }
     ],
-    deduction_types: ['Loan', 'Staff Advance', 'Health Insurance']
+    deduction_types: [
+      { name: 'Loan', type: 'fixed', value: 0 },
+      { name: 'Staff Advance', type: 'fixed', value: 0 },
+      { name: 'Health Insurance', type: 'fixed', value: 0 }
+    ]
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +95,7 @@ export default function Settings() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   
   const [isDeductionModalOpen, setIsDeductionModalOpen] = useState(false);
-  const [newDeductionType, setNewDeductionType] = useState('');
+  const [newDeduction, setNewDeduction] = useState({ name: '', type: 'fixed' as 'fixed' | 'percentage', value: 0 });
   const [logo, setLogo] = useState('');
   const [signature, setSignature] = useState('');
 
@@ -116,7 +120,18 @@ export default function Settings() {
       if (sigSetting) setSignature(sigSetting.value);
 
       const payrollSetting = res.data.find((s: any) => s.key === 'payroll_config');
-      if (payrollSetting) setPayrollConfig(JSON.parse(payrollSetting.value));
+      if (payrollSetting) {
+        let config = JSON.parse(payrollSetting.value);
+        // Migration: convert string deductions to objects
+        if (config.deduction_types && typeof config.deduction_types[0] === 'string') {
+          config.deduction_types = config.deduction_types.map((name: string) => ({
+            name,
+            type: 'fixed',
+            value: 0
+          }));
+        }
+        setPayrollConfig(config);
+      }
     } catch (error) {
       toast.error('Failed to load settings');
     } finally {
@@ -342,11 +357,14 @@ export default function Settings() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(payrollConfig.deduction_types || []).map((type: string, i: number) => (
+                  {(payrollConfig.deduction_types || []).map((d: any, i: number) => (
                     <Badge key={i} className="bg-white text-[#141414] border-[#E4E3E0] px-4 py-2 rounded-xl flex items-center gap-2">
-                      {type}
+                      <span className="font-bold">{d.name}</span>
+                      <span className="text-[10px] text-[#8E9299] bg-[#F5F5F5] px-2 py-0.5 rounded-md">
+                        {d.type === 'percentage' ? `${d.value}%` : `${currency === 'USD' ? '$' : '₵'}${d.value}`}
+                      </span>
                       <button 
-                        className="text-[#8E9299] hover:text-red-500" 
+                        className="text-[#8E9299] hover:text-red-500 ml-1" 
                         onClick={() => {
                           const newTypes = payrollConfig.deduction_types.filter((_: any, index: number) => index !== i);
                           setPayrollConfig({...payrollConfig, deduction_types: newTypes});
@@ -363,27 +381,52 @@ export default function Settings() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>New Deduction Type</DialogTitle>
-                    <DialogDescription>Add a category for payroll subtractions.</DialogDescription>
+                    <DialogDescription>Add a category and default value for payroll subtractions.</DialogDescription>
                   </DialogHeader>
-                  <div className="py-4">
-                    <Label>Deduction Name</Label>
-                    <Input 
-                      value={newDeductionType} 
-                      onChange={(e) => setNewDeductionType(e.target.value)}
-                      placeholder="e.g. Welfare Fund"
-                      className="bg-[#F5F5F5] border-none rounded-xl mt-2"
-                    />
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Deduction Name</Label>
+                      <Input 
+                        value={newDeduction.name} 
+                        onChange={(e) => setNewDeduction({...newDeduction, name: e.target.value})}
+                        placeholder="e.g. Welfare Fund"
+                        className="bg-[#F5F5F5] border-none rounded-xl"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Value Type</Label>
+                        <Select value={newDeduction.type} onValueChange={(v: any) => setNewDeduction({...newDeduction, type: v})}>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fixed">Fixed Amount</SelectItem>
+                            <SelectItem value="percentage">Percentage (%)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Default Value</Label>
+                        <Input 
+                          type="number"
+                          value={newDeduction.value} 
+                          onChange={(e) => setNewDeduction({...newDeduction, value: Number(e.target.value)})}
+                          className="bg-[#F5F5F5] border-none rounded-xl"
+                        />
+                      </div>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button 
                       className="bg-[#141414] text-white w-full rounded-xl"
                       onClick={() => {
-                        if (newDeductionType) {
+                        if (newDeduction.name) {
                           setPayrollConfig({
                             ...payrollConfig,
-                            deduction_types: [...(payrollConfig.deduction_types || []), newDeductionType]
+                            deduction_types: [...(payrollConfig.deduction_types || []), newDeduction]
                           });
-                          setNewDeductionType('');
+                          setNewDeduction({ name: '', type: 'fixed', value: 0 });
                           setIsDeductionModalOpen(false);
                         }
                       }}

@@ -463,12 +463,31 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             <div key={i} className="flex gap-2 items-end">
                               <div className="flex-1">
                                 <Select value={d.type} onValueChange={(v) => {
+                                  const config = companySettings.find(s => s.key === 'payroll_config');
+                                  const configObj = config ? JSON.parse(config.value) : { deduction_types: [] };
+                                  const deductionDef = configObj.deduction_types.find((dt: any) => dt.name === v);
+                                  
+                                  let amount = 0;
+                                  if (deductionDef) {
+                                    if (deductionDef.type === 'percentage') {
+                                      amount = (Number(payrollData.base_salary) * Number(deductionDef.value)) / 100;
+                                    } else {
+                                      amount = Number(deductionDef.value);
+                                    }
+                                  }
+
                                   const newD = [...payrollData.deductions];
                                   newD[i].type = v;
+                                  newD[i].amount = amount;
                                   setPayrollData({...payrollData, deductions: newD});
                                 }}>
                                   <SelectTrigger className="bg-[#F5F5F5] border-none h-11 rounded-xl"><SelectValue /></SelectTrigger>
-                                  <SelectContent>{types.map((t: string) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                  <SelectContent>
+                                    {(companySettings.find(s => s.key === 'payroll_config') 
+                                      ? JSON.parse(companySettings.find(s => s.key === 'payroll_config')!.value).deduction_types 
+                                      : []).map((t: any) => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)
+                                    }
+                                  </SelectContent>
                                 </Select>
                               </div>
                               <div className="w-32"><Input type="number" value={d.amount} onChange={(e) => {
