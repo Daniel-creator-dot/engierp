@@ -1,7 +1,7 @@
 
 export type Module = 
   | 'dashboard' 
-  | 'accounting-gl' | 'accounting-ar' | 'accounting-ap' | 'accounting-tax' | 'accounting-bank' | 'accounting-transactions' | 'accounting-reports'
+  | 'accounting-gl' | 'accounting-ar' | 'accounting-ap' | 'accounting-tax' | 'accounting-bank' | 'accounting-transactions' | 'accounting-reports' | 'accounting-coa'
   | 'hr-directory' | 'hr-payroll' | 'hr-attendance' | 'hr-leave' | 'hr-performance' | 'hr-resources'
   | 'projects-active' | 'projects-costing' | 'projects-contracts' | 'projects-wip'
   | 'procurement-pos' | 'procurement-inventory' | 'procurement-suppliers'

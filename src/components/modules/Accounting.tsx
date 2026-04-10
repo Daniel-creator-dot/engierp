@@ -81,6 +81,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [isRecordBillOpen, setIsRecordBillOpen] = useState(false);
   const [isPayBillOpen, setIsPayBillOpen] = useState(false);
   const [isAddBankOpen, setIsAddBankOpen] = useState(false);
+  const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [coaFilter, setCoaFilter] = useState('All');
   
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
@@ -132,6 +134,9 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
           accountingApi.getCOA()
         ]);
         setTransactions(txRes.data);
+        setCOA(coaRes.data);
+      } else if (activeSub === 'accounting-coa') {
+        const coaRes = await accountingApi.getCOA();
         setCOA(coaRes.data);
       } else if (activeSub === 'accounting-reports') {
         const [rec, pay, pl, tb] = await Promise.all([
@@ -705,6 +710,142 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             </div>
           </div>
         );
+
+      case 'accounting-coa': {
+        const typeColors: Record<string, string> = {
+          'Asset': 'bg-blue-100 text-blue-700',
+          'Liability': 'bg-red-100 text-red-700',
+          'Equity': 'bg-purple-100 text-purple-700',
+          'Income': 'bg-green-100 text-green-700',
+          'Expense': 'bg-orange-100 text-orange-700',
+        };
+        const filteredCOA = coa.filter(a => {
+          if (coaFilter !== 'All' && a.type !== coaFilter) return false;
+          return true;
+        });
+        const groupedByType = ['Asset', 'Liability', 'Equity', 'Income', 'Expense'];
+        const totalsByType = groupedByType.map(type => ({
+          type,
+          count: coa.filter(a => a.type === type).length,
+          balance: coa.filter(a => a.type === type).reduce((s: number, a: any) => s + Number(a.balance || 0), 0)
+        }));
+
+        return (
+          <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+              {totalsByType.map(t => (
+                <button
+                  key={t.type}
+                  onClick={() => setCoaFilter(coaFilter === t.type ? 'All' : t.type)}
+                  className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                    coaFilter === t.type ? 'border-[#141414] bg-[#141414] text-white shadow-xl' : 'border-[#F5F5F5] bg-white hover:border-[#8E9299]'
+                  }`}
+                >
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${coaFilter === t.type ? 'text-white/60' : 'text-[#8E9299]'}`}>{t.type}</p>
+                  <p className={`text-2xl font-black ${coaFilter === t.type ? 'text-white' : 'text-[#141414]'}`}>{t.count}</p>
+                  <p className={`text-xs font-bold mt-1 ${coaFilter === t.type ? 'text-white/70' : 'text-[#8E9299]'}`}>{currSym}{Math.abs(t.balance).toLocaleString()}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Header */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold">Chart of Accounts</h2>
+                <p className="text-sm text-[#8E9299]">{filteredCOA.length} accounts {coaFilter !== 'All' ? `(${coaFilter})` : ''}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('chart_of_accounts', ['Code','Name','Type','Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
+                  <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg"><Plus className="w-4 h-4" /> New Account</Button></DialogTrigger>
+                  <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const fd = new FormData(e.target as HTMLFormElement);
+                      try {
+                        await accountingApi.createCOA({
+                          code: fd.get('code'),
+                          name: fd.get('name'),
+                          type: fd.get('type'),
+                          balance: 0
+                        });
+                        toast.success('Ledger account created');
+                        setIsAddAccountOpen(false);
+                        fetchData();
+                      } catch (error) {
+                        toast.error('Failed to create account');
+                      }
+                    }}>
+                      <DialogHeader className="p-8 bg-blue-50">
+                        <DialogTitle className="text-2xl font-bold text-blue-900">Register Ledger Account</DialogTitle>
+                        <DialogDescription className="text-blue-700">Add a new account to your Chart of Accounts.</DialogDescription>
+                      </DialogHeader>
+                      <div className="p-8 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label className="font-bold text-xs uppercase text-[#8E9299]">Code</Label>
+                            <Input name="code" placeholder="e.g. 5200" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-mono font-bold text-lg" />
+                          </div>
+                          <div className="col-span-2 space-y-2">
+                            <Label className="font-bold text-xs uppercase text-[#8E9299]">Account Name</Label>
+                            <Input name="name" placeholder="e.g. Marketing Expense" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-xs uppercase text-[#8E9299]">Account Type</Label>
+                          <Select name="type" required>
+                            <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue placeholder="Select type..." /></SelectTrigger>
+                            <SelectContent className="rounded-xl border-none shadow-2xl">
+                              <SelectItem value="Asset">Asset</SelectItem>
+                              <SelectItem value="Liability">Liability</SelectItem>
+                              <SelectItem value="Equity">Equity</SelectItem>
+                              <SelectItem value="Income">Income / Revenue</SelectItem>
+                              <SelectItem value="Expense">Expense</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter className="p-8 bg-[#F5F5F5]/30 border-t border-[#F5F5F5]">
+                        <Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold shadow-lg shadow-blue-500/20">REGISTER ACCOUNT</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+
+            {/* Accounts Table */}
+            <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none">
+                        <TableHead className="font-bold w-24">Code</TableHead>
+                        <TableHead className="font-bold">Account Name</TableHead>
+                        <TableHead className="font-bold w-32">Type</TableHead>
+                        <TableHead className="font-bold text-right w-40">Balance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCOA.map(a => (
+                        <TableRow key={a.id} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
+                          <TableCell className="font-mono font-bold text-blue-600">{a.code}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell><Badge className={`${typeColors[a.type] || 'bg-gray-100 text-gray-700'} border-none font-bold text-[10px]`}>{a.type.toUpperCase()}</Badge></TableCell>
+                          <TableCell className={`text-right font-black ${Number(a.balance) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{currSym}{Number(a.balance).toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                      {filteredCOA.length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-12 text-[#8E9299]">No accounts match the selected filter.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      }
 
       default: return null;
     }

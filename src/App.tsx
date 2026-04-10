@@ -94,6 +94,7 @@ export default function App() {
         { id: 'accounting-ar', label: 'Accounts Receivable (AR)' },
         { id: 'accounting-ap', label: 'Accounts Payable (AP)' },
         { id: 'accounting-transactions', label: 'General Ledger' },
+        { id: 'accounting-coa', label: 'Chart of Accounts' },
         { id: 'accounting-reports', label: 'Financial Reports' },
       ]
     },
