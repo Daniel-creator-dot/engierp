@@ -59,6 +59,7 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { hrApi, settingsApi } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HRProps {
   activeSub?: string;
@@ -70,6 +71,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [payrollEntries, setPayrollEntries] = useState<PayrollRecord[]>([]);
   const [appraisals, setAppraisals] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
   
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false);
@@ -554,11 +556,10 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                 </DialogContent>
               </Dialog>
             </div>
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff Member</TableHead><TableHead>Type</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                  <TableBody>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff Member</TableHead><TableHead>Type</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
                     {leaveRequests.map(l => (
                       <TableRow key={l.id}>
                         <TableCell className="font-bold">{l.employee_name || l.employee_id}</TableCell>
@@ -574,7 +575,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
-                          {l.status === 'Pending' && (
+                          {l.status === 'Pending' && user?.role === 'admin' && (
                             <>
                               <Button variant="ghost" size="icon" onClick={() => handleUpdateLeaveStatus(l.id, 'Approved')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full"><CheckCircle2 className="w-4 h-4" /></Button>
                               <Button variant="ghost" size="icon" onClick={() => handleUpdateLeaveStatus(l.id, 'Rejected')} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-full"><XCircle className="w-4 h-4" /></Button>
@@ -586,8 +587,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                     {leaveRequests.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No current absence records.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         );
       case 'hr-payroll':

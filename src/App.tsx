@@ -297,8 +297,8 @@ export default function App() {
           </div>
           {isSidebarOpen && (
             <span className="font-bold text-xl tracking-tight truncate">
-              <span className="text-orange-500">bytz</span>
-              <span className="text-white">forge</span>
+              <span className="text-white">bytz</span>
+              <span className="text-orange-500">forge</span>
             </span>
           )}
         </div>
@@ -461,7 +461,7 @@ export default function App() {
         </header>
 
         {/* Module Content */}
-        <ScrollArea className="flex-1 p-8">
+        <ScrollArea className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
             {renderModule()}
           </div>

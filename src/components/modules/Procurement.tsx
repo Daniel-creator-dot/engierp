@@ -305,6 +305,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
               </Dialog>
             </CardHeader>
             <CardContent className="p-0">
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#F5F5F5]/50"><TableHead>PO ID</TableHead><TableHead>Vendor</TableHead><TableHead>Project</TableHead><TableHead className="text-right">Total ({currSym})</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
@@ -327,6 +328,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                   {purchaseOrders.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active purchase orders found.</TableCell></TableRow>}
                 </TableBody>
               </Table>
+            </div>
             </CardContent>
           </Card>
         );
@@ -361,22 +363,24 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
               </Dialog>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#F5F5F5]/50"><TableHead>Material Item</TableHead><TableHead>Deployment Site</TableHead><TableHead>Quantity</TableHead><TableHead className="text-right">Integrity Status</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventory.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-blue-50/20">
-                      <TableCell className="font-bold text-[#141414]">{inv.name}</TableCell>
-                      <TableCell className="text-xs text-[#8E9299] font-medium">{inv.project_name || 'Common Storage'}</TableCell>
-                      <TableCell className="font-black">{inv.quantity} {inv.unit}</TableCell>
-                      <TableCell className="text-right"><Badge className={inv.quantity > inv.reorder_level ? 'bg-green-100 text-green-700 font-bold px-3 border-none' : 'bg-red-100 text-red-700 font-bold px-3 border-none'}>{inv.quantity > inv.reorder_level ? 'SUFFICIENT' : 'REORDER'}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                  {inventory.length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-12 text-[#8E9299]">Site stockpile is empty.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-[#F5F5F5]/50"><TableHead>Material Item</TableHead><TableHead>Deployment Site</TableHead><TableHead>Quantity</TableHead><TableHead className="text-right">Integrity Status</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {inventory.map((inv) => (
+                      <TableRow key={inv.id} className="hover:bg-blue-50/20">
+                        <TableCell className="font-bold text-[#141414]">{inv.name}</TableCell>
+                        <TableCell className="text-xs text-[#8E9299] font-medium">{inv.project_name || 'Common Storage'}</TableCell>
+                        <TableCell className="font-black">{inv.quantity} {inv.unit}</TableCell>
+                        <TableCell className="text-right"><Badge className={inv.quantity > inv.reorder_level ? 'bg-green-100 text-green-700 font-bold px-3 border-none' : 'bg-red-100 text-red-700 font-bold px-3 border-none'}>{inv.quantity > inv.reorder_level ? 'SUFFICIENT' : 'REORDER'}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                    {inventory.length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-12 text-[#8E9299]">Site stockpile is empty.</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         );

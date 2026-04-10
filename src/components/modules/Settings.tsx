@@ -87,7 +87,8 @@ export default function Settings() {
       { name: 'Loan', type: 'fixed', value: 0 },
       { name: 'Staff Advance', type: 'fixed', value: 0 },
       { name: 'Health Insurance', type: 'fixed', value: 0 }
-    ]
+    ],
+    max_leave_days_per_month: 5
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -342,6 +343,19 @@ export default function Settings() {
               </div>
 
               <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
+                <div className="space-y-2">
+                  <Label className="font-bold text-[#141414]">Monthly Leave Limit (Days per Employee)</Label>
+                  <Input 
+                    type="number" 
+                    value={payrollConfig.max_leave_days_per_month} 
+                    onChange={(e) => setPayrollConfig({...payrollConfig, max_leave_days_per_month: Number(e.target.value)})}
+                    className="bg-[#F5F5F5] border-none rounded-xl max-w-xs"
+                  />
+                  <p className="text-[10px] text-[#8E9299]">Restricts the total number of approved leave days an employee can have in a single calendar month.</p>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="font-bold text-[#141414]">Custom Deduction Types</Label>
@@ -497,7 +511,7 @@ export default function Settings() {
                   <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                   <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>
-                <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://api.yourprovider.com/v1" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://api.yourprovider.com/v1?to={to}&msg={msg}&key={key}" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 <div className="space-y-2"><Label>API Key</Label><Input value={smsConfig.api_key} onChange={(e) => setSmsConfig({...smsConfig, api_key: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 <div className="space-y-2"><Label>API Secret</Label><Input value={smsConfig.api_secret} onChange={(e) => setSmsConfig({...smsConfig, api_secret: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
               </CardContent>

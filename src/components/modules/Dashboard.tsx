@@ -117,7 +117,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <Badge className="mb-2 bg-blue-100 text-blue-600 border-none font-bold px-3 py-1">v3.0 ENTERPRISE</Badge>
-          <h1 className="text-5xl font-black tracking-tighter text-[#141414] leading-tight">
+          <h1 className="text-3xl md:text-5xl font-black tracking-tighter text-[#141414] leading-tight">
             Engineering <span className="text-blue-600">Intelligence.</span>
           </h1>
           <p className="text-[#8E9299] text-lg font-medium max-w-2xl mt-2">

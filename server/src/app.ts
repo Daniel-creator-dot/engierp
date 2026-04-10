@@ -79,6 +79,29 @@ async function bootstrap() {
         console.log('✅ Existing users synced.');
       }
     }
+
+    // Ensure SMS Notify GH is the default provider
+    const existingSMS = await db('sms_configurations').first();
+    const defaultSMSUrl = 'https://sms.smsnotifygh.com/smsapi?key={key}&to={to}&msg={msg}&sender_id={sender}';
+    const defaultSMSKey = '84c879bb-f9f9-4666-84a8-9f70a9b238cc';
+
+    if (!existingSMS) {
+      console.log('⏳ Initializing default SMS Gateway (Notify GH)...');
+      await db('sms_configurations').insert({
+        provider: 'Custom',
+        api_url: defaultSMSUrl,
+        api_key: defaultSMSKey,
+        sender_id: 'BytzForge'
+      });
+      console.log('✅ SMS Configuration initialized.');
+    } else if ((existingSMS as any).api_url && ((existingSMS as any).api_url.includes('hubtel') || (existingSMS as any).api_url === '')) {
+      console.log('⏳ Updating SMS Gateway to Notify GH defaults...');
+      await db('sms_configurations').where({ id: existingSMS.id }).update({
+        api_url: defaultSMSUrl,
+        api_key: defaultSMSKey
+      });
+      console.log('✅ SMS Configuration updated.');
+    }
   } catch (error) {
     console.error('❌ Bootstrap error:', error);
   }

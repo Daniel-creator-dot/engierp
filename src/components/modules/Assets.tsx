@@ -243,41 +243,43 @@ export default function Assets() {
           <button className={`text-sm font-bold transition-all ${activeTab === 'allocations' ? 'text-blue-600 border-b-2 border-blue-600 pb-4 -mb-4' : 'text-[#8E9299]'}`} onClick={() => setActiveTab('allocations')}>Site Allocations</button>
         </div>
         <CardContent className="p-0">
-          {activeTab === 'inventory' ? (
-            <Table>
-              <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset ID</TableHead><TableHead>Unit Name</TableHead><TableHead>Category</TableHead><TableHead>Daily Rate</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {equipment.map((item) => (
-                  <TableRow key={item.id} className="hover:bg-blue-50/20">
-                    <TableCell className="font-mono text-xs font-bold text-blue-600">{item.id}</TableCell>
-                    <TableCell className="font-bold text-[#141414]">{item.name}</TableCell>
-                    <TableCell className="text-[#8E9299] font-medium">{item.category}</TableCell>
-                    <TableCell className="font-black">GH₵{Number(item.daily_cost).toLocaleString()}</TableCell>
-                    <TableCell><Badge className={item.status === 'Available' ? 'bg-green-100 text-green-700 font-bold border-none px-3' : item.status === 'On Site' ? 'bg-blue-100 text-blue-700 font-bold border-none px-3' : 'bg-red-100 text-red-700 font-bold border-none px-3'}>{item.status}</Badge></TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => { setSelectedEquipment(item); setIsEditModalOpen(true); }} className="h-8 w-8 hover:bg-white rounded-full">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <Table>
-              <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset</TableHead><TableHead>Project Site</TableHead><TableHead>Deployed Date</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {allocations.map((alloc) => (
-                  <TableRow key={alloc.id} className="hover:bg-blue-50/20">
-                    <TableCell className="font-bold">{alloc.equipment_name}</TableCell>
-                    <TableCell className="font-medium text-[#141414]">{alloc.project_name}</TableCell>
-                    <TableCell className="text-[#8E9299] text-xs font-bold">{new Date(alloc.start_date).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right"><Badge className="bg-blue-50 text-blue-600 border-none font-bold">ACTIVE DEPLOYMENT</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <div className="overflow-x-auto">
+            {activeTab === 'inventory' ? (
+              <Table>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset ID</TableHead><TableHead>Unit Name</TableHead><TableHead>Category</TableHead><TableHead>Daily Rate</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {equipment.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-blue-50/20">
+                      <TableCell className="font-mono text-xs font-bold text-blue-600">{item.id}</TableCell>
+                      <TableCell className="font-bold text-[#141414]">{item.name}</TableCell>
+                      <TableCell className="text-[#8E9299] font-medium">{item.category}</TableCell>
+                      <TableCell className="font-black">GH₵{Number(item.daily_cost).toLocaleString()}</TableCell>
+                      <TableCell><Badge className={item.status === 'Available' ? 'bg-green-100 text-green-700 font-bold border-none px-3' : item.status === 'On Site' ? 'bg-blue-100 text-blue-700 font-bold border-none px-3' : 'bg-red-100 text-red-700 font-bold border-none px-3'}>{item.status}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedEquipment(item); setIsEditModalOpen(true); }} className="h-8 w-8 hover:bg-white rounded-full">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset</TableHead><TableHead>Project Site</TableHead><TableHead>Deployed Date</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {allocations.map((alloc) => (
+                    <TableRow key={alloc.id} className="hover:bg-blue-50/20">
+                      <TableCell className="font-bold">{alloc.equipment_name}</TableCell>
+                      <TableCell className="font-medium text-[#141414]">{alloc.project_name}</TableCell>
+                      <TableCell className="text-[#8E9299] text-xs font-bold">{new Date(alloc.start_date).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right"><Badge className="bg-blue-50 text-blue-600 border-none font-bold">ACTIVE DEPLOYMENT</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -277,22 +277,24 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                       <Badge className="bg-green-100 text-green-700 border-none font-bold">ON BUDGET</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader><TableRow><TableHead>Cost Category</TableHead><TableHead className="text-right">Actual to Date</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                        {costingData.actuals.map((c: any, i: number) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-medium text-[#141414]">{c.category}</TableCell>
-                            <TableCell className="text-right font-bold">{currSym}{c.amount.toLocaleString()}</TableCell>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>Cost Category</TableHead><TableHead className="text-right">Actual to Date</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {costingData.actuals.map((c: any, i: number) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium text-[#141414]">{c.category}</TableCell>
+                              <TableCell className="text-right font-bold">{currSym}{c.amount.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-[#F5F5F5]/50 font-black">
+                            <TableCell>Total Committed Cost</TableCell>
+                            <TableCell className="text-right">{currSym}{costingData.actuals.reduce((s:any,c:any)=>s+c.amount,0).toLocaleString()}</TableCell>
                           </TableRow>
-                        ))}
-                        <TableRow className="bg-[#F5F5F5]/50 font-black">
-                          <TableCell>Total Committed Cost</TableCell>
-                          <TableCell className="text-right">{currSym}{costingData.actuals.reduce((s:any,c:any)=>s+c.amount,0).toLocaleString()}</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
+                        </TableBody>
+                      </Table>
+                    </div>
                   </CardContent>
                 </>
               ) : (
@@ -336,21 +338,23 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
               </Dialog>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Contract Ref</TableHead><TableHead>Project</TableHead><TableHead>Value</TableHead><TableHead>Retention ({currSym})</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {contracts.map(c => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
-                      <TableCell className="font-medium">{c.project_name}</TableCell>
-                      <TableCell className="font-bold text-[#141414]">{currSym}{Number(c.value).toLocaleString()}</TableCell>
-                      <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{currSym}{Number(c.retention_amount).toLocaleString()}</TableCell>
-                      <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                  {contracts.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No executive contracts initialized.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Contract Ref</TableHead><TableHead>Project</TableHead><TableHead>Value</TableHead><TableHead>Retention ({currSym})</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {contracts.map(c => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
+                        <TableCell className="font-medium">{c.project_name}</TableCell>
+                        <TableCell className="font-bold text-[#141414]">{currSym}{Number(c.value).toLocaleString()}</TableCell>
+                        <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{currSym}{Number(c.retention_amount).toLocaleString()}</TableCell>
+                        <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                    {contracts.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No executive contracts initialized.</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         );
@@ -359,39 +363,41 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
           <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden">
             <CardHeader className="bg-[#F5F5F5]/30"><CardTitle>Work-in-Progress (WIP) Position</CardTitle><CardDescription>Earned vs Billed revenue recognition.</CardDescription></CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#F5F5F5]/50">
-                    <TableHead>Project</TableHead>
-                    <TableHead>Completion %</TableHead>
-                    <TableHead>Earned Revenue</TableHead>
-                    <TableHead>Billed Revenue</TableHead>
-                    <TableHead className="text-right">Net Position</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {wipReport.map((w, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-bold">{w.project_name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Progress value={Number(w.poc)} className="w-20 h-1.5" />
-                          <span className="text-xs font-bold">{w.poc}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.earned_revenue).toLocaleString()}</TableCell>
-                      <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.billed_revenue).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                          {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
-                        </Badge>
-                        <p className="text-[10px] font-bold mt-1">{currSym}{Math.abs(w.over_under_billing).toLocaleString()}</p>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-[#F5F5F5]/50">
+                      <TableHead>Project</TableHead>
+                      <TableHead>Completion %</TableHead>
+                      <TableHead>Earned Revenue</TableHead>
+                      <TableHead>Billed Revenue</TableHead>
+                      <TableHead className="text-right">Net Position</TableHead>
                     </TableRow>
-                  ))}
-                  {wipReport.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active WIP data available for recording.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {wipReport.map((w, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-bold">{w.project_name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={Number(w.poc)} className="w-20 h-1.5" />
+                            <span className="text-xs font-bold">{w.poc}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.earned_revenue).toLocaleString()}</TableCell>
+                        <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.billed_revenue).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                            {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
+                          </Badge>
+                          <p className="text-[10px] font-bold mt-1">{currSym}{Math.abs(w.over_under_billing).toLocaleString()}</p>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {wipReport.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active WIP data available for recording.</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         );

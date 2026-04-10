@@ -369,7 +369,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                </Dialog>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {bankAccounts.map(b => (
                 <Card key={b.id} className="border-none shadow-sm rounded-2xl bg-gradient-to-br from-[#141414] to-slate-900 text-white overflow-hidden">
                   <CardHeader className="pb-2">
@@ -388,10 +388,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               ))}
             </div>
 
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]"><CardTitle>Bank Feeds & Reconciliation</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <Table>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
                   <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {bankTx.map((tx, idx) => (
@@ -444,31 +442,29 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               </Dialog>
             </div>
             
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {bills.map((bill, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-bold text-[#141414]">{bill.supplier_name}</TableCell>
-                        <TableCell className="text-[#8E9299] text-xs font-medium">{bill.category}</TableCell>
-                        <TableCell className="font-mono text-xs">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-right font-black text-red-600">{currSym}{Number(bill.amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-600 border-none'}>{bill.status.toUpperCase()}</Badge></TableCell>
-                        <TableCell className="text-right">
-                          {bill.status !== 'Paid' && (
-                            <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Bill', id: bill.id, amount: bill.amount}); setIsPayBillOpen(true); }}>
-                              PAY
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {bills.map((bill, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-bold text-[#141414]">{bill.supplier_name}</TableCell>
+                      <TableCell className="text-[#8E9299] text-xs font-medium">{bill.category}</TableCell>
+                      <TableCell className="font-mono text-xs">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right font-black text-red-600">{currSym}{Number(bill.amount).toLocaleString()}</TableCell>
+                      <TableCell><Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-600 border-none'}>{bill.status.toUpperCase()}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        {bill.status !== 'Paid' && (
+                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Bill', id: bill.id, amount: bill.amount}); setIsPayBillOpen(true); }}>
+                            PAY
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
             {/* Payment Modal */}
             <Dialog open={isPayBillOpen} onOpenChange={setIsPayBillOpen}>
@@ -535,32 +531,30 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               </Dialog>
             </div>
             
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Invoice ID</TableHead><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {invoices.map((inv) => (
-                      <TableRow key={inv.id} className="hover:bg-blue-50/20">
-                        <TableCell className="font-bold text-blue-600">{inv.id}</TableCell>
-                        <TableCell className="font-bold text-[#141414]">{inv.client}</TableCell>
-                        <TableCell className="text-[#8E9299] text-xs font-mono">{inv.dueDate}</TableCell>
-                        <TableCell className="text-right font-black">{currSym}{Number(inv.amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge></TableCell>
-                        <TableCell className="text-right space-x-2">
-                          {inv.status !== 'paid' && (
-                            <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Invoice', id: inv.id, amount: inv.amount}); setIsPayInvoiceOpen(true); }}>
-                              RECEIVE
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => handlePrintDocument(`INVOICE - ${inv.id}`, `<h3>To: ${inv.client}</h3><p>Amount: ${currSym}${inv.amount}</p>`)}><Printer className="w-3 h-3" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Invoice ID</TableHead><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {invoices.map((inv) => (
+                    <TableRow key={inv.id} className="hover:bg-blue-50/20">
+                      <TableCell className="font-bold text-blue-600">{inv.id}</TableCell>
+                      <TableCell className="font-bold text-[#141414]">{inv.client}</TableCell>
+                      <TableCell className="text-[#8E9299] text-xs font-mono">{inv.dueDate}</TableCell>
+                      <TableCell className="text-right font-black">{currSym}{Number(inv.amount).toLocaleString()}</TableCell>
+                      <TableCell><Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge></TableCell>
+                      <TableCell className="text-right space-x-2">
+                        {inv.status !== 'paid' && (
+                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Invoice', id: inv.id, amount: inv.amount}); setIsPayInvoiceOpen(true); }}>
+                            RECEIVE
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => handlePrintDocument(`INVOICE - ${inv.id}`, `<h3>To: ${inv.client}</h3><p>Amount: ${currSym}${inv.amount}</p>`)}><Printer className="w-3 h-3" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
             {/* Receive Payment Modal */}
             <Dialog open={isPayInvoiceOpen} onOpenChange={setIsPayInvoiceOpen}>
@@ -639,23 +633,21 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                </Dialog>
             </div>
             
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {transactions.map((tx) => (
-                      <TableRow key={tx.id} className="hover:bg-blue-50/20">
-                        <TableCell className="text-[#8E9299] font-mono text-xs">{tx.date}</TableCell>
-                        <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
-                        <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414]">{tx.category}</Badge></TableCell>
-                        <TableCell className={`text-right font-black ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {transactions.map((tx) => (
+                    <TableRow key={tx.id} className="hover:bg-blue-50/20">
+                      <TableCell className="text-[#8E9299] font-mono text-xs">{tx.date}</TableCell>
+                      <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
+                      <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414]">{tx.category}</Badge></TableCell>
+                      <TableCell className={`text-right font-black ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         );
 
@@ -674,24 +666,21 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               </div>
             )}
 
-            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]"><CardTitle>Unadjusted Trial Balance</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Code</TableHead><TableHead>Account Name</TableHead><TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {trialBalance.map(a => (
-                      <TableRow key={a.id} className="hover:bg-[#F5F5F5]/50">
-                        <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
-                        <TableCell className="font-bold">{a.name}</TableCell>
-                        <TableCell className="text-right font-black text-green-600">{a.balance >= 0 ? `${currSym}${Number(a.balance).toLocaleString()}` : '-'}</TableCell>
-                        <TableCell className="text-right font-black text-red-600">{a.balance < 0 ? `${currSym}${Math.abs(Number(a.balance)).toLocaleString()}` : '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Code</TableHead><TableHead>Account Name</TableHead><TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {trialBalance.map(a => (
+                    <TableRow key={a.id} className="hover:bg-[#F5F5F5]/50">
+                      <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
+                      <TableCell className="font-bold">{a.name}</TableCell>
+                      <TableCell className="text-right font-black text-green-600">{a.balance >= 0 ? `${currSym}${Number(a.balance).toLocaleString()}` : '-'}</TableCell>
+                      <TableCell className="text-right font-black text-red-600">{a.balance < 0 ? `${currSym}${Math.abs(Number(a.balance)).toLocaleString()}` : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         );
 

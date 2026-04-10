@@ -34,8 +34,9 @@ export async function sendSMS(to: string, message: string) {
       const finalUrl = api_url
         .replace('{to}', to)
         .replace('{message}', encodeURIComponent(message))
+        .replace('{msg}', encodeURIComponent(message))
         .replace('{key}', api_key)
-        .replace('{secret}', api_secret)
+        .replace('{secret}', api_secret || '')
         .replace('{sender}', sender_id);
       
       await axios.get(finalUrl);

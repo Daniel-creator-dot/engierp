@@ -24,7 +24,7 @@ export default api;
 export const authApi = {
   login: (credentials: any) => api.post('/auth/login', credentials),
   me: () => api.get('/auth/me'),
-  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  forgotPassword: (phone: string) => api.post('/auth/forgot-password', { phone }),
   resetPassword: (data: any) => api.post('/auth/reset-password', data),
 };
 

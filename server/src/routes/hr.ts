@@ -60,16 +60,42 @@ router.get('/leave-requests', authenticateToken, async (req: AuthRequest, res) =
 router.post('/leave-requests', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { type, startDate, endDate, reason } = req.body;
-    let empId = req.user?.employee_id;
-    
-    if (!empId && req.user?.role === 'admin') {
-      const adminUser = await db('users').where({ id: req.user.id }).first();
-      empId = adminUser?.employee_id;
-    }
+    const empId = req.user?.employee_id;
 
-    if (!empId) return res.status(400).json({ 
-      message: 'Leave request failed: Your user account is not associated with an Employee profile. Please link your account in User Management first.' 
-    });
+    if (!empId) return res.status(401).json({ message: 'User not associated with employee record' });
+
+    // Calculate requested duration
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const requestedDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Get Leave Limit from Config
+    const configRaw = await db('settings').where('key', 'payroll_config').first();
+    const config = configRaw ? JSON.parse(configRaw.value) : { max_leave_days_per_month: 5 };
+    const limit = Number(config.max_leave_days_per_month) || 30;
+
+    // Check existing days for this month (Simplified: check if start month has room)
+    const monthStart = new Date(start.getFullYear(), start.getMonth(), 1).toISOString();
+    const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0).toISOString();
+
+    const existingDays = await db('leave_requests')
+      .where({ employee_id: empId })
+      .whereIn('status', ['Pending', 'Approved'])
+      .where('startDate', '>=', monthStart)
+      .where('startDate', '<=', monthEnd)
+      .select('startDate', 'endDate');
+
+    const totalExisting = existingDays.reduce((sum, req) => {
+      const s = new Date(req.startDate);
+      const e = new Date(req.endDate);
+      return sum + (Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    }, 0);
+
+    if (totalExisting + requestedDays > limit) {
+      return res.status(400).json({ 
+        message: `Leave limit exceeded: You have already used/requested ${totalExisting} days this month. Your monthly limit is ${limit} days.` 
+      });
+    }
 
     const [id] = await db('leave_requests').insert({
       employee_id: empId,
@@ -86,8 +112,8 @@ router.post('/leave-requests', authenticateToken, async (req: AuthRequest, res) 
   }
 });
 
-// Approve/Reject leave request
-router.patch('/leave-requests/:id', authenticateToken, authorizeRole(['hr', 'admin']), async (req, res) => {
+// Approve/Reject leave request (Admin only)
+router.patch('/leave-requests/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
