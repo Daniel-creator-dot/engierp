@@ -13,7 +13,8 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
-  PiggyBank
+  PiggyBank,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   Card, 
@@ -333,6 +334,17 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     setTimeout(() => printWindow.print(), 500);
   };
 
+  const handleExportCSV = (filename: string, headers: string[], rows: string[][]) => {
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success(`${filename}.csv exported successfully`);
+  };
+
   if (isLoading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
   }
@@ -343,6 +355,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         return (
           <div className="space-y-6">
             <div className="flex justify-end gap-2">
+               <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date','Description','Bank','Amount','Type','Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
                <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
                  <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
@@ -416,6 +429,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <h2 className="text-xl font-bold">Accounts Payable</h2>
                 <p className="text-sm text-[#8E9299]">Vendor bills and cash outflows.</p>
               </div>
+              <div className="flex gap-2">
+              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_payable', ['Supplier','Category','Due Date','Amount','Status'], bills.map((b: any) => [b.supplier_name, b.category, new Date(b.due_date).toLocaleDateString(), String(b.amount), b.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
               <Dialog open={isRecordBillOpen} onOpenChange={setIsRecordBillOpen}>
                 <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11"><Plus className="w-4 h-4" /> Enter Bill</Button></DialogTrigger>
                 <DialogContent className="rounded-2xl">
@@ -439,6 +454,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
             
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
@@ -485,7 +501,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       <Label>Source Bank Account</Label>
                       <Select name="bank_account_id" required>
                         <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={b.id}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
+                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2"><Label>Reference Note</Label><Input name="reference" required className="bg-[#F5F5F5] border-none" placeholder="Cheque No. / TX Hash" /></div>
@@ -506,6 +522,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <h2 className="text-xl font-bold">Accounts Receivable</h2>
                 <p className="text-sm text-[#8E9299]">Client invoicing, statements, and revenue tracking.</p>
               </div>
+              <div className="flex gap-2">
+              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID','Customer','Due Date','Amount','Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
               <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
                 <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
                 <DialogContent className="rounded-2xl">
@@ -528,6 +546,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
             
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
@@ -574,8 +593,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <div className="space-y-2">
                       <Label>Destination Bank Account</Label>
                       <Select name="bank_account_id" required>
-                        <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={b.id}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select bank account..." /></SelectTrigger>
+                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2"><Label>Reference / Cheque No.</Label><Input name="reference" required className="bg-[#F5F5F5] border-none" /></div>
@@ -593,6 +612,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             {/* GL Implementation kept relatively same, hidden for brevity but completely functional */}
             <div className="flex justify-between items-center">
               <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">Live auditing of all fiscal transactions.</p></div>
+              <div className="flex gap-2">
+              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('general_ledger', ['Date','Reference','Category','Amount','Type'], transactions.map(tx => [tx.date, tx.description, tx.category, String(tx.amount), tx.type]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
               <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
                  <DialogTrigger asChild><Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm"><BookOpen className="w-4 h-4" /> Manual Journal Post</Button></DialogTrigger>
                  <DialogContent className="max-w-3xl rounded-2xl">
@@ -610,7 +631,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                              <div className="col-span-6">
                                <Select onValueChange={(val) => { const n = [...journalItems]; n[idx].account_id = val; setJournalItems(n); }}>
                                  <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select Account" /></SelectTrigger>
-                                 <SelectContent>{coa.map(a => <SelectItem key={a.id} value={a.id}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
+                                 <SelectContent>{coa.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
                                </Select>
                              </div>
                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.debit} onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-green-600" /></div>
@@ -630,6 +651,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                    </form>
                  </DialogContent>
                </Dialog>
+              </div>
             </div>
             
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
@@ -655,6 +677,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
           <div className="space-y-8">
             <div className="flex items-center justify-between">
               <div><h2 className="text-2xl font-bold text-[#141414]">Financial Position</h2><p className="text-[#8E9299]">Executive reporting and trial balance generated in real-time.</p></div>
+              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('trial_balance', ['Code','Account Name','Debit','Credit'], trialBalance.map((a: any) => [a.code, a.name, a.balance >= 0 ? String(a.balance) : '', a.balance < 0 ? String(Math.abs(a.balance)) : '']))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
             </div>
             
             {profitLoss && (
