@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Briefcase, Lock, Mail, Loader2, Smartphone, ArrowLeft, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Briefcase, Lock, Mail, Loader2, Smartphone, ArrowLeft, KeyRound, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { authApi } from '../lib/api';
 
@@ -19,6 +19,7 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -103,8 +104,28 @@ export default function Login() {
                 <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="email" placeholder="admin@bytzforge.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between"><Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Password</Label><button type="button" onClick={() => setMode('forgot_phone')} className="text-[11px] font-bold text-blue-600 hover:underline">Forgot?</button></div>
-                <div className="relative"><Lock className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
+                <div className="flex items-center justify-between">
+                  <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Password</Label>
+                  <button type="button" onClick={() => setMode('forgot_phone')} className="text-[11px] font-bold text-blue-600 hover:underline">Forgot?</button>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" />
+                  <Input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="••••••••" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    required 
+                    className="h-12 pl-10 pr-12 bg-[#F5F5F5] border-none rounded-xl" 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-[#8E9299] hover:text-[#141414]"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Enter Dashboard'}</Button>
             </form>
@@ -144,7 +165,24 @@ export default function Login() {
               </div>
               <div className="space-y-2">
                 <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">New Password</Label>
-                <div className="relative"><Lock className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" />
+                  <Input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="••••••••" 
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    required 
+                    className="h-12 pl-10 pr-12 bg-[#F5F5F5] border-none rounded-xl" 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-[#8E9299] hover:text-[#141414]"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <Button type="submit" className="w-full h-12 bg-green-600 text-white rounded-xl font-bold" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Update Password'}</Button>
             </form>
