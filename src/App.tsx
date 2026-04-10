@@ -202,7 +202,10 @@ export default function App() {
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10">
           <img src={LogoImg} className="w-full h-full object-cover" alt="Logo" />
         </div>
-        <span className="font-bold text-xl tracking-tight truncate">bytzforge</span>
+        <span className="font-bold text-xl tracking-tight truncate">
+          <span className="text-orange-500">bytz</span>
+          <span className="text-white">forge</span>
+        </span>
       </div>
 
       <ScrollArea className="flex-1 px-3">
@@ -292,7 +295,12 @@ export default function App() {
           <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10">
             <img src={LogoImg} className="w-full h-full object-cover" alt="Logo" />
           </div>
-          {isSidebarOpen && <span className="font-bold text-xl tracking-tight truncate">bytzforge</span>}
+          {isSidebarOpen && (
+            <span className="font-bold text-xl tracking-tight truncate">
+              <span className="text-orange-500">bytz</span>
+              <span className="text-white">forge</span>
+            </span>
+          )}
         </div>
 
         <ScrollArea className="flex-1 px-3">

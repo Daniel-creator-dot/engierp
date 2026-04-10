@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import LogoImg from '../thisone.png';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -35,12 +36,16 @@ export default function Login() {
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/5 rounded-full blur-3xl z-0" />
       
       <Card className="w-full max-w-md shadow-2xl z-10 border-none rounded-3xl overflow-hidden bg-white/95 backdrop-blur-xl">
-        <CardHeader className="space-y-4 pt-12 px-10 pb-8 text-center bg-blue-50/50 border-b border-blue-100">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 shadow-blue-500/20">
-            <Briefcase className="text-white w-6 h-6" />
+        <CardHeader className="space-y-4 pt-12 px-10 pb-8 text-center bg-[#141414] border-b border-white/5">
+          <div className="mx-auto w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6">
+            <img src={LogoImg} className="w-8 h-8 object-contain" alt="Logo" />
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-2xl font-bold tracking-tight text-[#141414]">bytzforge Portal</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              <span className="text-orange-500">bytz</span>
+              <span className="text-white">forge</span>
+              <span className="text-white/60 ml-2">Portal</span>
+            </CardTitle>
             <CardDescription className="text-[#8E9299]">
               Enter your credentials to access the terminal.
             </CardDescription>
