@@ -17,16 +17,16 @@ router.get('/', authenticateToken, async (req, res) => {
         .join('chart_of_accounts', 'ledger_entries.account_id', 'chart_of_accounts.id')
         .where('journal_entries.project_id', p.id)
         .where('chart_of_accounts.type', 'Expense')
-        .sum(db.raw('debit - credit') as any)
+        .select(db.raw('SUM(debit - credit) as total'))
         .first() as any;
       
-      const actualCosts = Number(actualsRes?.sum || 0);
+      const actualCosts = Number(actualsRes?.total || 0);
 
       // 2. Sum committed costs from Approved POs
       const committedRes = await db('purchase_orders')
         .where({ project_id: p.id })
         .whereIn('status', ['Approved', 'Paid', 'Partially Received'])
-        .sum('total_amount as total')
+        .select(db.raw('SUM(total_amount) as total'))
         .first() as any;
       
       const committedCosts = Number(committedRes?.total || 0);
@@ -34,8 +34,8 @@ router.get('/', authenticateToken, async (req, res) => {
       // 3. Sum Billed Revenue (from invoices)
       const revenueRes = await db('invoices')
         .where({ project_id: p.id })
-        .where('status', 'Paid')
-        .sum('total_amount as total')
+        .whereIn('status', ['paid', 'Paid'])
+        .select(db.raw('SUM(amount) as total'))
         .first() as any;
       
       const revenue = Number(revenueRes?.total || 0);
