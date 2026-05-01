@@ -306,34 +306,54 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
             <Card className="lg:col-span-3 border-none shadow-sm rounded-3xl bg-white overflow-hidden">
               {costingData ? (
                 <>
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <div>
-                      <CardTitle>Job Cost Breakdown: {costingData.project_name}</CardTitle>
-                      <CardDescription>Fiscal vs Budget variance by category.</CardDescription>
+                      <CardTitle className="text-2xl font-black">Project Governance: {costingData.project_name}</CardTitle>
+                      <CardDescription>Real-time fiscal position against authorized budget.</CardDescription>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] font-bold text-[#8E9299] uppercase">Project Health</p>
-                      <Badge className="bg-green-100 text-green-700 border-none font-bold">ON BUDGET</Badge>
+                      <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Project Health</p>
+                      <Badge className={costingData.budget_remaining >= 0 ? "bg-green-100 text-green-700 border-none font-bold" : "bg-red-100 text-red-700 border-none font-bold"}>
+                        {costingData.budget_remaining >= 0 ? "ON BUDGET" : "OVER BUDGET"}
+                      </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-0">
+                  <CardContent className="space-y-6">
+                    {/* Governance Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-2">
+                      <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
+                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Total Budget</p>
+                        <p className="text-xl font-black text-[#141414]">{currSym}{Number(costingData.revised_budget).toLocaleString()}</p>
+                      </div>
+                      <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
+                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Spent to Date</p>
+                        <p className="text-xl font-black text-orange-600">{currSym}{Number(costingData.total_actuals).toLocaleString()}</p>
+                      </div>
+                      <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
+                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Open Commitments</p>
+                        <p className="text-xl font-black text-blue-600">{currSym}{Number(costingData.total_committed).toLocaleString()}</p>
+                      </div>
+                      <div className="bg-[#141414] p-4 rounded-2xl shadow-xl shadow-slate-200">
+                        <p className="text-[10px] font-black text-white/50 uppercase mb-1">Budget Remaining</p>
+                        <p className={`text-xl font-black ${costingData.budget_remaining >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {currSym}{Number(costingData.budget_remaining).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader><TableRow><TableHead>Cost Category</TableHead><TableHead className="text-right">Actual to Date</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow className="bg-[#F5F5F5]/50 border-none"><TableHead className="font-bold text-xs uppercase">Cost Category</TableHead><TableHead className="text-right font-bold text-xs uppercase">Actual to Date</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {costingData.actuals.map((c: any, i: number) => (
-                            <TableRow key={i}>
+                            <TableRow key={i} className="hover:bg-slate-50 transition-colors">
                               <TableCell className="font-medium text-[#141414]">{c.category}</TableCell>
                               <TableCell className="text-right font-bold">{currSym}{c.amount.toLocaleString()}</TableCell>
                             </TableRow>
                           ))}
-                          <TableRow className="bg-blue-50/50">
-                            <TableCell className="font-bold text-blue-700">Open Commitments (POs)</TableCell>
+                          <TableRow className="bg-blue-50/30">
+                            <TableCell className="font-bold text-blue-700">Total Purchase Order Commitments</TableCell>
                             <TableCell className="text-right font-black text-blue-700">{currSym}{Number(costingData.total_committed || 0).toLocaleString()}</TableCell>
-                          </TableRow>
-                          <TableRow className="bg-[#141414] text-white font-black">
-                            <TableCell className="text-lg">TOTAL COMMITTED COST</TableCell>
-                            <TableCell className="text-right text-lg">{currSym}{(costingData.actuals.reduce((s:any,c:any)=>s+c.amount,0) + Number(costingData.total_committed || 0)).toLocaleString()}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
