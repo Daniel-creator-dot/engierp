@@ -172,6 +172,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
   const getSetting = (key: string) => companySettings.find(s => s.key === key)?.value || '';
   const currSym = getSetting('currency') === 'USD' ? '$' : 'GH₵';
+  const accountingConfig = JSON.parse(getSetting('accounting_config') || '{"sales_tax_rate": "15", "tax_name": "VAT"}');
 
   // Bank Actions
   const handleAddBankAccount = async (e: React.FormEvent) => {
@@ -218,12 +219,17 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const projId = formData.get('project_id') as string;
     const project = projects.find(p => p.id === projId);
     
-    const totalAmount = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const subtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const taxRate = Number(accountingConfig.sales_tax_rate) / 100;
+    const taxAmount = subtotal * taxRate;
+    const totalAmount = subtotal + taxAmount;
     
     const data = {
       id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       client: project?.client || formData.get('client_name'),
       amount: totalAmount,
+      tax_amount: taxAmount,
+      subtotal: subtotal,
       dueDate: formData.get('dueDate'),
       project_id: projId,
       status: 'unpaid',
@@ -673,15 +679,25 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         </div>
                       </div>
 
-                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl flex justify-between items-center">
-                        <div>
-                          <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
-                          <p className="text-sm text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
+                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-blue-600 font-medium">Subtotal</span>
+                          <span className="font-bold">{currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}</span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-blue-700">
-                            {currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}
-                          </p>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-blue-600 font-medium">{accountingConfig.tax_name} ({accountingConfig.sales_tax_rate}%)</span>
+                          <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (Number(accountingConfig.sales_tax_rate) / 100)).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-blue-100">
+                          <div>
+                            <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
+                            <p className="text-xs text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-black text-blue-700">
+                              {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + Number(accountingConfig.sales_tax_rate) / 100)).toLocaleString()}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -745,6 +761,14 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                                   ${itemsHtml}
                                 </tbody>
                                 <tfoot>
+                                  <tr>
+                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">Subtotal:</td>
+                                    <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.subtotal || inv.amount).toLocaleString()}</td>
+                                  </tr>
+                                  <tr>
+                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">${accountingConfig.tax_name} (${accountingConfig.sales_tax_rate}%):</td>
+                                    <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.tax_amount || 0).toLocaleString()}</td>
+                                  </tr>
                                   <tr style="font-size: 1.2rem; font-weight: bold;">
                                     <td colspan="3" style="padding: 20px 10px; text-align: right;">Grand Total:</td>
                                     <td style="padding: 20px 10px; text-align: right; color: #2563eb;">${currSym}${Number(inv.amount).toLocaleString()}</td>

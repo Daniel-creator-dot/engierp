@@ -93,6 +93,11 @@ export default function Settings() {
     ],
     max_leave_days_per_month: 5
   });
+
+  const [accountingConfig, setAccountingConfig] = useState<any>({
+    sales_tax_rate: '15',
+    tax_name: 'VAT'
+  });
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -138,6 +143,11 @@ export default function Settings() {
         }
         setPayrollConfig(config);
       }
+
+      const accountingSetting = res.data.find((s: any) => s.key === 'accounting_config');
+      if (accountingSetting) {
+        setAccountingConfig(JSON.parse(accountingSetting.value));
+      }
     } catch (error) {
       toast.error('Failed to load settings');
     } finally {
@@ -178,10 +188,13 @@ export default function Settings() {
   const handleSavePayroll = async () => {
     setIsSaving(true);
     try {
-      await settingsApi.updateSetting('payroll_config', JSON.stringify(payrollConfig));
-      toast.success('Payroll compliance updated!');
+      await Promise.all([
+        settingsApi.updateSetting('payroll_config', JSON.stringify(payrollConfig)),
+        settingsApi.updateSetting('accounting_config', JSON.stringify(accountingConfig))
+      ]);
+      toast.success('Tax and payroll configuration updated!');
     } catch (error) {
-      toast.error('Failed to save payroll config');
+      toast.error('Failed to save tax config');
     } finally {
       setIsSaving(false);
     }
@@ -435,6 +448,30 @@ export default function Settings() {
                   />
                   <p className="text-[10px] text-[#8E9299]">Restricts the total number of approved leave days an employee can have in a single calendar month.</p>
                 </div>
+              </div>
+
+              <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-[#141414]">Sales Tax Name (e.g. VAT)</Label>
+                    <Input 
+                      value={accountingConfig.tax_name} 
+                      onChange={(e) => setAccountingConfig({...accountingConfig, tax_name: e.target.value})}
+                      placeholder="VAT"
+                      className="bg-[#F5F5F5] border-none rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-[#141414]">Standard Tax Rate (%)</Label>
+                    <Input 
+                      type="number" 
+                      value={accountingConfig.sales_tax_rate} 
+                      onChange={(e) => setAccountingConfig({...accountingConfig, sales_tax_rate: e.target.value})}
+                      className="bg-[#F5F5F5] border-none rounded-xl"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-[#8E9299]">This rate will be applied to all new sales invoices generated in the system.</p>
               </div>
 
               <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
