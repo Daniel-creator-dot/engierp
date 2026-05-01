@@ -100,8 +100,29 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     deductions: [] as { type: string, amount: number }[],
     month: new Date().toLocaleString('default', { month: 'long' }),
     year: 2026,
-    payment_date: new Date().toISOString().split('T')[0]
+    payment_date: new Date().toISOString().split('T')[0],
+    ssnit: 0,
+    paye: 0
   });
+
+  const calculatePAYE = (taxableIncome: number, tiers: any[]) => {
+    let tax = 0;
+    let remainingIncome = taxableIncome;
+
+    for (const tier of tiers) {
+      const taxableInThisTier = Math.min(Math.max(remainingIncome, 0), Number(tier.threshold));
+      tax += taxableInThisTier * (Number(tier.rate) / 100);
+      remainingIncome -= taxableInThisTier;
+      if (remainingIncome <= 0) break;
+    }
+    
+    if (remainingIncome > 0 && tiers.length > 0) {
+      const lastRate = Number(tiers[tiers.length - 1].rate);
+      tax += remainingIncome * (lastRate / 100);
+    }
+
+    return tax;
+  };
 
   const togglePeriod = (period: string) => {
     setExpandedPeriods(prev => ({ ...prev, [period]: !prev[period] }));
@@ -306,6 +327,20 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     const totalDeductions = payrollData.deductions.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
     
     try {
+      const config = companySettings.find(s => s.key === 'payroll_config');
+      const configObj = config ? JSON.parse(config.value) : { ssnit_employee: 5.5, tax_tiers: [] };
+      const ssnit = (Number(payrollData.base_salary) * Number(configObj.ssnit_employee)) / 100;
+      const taxable = Number(payrollData.base_salary) - ssnit;
+      const paye = calculatePAYE(taxable, configObj.tax_tiers || []);
+      const other = payrollData.deductions.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+
+      // Detailed breakdown for DB
+      const detailed_deductions = [
+        { type: 'SSNIT (5.5%)', amount: ssnit },
+        { type: 'PAYE (Income Tax)', amount: paye },
+        ...payrollData.deductions
+      ];
+
       await hrApi.processPayroll({
         employee_id: selectedEmployee.id,
         month: payrollData.month,
@@ -313,8 +348,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
         payment_date: payrollData.payment_date,
         base_salary: payrollData.base_salary,
         allowances: payrollData.allowances,
-        deductions: totalDeductions,
-        detailed_deductions: payrollData.deductions
+        deductions: ssnit + paye + other,
+        detailed_deductions
       });
       toast.success(`Payroll processed for ${selectedEmployee.name}`);
       setIsIndividualPayrollOpen(false);
@@ -372,6 +407,56 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     `);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
+  };
+
+  const handlePrintPV = (p: PayrollRecord) => {
+    const content = `
+      <div style="border: 2px solid #141414; padding: 20px; border-radius: 12px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 10px; border: 1px solid #E4E3E0; background: #F5F5F5; font-weight: bold;">PAYEE NAME</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0;">${p.name}</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0; background: #F5F5F5; font-weight: bold;">PV NUMBER</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0;">PV-${p.id}-${p.year}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid #E4E3E0; background: #F5F5F5; font-weight: bold;">MONTH/YEAR</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0;">${p.month} ${p.year}</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0; background: #F5F5F5; font-weight: bold;">PAYMENT DATE</td>
+            <td style="padding: 10px; border: 1px solid #E4E3E0;">${new Date(p.payment_date).toLocaleDateString()}</td>
+          </tr>
+        </table>
+
+        <div style="margin-top: 40px;">
+          <h3 style="border-bottom: 2px solid #141414; padding-bottom: 5px;">AUTHORIZATION DETAILS</h3>
+          <p>Being payment of salary for the month of <strong>${p.month} ${p.year}</strong>.</p>
+          <table style="width: 100%; margin-top: 20px;">
+            <tr style="font-size: 1.2rem; font-weight: bold;">
+              <td>GROSS PAYABLE</td>
+              <td style="text-align: right;">GH₵${Number(p.base_salary).toLocaleString()}</td>
+            </tr>
+            <tr style="color: #ef4444;">
+              <td>TOTAL DEDUCTIONS</td>
+              <td style="text-align: right;">(GH₵${Number(p.deductions).toLocaleString()})</td>
+            </tr>
+            <tr style="font-size: 1.5rem; font-weight: bold; border-top: 2px solid #141414;">
+              <td>NET AMOUNT TO DISBURSE</td>
+              <td style="text-align: right; color: #16a34a;">GH₵${Number(p.net_pay).toLocaleString()}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="margin-top: 60px; display: grid; grid-template-cols: 1fr 1fr; gap: 40px;">
+          <div style="border-top: 1px solid #141414; padding-top: 10px; text-align: center;">
+            <p style="font-size: 0.8rem; font-weight: bold;">PREPARED BY (ACCOUNTANT)</p>
+          </div>
+          <div style="border-top: 1px solid #141414; padding-top: 10px; text-align: center;">
+            <p style="font-size: 0.8rem; font-weight: bold;">APPROVED BY (DIRECTOR/ADMIN)</p>
+          </div>
+        </div>
+      </div>
+    `;
+    handlePrintDocument(`PAYMENT VOUCHER - ${p.name}`, content);
   };
 
   if (isLoading) {
@@ -706,13 +791,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         {payrollData.deductions.map((d: any, i: number) => {
                           const config = companySettings.find(s => s.key === 'payroll_config');
-                          const types = config ? JSON.parse(config.value).deduction_types : ['Loan', 'Staff Advance'];
+                          const configObj = config ? JSON.parse(config.value) : { deduction_types: [] };
+                          
                           return (
                             <div key={i} className="flex gap-2 items-end">
                               <div className="flex-1">
                                 <Select value={d.type} onValueChange={(v) => {
-                                  const config = companySettings.find(s => s.key === 'payroll_config');
-                                  const configObj = config ? JSON.parse(config.value) : { deduction_types: [] };
                                   const deductionDef = configObj.deduction_types.find((dt: any) => dt.name === v);
                                   
                                   let amount = 0;
@@ -730,11 +814,10 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                                   setPayrollData({...payrollData, deductions: newD});
                                 }}>
                                   <SelectTrigger className="bg-[#F5F5F5] border-none h-11 rounded-xl"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {(companySettings.find(s => s.key === 'payroll_config') 
-                                      ? JSON.parse(companySettings.find(s => s.key === 'payroll_config')!.value).deduction_types 
-                                      : []).map((t: any) => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)
-                                    }
+                                  <SelectContent className="z-[100]">
+                                    {(configObj.deduction_types || []).map((t: any) => (
+                                      <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -743,21 +826,51 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                                 newD[i].amount = Number(e.target.value);
                                 setPayrollData({...payrollData, deductions: newD});
                               }} placeholder="Amount" className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
-                              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 text-red-500 hover:bg-red-50 rounded-xl" onClick={() => setPayrollData({...payrollData, deductions: payrollData.deductions.filter((_: any, idx: number) => idx !== i)})}>×</Button>
+                              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-red-500 hover:bg-red-50 rounded-xl" onClick={() => setPayrollData({...payrollData, deductions: payrollData.deductions.filter((_: any, idx: number) => idx !== i)})}>×</Button>
                             </div>
                           );
                         })}
                       </div>
 
-                      <div className="p-4 bg-blue-50/50 rounded-2xl flex justify-between items-center text-blue-700 border border-blue-100">
-                        <span className="font-bold">Final Net Disbursal:</span>
-                        <span className="text-xl font-black tabular-nums">
-                          GH₵{(payrollData.base_salary + payrollData.allowances - payrollData.deductions.reduce((s: number, d: any) => s + Number(d.amount), 0)).toLocaleString()}
-                        </span>
+                      <div className="p-4 bg-[#F5F5F5] rounded-2xl space-y-3">
+                        <div className="flex justify-between text-sm font-bold">
+                          <span className="text-[#8E9299]">Total Statutory (SSNIT + PAYE)</span>
+                          <span className="text-red-600">
+                            {(() => {
+                              const config = companySettings.find(s => s.key === 'payroll_config');
+                              const configObj = config ? JSON.parse(config.value) : { ssnit_employee: 5.5, tax_tiers: [] };
+                              const ssnit = (Number(payrollData.base_salary) * Number(configObj.ssnit_employee)) / 100;
+                              const taxable = Number(payrollData.base_salary) - ssnit;
+                              const paye = calculatePAYE(taxable, configObj.tax_tiers || []);
+                              return `GH₵ ${(ssnit + paye).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm text-[#8E9299]">
+                          <span>Custom Deductions</span>
+                          <span>GH₵ {payrollData.deductions.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0).toLocaleString()}</span>
+                        </div>
+                        <div className="pt-3 border-t border-[#E4E3E0] flex justify-between items-center">
+                          <span className="font-bold text-[#141414]">NET TAKE HOME</span>
+                          <span className="text-xl font-black text-green-600">
+                            {(() => {
+                              const config = companySettings.find(s => s.key === 'payroll_config');
+                              const configObj = config ? JSON.parse(config.value) : { ssnit_employee: 5.5, tax_tiers: [] };
+                              const ssnit = (Number(payrollData.base_salary) * Number(configObj.ssnit_employee)) / 100;
+                              const taxable = Number(payrollData.base_salary) - ssnit;
+                              const paye = calculatePAYE(taxable, configObj.tax_tiers || []);
+                              const other = payrollData.deductions.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+                              const net = (Number(payrollData.base_salary) + Number(payrollData.allowances || 0)) - (ssnit + paye + other);
+                              return `GH₵ ${net.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                            })()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <DialogFooter className="bg-[#F5F5F5]/30 p-6 border-t rounded-b-3xl">
-                      <Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11 shadow-lg shadow-blue-500/20">COMMIT PAYROLL DISBURSAL</Button>
+                    <DialogFooter>
+                      <Button type="submit" className="w-full bg-blue-600 text-white h-12 font-bold rounded-xl shadow-lg shadow-blue-500/20" disabled={isProcessing}>
+                        {isProcessing ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'PROCESS DISBURSEMENT'}
+                      </Button>
                     </DialogFooter>
                   </form>
                 )}
@@ -964,9 +1077,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                                 <Eye className="w-4 h-4" />
                               </Button>
                               {p.status === 'Paid' && (
-                                <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={(e) => { e.stopPropagation(); handlePrintDocument(`PAYSLIP - ${p.name}`, `<h3>Employee: ${p.name}</h3><p>Period: ${p.month} ${p.year}</p><p>Gross Salary: GH₵${Number(p.base_salary).toLocaleString()}</p><p>Total Deductions: GH₵${Number(p.deductions).toLocaleString()}</p><h2 style="color: green;">Net Pay: GH₵${Number(p.net_pay).toLocaleString()}</h2>`); }}>
-                                  <Printer className="w-4 h-4" />
-                                </Button>
+                                <>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" title="Print Payslip" onClick={(e) => { e.stopPropagation(); handlePrintDocument(`PAYSLIP - ${p.name}`, `<h3>Employee: ${p.name}</h3><p>Period: ${p.month} ${p.year}</p><p>Gross Salary: GH₵${Number(p.base_salary).toLocaleString()}</p><p>Total Deductions: GH₵${Number(p.deductions).toLocaleString()}</p><h2 style="color: green;">Net Pay: GH₵${Number(p.net_pay).toLocaleString()}</h2>`); }}>
+                                    <Printer className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 text-purple-600 p-0" title="Payment Voucher" onClick={(e) => { e.stopPropagation(); handlePrintPV(p); }}>
+                                    <FileText className="w-4 h-4" />
+                                  </Button>
+                                </>
                               )}
                             </TableCell>
                           </TableRow>

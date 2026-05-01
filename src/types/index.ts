@@ -51,6 +51,7 @@ export interface Employee {
   account_name?: string;
   account_number?: string;
   branch?: string;
+  wage_type?: string;
 }
 
 export interface Invoice {
@@ -91,6 +92,7 @@ export interface PayrollRecord {
   net_pay: number;
   month: string;
   year: number;
+  payment_date: string;
   status: string;
 }
 

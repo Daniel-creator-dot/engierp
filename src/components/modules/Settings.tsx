@@ -75,6 +75,7 @@ export default function Settings() {
   const [payrollConfig, setPayrollConfig] = useState<any>({
     ssnit_employee: '5.5',
     ssnit_employer: '13',
+    ssnit_tier2: '5',
     tax_tiers: [
       { threshold: 402, rate: 0 },
       { threshold: 110, rate: 5 },
@@ -87,6 +88,7 @@ export default function Settings() {
     deduction_types: [
       { name: 'Loan', type: 'fixed', value: 0 },
       { name: 'Staff Advance', type: 'fixed', value: 0 },
+      { name: 'Surcharge (Surge Charge)', type: 'fixed', value: 0 },
       { name: 'Health Insurance', type: 'fixed', value: 0 }
     ],
     max_leave_days_per_month: 5
@@ -346,6 +348,79 @@ export default function Settings() {
                     className="bg-[#F5F5F5] border-none rounded-xl"
                   />
                   <p className="text-[10px] text-[#8E9299]">Standard rate in Ghana is 13%.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold text-[#141414]">Tier 2 Contribution (%)</Label>
+                  <Input 
+                    type="number" 
+                    value={payrollConfig.ssnit_tier2} 
+                    onChange={(e) => setPayrollConfig({...payrollConfig, ssnit_tier2: e.target.value})}
+                    className="bg-[#F5F5F5] border-none rounded-xl"
+                  />
+                  <p className="text-[10px] text-[#8E9299]">Portion of employer contribution to private scheme (usually 5%).</p>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="font-bold text-[#141414]">PAYE Tax Tiers (Monthly)</Label>
+                    <p className="text-sm text-[#8E9299]">Define monthly income thresholds and applicable tax rates.</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="rounded-xl"
+                    onClick={() => {
+                      const newTiers = [...(payrollConfig.tax_tiers || []), { threshold: 0, rate: 0 }];
+                      setPayrollConfig({...payrollConfig, tax_tiers: newTiers});
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Add Tier
+                  </Button>
+                </div>
+                <div className="grid gap-3">
+                  {(payrollConfig.tax_tiers || []).map((tier: any, i: number) => (
+                    <div key={i} className="flex items-center gap-4 bg-[#F5F5F5]/50 p-4 rounded-2xl border border-[#F5F5F5]">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-[#8E9299]">Threshold Amount</Label>
+                        <Input 
+                          type="number" 
+                          value={tier.threshold} 
+                          onChange={(e) => {
+                            const newTiers = [...payrollConfig.tax_tiers];
+                            newTiers[i].threshold = Number(e.target.value);
+                            setPayrollConfig({...payrollConfig, tax_tiers: newTiers});
+                          }}
+                          className="bg-white border-none rounded-xl h-10"
+                        />
+                      </div>
+                      <div className="w-32 space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-[#8E9299]">Rate (%)</Label>
+                        <Input 
+                          type="number" 
+                          value={tier.rate} 
+                          onChange={(e) => {
+                            const newTiers = [...payrollConfig.tax_tiers];
+                            newTiers[i].rate = Number(e.target.value);
+                            setPayrollConfig({...payrollConfig, tax_tiers: newTiers});
+                          }}
+                          className="bg-white border-none rounded-xl h-10"
+                        />
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="mt-5 text-red-500 hover:bg-red-50 h-10 w-10 rounded-xl"
+                        onClick={() => {
+                          const newTiers = payrollConfig.tax_tiers.filter((_: any, idx: number) => idx !== i);
+                          setPayrollConfig({...payrollConfig, tax_tiers: newTiers});
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               </div>
 

@@ -174,16 +174,46 @@ router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'a
   }
 });
 
+/**
+ * Calculates PAYE (Income Tax) based on tiered rates from settings
+ */
+function calculatePAYE(taxableIncome: number, tiers: any[]) {
+  let tax = 0;
+  let remainingIncome = taxableIncome;
+
+  for (const tier of tiers) {
+    const taxableInThisTier = Math.min(Math.max(remainingIncome, 0), Number(tier.threshold));
+    tax += taxableInThisTier * (Number(tier.rate) / 100);
+    remainingIncome -= taxableInThisTier;
+    if (remainingIncome <= 0) break;
+  }
+  
+  // If income exceeds last tier, apply last rate to the remainder (usually the top bracket)
+  if (remainingIncome > 0 && tiers.length > 0) {
+    const lastRate = Number(tiers[tiers.length - 1].rate);
+    tax += remainingIncome * (lastRate / 100);
+  }
+
+  return tax;
+}
+
 // Bulk process payroll for all active employees
 router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req: AuthRequest, res) => {
   try {
     const { month, year } = req.body;
     const isAdmin = req.user?.role === 'admin';
     
-    // 1. Get Payroll Configuration (Ghana SSNIT/PAYE)
+    // 1. Get Payroll Configuration
     const payrollConfigRaw = await db('settings').where('key', 'payroll_config').first();
-    const config = payrollConfigRaw ? JSON.parse(payrollConfigRaw.value) : { ssnit_employee: 5.5 };
-    const ssnitRate = Number(config.ssnit_employee) / 100;
+    const config = payrollConfigRaw 
+      ? JSON.parse(payrollConfigRaw.value) 
+      : { 
+          ssnit_employee: 5.5, 
+          tax_tiers: [{ threshold: 402, rate: 0 }, { threshold: 512, rate: 5 }, { threshold: 642, rate: 10 }] 
+        };
+        
+    const ssnitRate = Number(config.ssnit_employee || 5.5) / 100;
+    const tiers = config.tax_tiers || [];
 
     // 2. Get all active employees
     const employees = await db('employees').where('status', 'active');
@@ -211,7 +241,13 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
       const gross = Number(emp.salary);
       const ssnit = gross * ssnitRate;
       const taxableIncome = gross - ssnit;
-      const net_pay = taxableIncome * 0.85;
+      const paye = calculatePAYE(taxableIncome, tiers);
+      const net_pay = taxableIncome - paye;
+
+      const detailed_deductions = [
+        { type: 'SSNIT (5.5%)', amount: ssnit },
+        { type: 'PAYE (Income Tax)', amount: paye }
+      ];
 
       return {
         employee_id: emp.id,
@@ -220,7 +256,8 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
         payment_date: req.body.payment_date || db.fn.now(),
         base_salary: gross,
         allowances: 0,
-        deductions: ssnit,
+        deductions: ssnit + paye,
+        detailed_deductions: JSON.stringify(detailed_deductions),
         net_pay,
         status: isAdmin ? 'Paid' : 'Pending',
         paid_at: isAdmin ? db.fn.now() : null
