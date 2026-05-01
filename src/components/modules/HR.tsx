@@ -78,7 +78,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false);
   const [isViewEmployeeOpen, setIsViewEmployeeOpen] = useState(false);
+  const [isViewLeaveOpen, setIsViewLeaveOpen] = useState(false);
+  const [isViewPayrollOpen, setIsViewPayrollOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+  const [selectedPayrollEntry, setSelectedPayrollEntry] = useState<PayrollRecord | null>(null);
   const [isLeaveRequestOpen, setIsLeaveRequestOpen] = useState(false);
   const [isBatchPayrollOpen, setIsBatchPayrollOpen] = useState(false);
   const [isAppraisalOpen, setIsAppraisalOpen] = useState(false);
@@ -716,6 +720,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
+                          <Button variant="ghost" size="icon" onClick={() => { setSelectedLeave(l); setIsViewLeaveOpen(true); }} className="h-8 w-8 text-blue-600 hover:bg-blue-50 rounded-full">
+                            <Eye className="w-4 h-4" />
+                          </Button>
                           {l.status === 'Pending' && user?.role === 'admin' && (
                             <>
                               <Button variant="ghost" size="icon" onClick={() => handleUpdateLeaveStatus(l.id, 'Approved')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full"><CheckCircle2 className="w-4 h-4" /></Button>
@@ -789,7 +796,10 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             <TableCell>GH₵{Number(p.base_salary).toLocaleString()}</TableCell>
                             <TableCell className="text-red-500">-GH₵{Number(p.deductions).toLocaleString()}</TableCell>
                             <TableCell className="text-right font-bold text-green-600">GH₵{Number(p.net_pay).toLocaleString()}</TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right space-x-2">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => { setSelectedPayrollEntry(p); setIsViewPayrollOpen(true); }}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
                               <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={(e) => { e.stopPropagation(); handlePrintDocument(`PAYSLIP - ${p.name}`, `<h3>Employee: ${p.name}</h3><p>Period: ${p.month} ${p.year}</p><p>Gross Salary: GH₵${Number(p.base_salary).toLocaleString()}</p><p>Total Deductions: GH₵${Number(p.deductions).toLocaleString()}</p><h2 style="color: green;">Net Pay: GH₵${Number(p.net_pay).toLocaleString()}</h2>`); }}>
                                 <Printer className="w-4 h-4" />
                               </Button>
@@ -803,6 +813,87 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                 </Table>
               </CardContent>
             </Card>
+            <Dialog open={isViewLeaveOpen} onOpenChange={setIsViewLeaveOpen}>
+              <DialogContent>
+                {selectedLeave && (
+                  <div>
+                    <DialogHeader>
+                      <DialogTitle>Leave Details: {selectedLeave.employee_name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 space-y-4">
+                      <div className="flex justify-between items-center p-4 bg-[#F5F5F5] rounded-2xl">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Status</p>
+                          <Badge className={
+                            selectedLeave.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                            selectedLeave.status === 'Rejected' ? 'bg-red-100 text-red-700' : 
+                            'bg-yellow-100 text-yellow-700'
+                          }>
+                            {selectedLeave.status}
+                          </Badge>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Leave Type</p>
+                          <p className="font-bold">{selectedLeave.type}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Start Date</p>
+                          <p className="font-medium">{selectedLeave.startDate}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">End Date</p>
+                          <p className="font-medium">{selectedLeave.endDate}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-[#8E9299]">Reason / Logistics</p>
+                        <p className="p-4 bg-[#F5F5F5]/50 rounded-xl text-sm italic">“{selectedLeave.reason || 'No reason provided.'}”</p>
+                      </div>
+                    </div>
+                    <DialogFooter><Button onClick={() => setIsViewLeaveOpen(false)} className="bg-[#141414] text-white w-full rounded-xl">Close</Button></DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isViewPayrollOpen} onOpenChange={setIsViewPayrollOpen}>
+              <DialogContent className="max-w-xl">
+                {selectedPayrollEntry && (
+                  <div>
+                    <DialogHeader>
+                      <DialogTitle>Payroll Statement: {selectedPayrollEntry.name}</DialogTitle>
+                      <DialogDescription>{selectedPayrollEntry.month} {selectedPayrollEntry.year}</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6 space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-white border border-[#F5F5F5] rounded-2xl">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299] mb-1">Gross Earnings</p>
+                          <p className="text-xl font-black text-[#141414]">GH₵{Number(selectedPayrollEntry.base_salary).toLocaleString()}</p>
+                        </div>
+                        <div className="p-4 bg-white border border-[#F5F5F5] rounded-2xl text-right">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299] mb-1">Net Disbursal</p>
+                          <p className="text-xl font-black text-green-600">GH₵{Number(selectedPayrollEntry.net_pay).toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase tracking-widest">Deduction Breakdown</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-sm p-3 bg-[#F5F5F5] rounded-xl">
+                            <span className="font-bold text-[#141414]">Statutory Deductions (SSNIT/Tax)</span>
+                            <span className="font-mono text-red-500">-GH₵{Number(selectedPayrollEntry.deductions).toLocaleString()}</span>
+                          </div>
+                          {/* Add detailed deductions if available in the future */}
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter><Button onClick={() => setIsViewPayrollOpen(false)} className="bg-[#141414] text-white w-full rounded-xl">Close Statement</Button></DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         );
       case 'hr-performance':

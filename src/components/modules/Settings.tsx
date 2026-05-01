@@ -20,7 +20,8 @@ import {
   Image as ImageIcon,
   Signature,
   FileSpreadsheet,
-  Calculator
+  Calculator,
+  Eye
 } from 'lucide-react';
 import { 
   Card, 
@@ -94,6 +95,8 @@ export default function Settings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isViewUserOpen, setIsViewUserOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   
   const [isDeductionModalOpen, setIsDeductionModalOpen] = useState(false);
   const [newDeduction, setNewDeduction] = useState({ name: '', type: 'fixed' as 'fixed' | 'percentage', value: 0 });
@@ -498,13 +501,50 @@ export default function Settings() {
                       <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">{u.email[0].toUpperCase()}</div>
                       <div><p className="font-bold">{u.email}</p><p className="text-xs text-[#8E9299]">{u.phone}</p></div>
                     </div>
-                    <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{u.role}</Badge>
+                    <div className="flex items-center gap-4">
+                      <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{u.role}</Badge>
+                      <Button variant="ghost" size="icon" onClick={() => { setSelectedUser(u); setIsViewUserOpen(true); }} className="h-8 w-8 text-blue-600 hover:bg-blue-50 rounded-full">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
+
+        <Dialog open={isViewUserOpen} onOpenChange={setIsViewUserOpen}>
+          <DialogContent>
+            {selectedUser && (
+              <div>
+                <DialogHeader>
+                  <DialogTitle>User Access Profile</DialogTitle>
+                </DialogHeader>
+                <div className="py-6 space-y-4">
+                  <div className="flex items-center gap-4 p-4 bg-[#F5F5F5] rounded-2xl">
+                    <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">{selectedUser.email[0].toUpperCase()}</div>
+                    <div>
+                      <p className="font-bold text-lg">{selectedUser.email}</p>
+                      <Badge className="bg-blue-100 text-blue-700 uppercase">{selectedUser.role}</Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-[#8E9299]">Phone Number</p>
+                      <p className="font-medium">{selectedUser.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-[#8E9299]">Employee Link</p>
+                      <p className="font-mono text-blue-600 font-bold">{selectedUser.employee_id || 'None'}</p>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter><Button onClick={() => setIsViewUserOpen(false)} className="bg-[#141414] text-white w-full rounded-xl">Close</Button></DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <TabsContent value="sms" className="space-y-6">
           <Card className="border-none shadow-sm">
