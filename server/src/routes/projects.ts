@@ -15,7 +15,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Create new project
-router.post('/', authenticateToken, authorizeRole(['pm', 'admin']), async (req, res) => {
+router.post('/', authenticateToken, authorizeRole(['pm', 'accountant', 'admin']), async (req, res) => {
   try {
     const project = req.body;
     await db('projects').insert(project);
@@ -26,7 +26,7 @@ router.post('/', authenticateToken, authorizeRole(['pm', 'admin']), async (req, 
 });
 
 // Update project
-router.patch('/:id', authenticateToken, authorizeRole(['pm', 'admin']), async (req, res) => {
+router.patch('/:id', authenticateToken, authorizeRole(['pm', 'accountant', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
