@@ -96,6 +96,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
+  const [billQuantity, setBillQuantity] = useState<number>(1);
+  const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
 
   // Journal Items state
   const [journalItems, setJournalItems] = useState([
@@ -263,6 +265,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const formData = new FormData(e.target as HTMLFormElement);
     const data = {
       supplier_id: formData.get('supplier_id'),
+      quantity: Number(formData.get('quantity')),
+      unit_price: Number(formData.get('unit_price')),
       amount: Number(formData.get('amount')),
       due_date: formData.get('due_date'),
       category: formData.get('category'),
@@ -491,11 +495,15 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Amount ({currSym})</Label><Input type="number" name="amount" required className="bg-[#F5F5F5] border-none font-bold text-lg" /></div>
-                        <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
+                        <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
+                        <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
                       </div>
-                      <div className="space-y-2"><Label>Category</Label><Input name="category" placeholder="e.g. Materials, Software" required className="bg-[#F5F5F5] border-none" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
+                        <div className="space-y-2"><Label>Category</Label><Input name="category" placeholder="e.g. Materials, Software" required className="bg-[#F5F5F5] border-none" /></div>
+                      </div>
                     </div>
                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">AUTHORIZE PAYABLE</Button></DialogFooter>
                   </form>
