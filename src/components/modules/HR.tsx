@@ -383,8 +383,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
           <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between border-b border-[#F5F5F5] bg-[#F5F5F5]/30">
               <div><CardTitle>Workforce Directory</CardTitle></div>
-              <Dialog open={isAddEmployeeOpen} onOpenChange={setIsAddEmployeeOpen}>
-                <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 rounded-xl"><Plus className="w-4 h-4" /> Add Personnel</Button></DialogTrigger>
+              {(user?.role === 'admin' || user?.role === 'hr') && (
+                <Dialog open={isAddEmployeeOpen} onOpenChange={setIsAddEmployeeOpen}>
+                  <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 rounded-xl"><Plus className="w-4 h-4" /> Add Personnel</Button></DialogTrigger>
                 <DialogContent>
                   <form onSubmit={handleAddEmployee}>
                     <DialogHeader><DialogTitle>Personnel Onboarding</DialogTitle></DialogHeader>
@@ -436,6 +437,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                   </form>
                 </DialogContent>
               </Dialog>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -471,9 +473,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsViewEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsEditEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
+                        {(user?.role === 'admin' || user?.role === 'hr') && (
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsEditEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
