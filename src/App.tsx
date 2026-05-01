@@ -138,7 +138,10 @@ export default function App() {
     if (role === 'admin' || role === 'hr') {
       return undefined; // show all sub-items
     }
-    // Accountant, PM, Procurement, and all other roles only see Leave & Payroll
+    if (role === 'accountant') {
+      return ['hr-directory', 'hr-leave', 'hr-payroll'];
+    }
+    // PM, Procurement, and all other roles only see Leave & Payroll
     return ['hr-leave', 'hr-payroll'];
   };
 
