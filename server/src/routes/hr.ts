@@ -5,8 +5,8 @@ import { sendSMS } from '../utils/sms';
 
 const router = Router();
 
-// Get all employees (HR/Admin only)
-router.get('/employees', authenticateToken, authorizeRole(['hr', 'admin']), async (req, res) => {
+// Get all employees (HR/Accountant/Admin)
+router.get('/employees', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req, res) => {
   try {
     const employees = await db('employees').select('*');
     res.json(employees);
