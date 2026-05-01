@@ -66,6 +66,8 @@ export const accountingApi = {
   getProfitLoss: () => api.get('/accounting/reports/profit-loss'),
   getCOA: () => api.get('/accounting/coa'),
   createCOA: (data: any) => api.post('/accounting/coa', data),
+  updateCOA: (id: number, data: any) => api.patch(`/accounting/coa/${id}`, data),
+  deleteCOA: (id: number) => api.delete(`/accounting/coa/${id}`),
   postJournal: (data: any) => api.post('/accounting/journal', data),
   getTrialBalance: () => api.get('/accounting/reports/trial-balance'),
   

@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   AlertCircle,
   PiggyBank,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { 
   Card, 
@@ -82,6 +84,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [isPayBillOpen, setIsPayBillOpen] = useState(false);
   const [isAddBankOpen, setIsAddBankOpen] = useState(false);
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [coaFilter, setCoaFilter] = useState('All');
   
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
@@ -264,6 +268,38 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       fetchData();
     } catch (error) {
       toast.error('Failed to record bill');
+    }
+  };
+
+  // COA Actions
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTarget) return;
+    const formData = new FormData(e.target as HTMLFormElement);
+    const data = {
+      code: formData.get('code'),
+      name: formData.get('name'),
+      type: formData.get('type'),
+    };
+    try {
+      await accountingApi.updateCOA(selectedTarget.id, data);
+      toast.success('Account updated successfully');
+      setIsEditAccountOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update account');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!selectedTarget) return;
+    try {
+      await accountingApi.deleteCOA(selectedTarget.id);
+      toast.success('Account deleted successfully');
+      setIsDeleteAccountOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete account');
     }
   };
 
@@ -812,6 +848,65 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     </form>
                   </DialogContent>
                 </Dialog>
+                
+                {/* Edit Account Dialog */}
+                <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
+                  <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
+                    <form onSubmit={handleUpdateAccount}>
+                      <DialogHeader className="p-8 bg-blue-50">
+                        <DialogTitle className="text-2xl font-bold text-blue-900">Edit Ledger Account</DialogTitle>
+                        <DialogDescription className="text-blue-700">Update account details.</DialogDescription>
+                      </DialogHeader>
+                      <div className="p-8 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label className="font-bold text-xs uppercase text-[#8E9299]">Code</Label>
+                            <Input name="code" defaultValue={selectedTarget?.code} required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-mono font-bold text-lg" />
+                          </div>
+                          <div className="col-span-2 space-y-2">
+                            <Label className="font-bold text-xs uppercase text-[#8E9299]">Account Name</Label>
+                            <Input name="name" defaultValue={selectedTarget?.name} required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-xs uppercase text-[#8E9299]">Account Type</Label>
+                          <Select name="type" defaultValue={selectedTarget?.type} required>
+                            <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                            <SelectContent className="rounded-xl border-none shadow-2xl">
+                              <SelectItem value="Asset">Asset</SelectItem>
+                              <SelectItem value="Liability">Liability</SelectItem>
+                              <SelectItem value="Equity">Equity</SelectItem>
+                              <SelectItem value="Income">Income / Revenue</SelectItem>
+                              <SelectItem value="Expense">Expense</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter className="p-8 bg-[#F5F5F5]/30 border-t border-[#F5F5F5]">
+                        <Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold shadow-lg shadow-blue-500/20">SAVE CHANGES</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete Account Dialog */}
+                <Dialog open={isDeleteAccountOpen} onOpenChange={setIsDeleteAccountOpen}>
+                  <DialogContent className="rounded-3xl border-none shadow-2xl p-6 max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-black text-red-600">Delete Account</DialogTitle>
+                      <DialogDescription className="font-bold text-[#141414] mt-2">
+                        Are you sure you want to delete {selectedTarget?.code} - {selectedTarget?.name}?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <p className="text-sm text-[#8E9299] mt-2 mb-6">
+                      This action cannot be undone. You cannot delete accounts that have existing ledger entries.
+                    </p>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                      <Button variant="outline" onClick={() => setIsDeleteAccountOpen(false)} className="rounded-xl font-bold border-[#E4E3E0]">CANCEL</Button>
+                      <Button variant="destructive" onClick={handleDeleteAccount} className="rounded-xl font-bold">DELETE ACCOUNT</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
 
@@ -826,6 +921,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         <TableHead className="font-bold">Account Name</TableHead>
                         <TableHead className="font-bold w-32">Type</TableHead>
                         <TableHead className="font-bold text-right w-40">Balance</TableHead>
+                        <TableHead className="font-bold text-right w-24">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -835,9 +931,19 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
                           <TableCell><Badge className={`${typeColors[a.type] || 'bg-gray-100 text-gray-700'} border-none font-bold text-[10px]`}>{a.type.toUpperCase()}</Badge></TableCell>
                           <TableCell className={`text-right font-black ${Number(a.balance) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{currSym}{Number(a.balance).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => { setSelectedTarget(a); setIsEditAccountOpen(true); }}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => { setSelectedTarget(a); setIsDeleteAccountOpen(true); }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
-                      {filteredCOA.length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-12 text-[#8E9299]">No accounts match the selected filter.</TableCell></TableRow>}
+                      {filteredCOA.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No accounts match the selected filter.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>

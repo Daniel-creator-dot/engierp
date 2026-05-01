@@ -123,6 +123,32 @@ router.post('/coa', authenticateToken, authorizeRole(['admin', 'accountant']), a
   }
 });
 
+router.patch('/coa/:id', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    await db('chart_of_accounts').where({ id }).update(data);
+    res.json({ message: 'Account updated' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating account' });
+  }
+});
+
+router.delete('/coa/:id', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Check if account is used in ledger entries before deleting
+    const inUse = await db('ledger_entries').where({ account_id: id }).first();
+    if (inUse) {
+      return res.status(400).json({ message: 'Cannot delete account because it is used in ledger entries' });
+    }
+    await db('chart_of_accounts').where({ id }).del();
+    res.json({ message: 'Account deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting account' });
+  }
+});
+
 // Journal Entries with Double Entry Logic
 router.post('/journal', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   const trx = await db.transaction();
