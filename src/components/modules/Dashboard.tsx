@@ -254,7 +254,7 @@ export default function Dashboard() {
                 <div key={i} className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-2xl hover:bg-white hover:shadow-md transition-all duration-300">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-blue-600">
-                      {p.progress}%
+                      {Math.round(p.completion_rate || 0)}%
                     </div>
                     <div>
                       <p className="font-bold text-[#141414]">{p.name}</p>
@@ -282,7 +282,7 @@ export default function Dashboard() {
             <ComplianceItem label="SSNIT Remittance" status="COMPLIANT" value="Month Paid" color="green" />
             <ComplianceItem label="PAYE Tax Filings" status="WARNING" value="Due in 2 days" color="yellow" />
             <ComplianceItem label="Equip Insurance" status="COMPLIANT" value="12 Units Vetted" color="green" />
-            <ComplianceItem label="Retention Held" status="ACTIVE" value={formatCurrency(activeProjects.length * 52000, currency)} color="blue" />
+            <ComplianceItem label="Retention Held" status="ACTIVE" value={formatCurrency(data.projects.reduce((sum: number, p: any) => sum + (Number(p.budget) * 0.05), 0), currency)} color="blue" />
           </CardContent>
         </Card>
       </div>
