@@ -240,7 +240,7 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
 });
 
 // Approve/Reject payroll entries (Admin only)
-router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
+router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body; // 'Paid' or 'Rejected'
@@ -254,29 +254,28 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin', 'account
     if (status === 'Paid') {
       try {
         const payrollEntry = await db('payroll')
-          .select('payroll.*', 'employees.name', 'employees.phone')
           .join('employees', 'payroll.employee_id', 'employees.id')
           .where('payroll.id', id)
+          .select('employees.phone', 'employees.name', 'payroll.net_pay')
           .first();
-        
-        if (payrollEntry?.phone) {
-          const msg = `Hi ${payrollEntry.name}, your ${payrollEntry.month} ${payrollEntry.year} payroll of GHS ${Number(payrollEntry.net_pay).toLocaleString()} has been approved. - ByTzForge ERP`;
-          await sendSMS(payrollEntry.phone, msg);
-          console.log(`[Payroll SMS] Sent to ${payrollEntry.name}`);
+
+        if (payrollEntry && payrollEntry.phone) {
+          const message = `Hello ${payrollEntry.name}, your payroll of GHS ${Number(payrollEntry.net_pay).toLocaleString()} has been approved and paid. - BytzForge`;
+          await sendSMS(payrollEntry.phone, message);
         }
-      } catch (smsErr) {
-        console.error('[Payroll SMS] Failed:', smsErr);
+      } catch (smsError) {
+        console.error('Failed to send SMS for individual payroll approval:', smsError);
       }
     }
 
-    res.json({ message: `Payroll entry ${status.toLowerCase()}` });
+    res.json({ message: `Payroll ${status}` });
   } catch (error) {
     res.status(500).json({ message: 'Error updating payroll status' });
   }
 });
 
-// Approve all pending payroll for a period (Admin only)
-router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
+// Batch approve payroll entries (Admin only)
+router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { month, year } = req.body;
 
