@@ -288,54 +288,59 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
           p.client?.toLowerCase().includes(q)
         );
         return (
-          <div className="grid gap-6 lg:grid-cols-4">
-            <Card className="lg:col-span-1 border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              <CardContent className="p-0 max-h-[600px] overflow-y-auto">
-                {filtered.map(p => (
-                  <button 
-                    key={p.id} 
-                    onClick={() => { setSelectedProject(p); fetchJobCosting(p.id); }}
-                    className={`w-full text-left p-4 border-b border-[#F5F5F5] hover:bg-blue-50 transition-colors ${selectedProject?.id === p.id ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
-                  >
-                    <p className="font-bold text-sm">{p.name}</p>
-                    <p className="text-[10px] text-[#8E9299]">{p.client}</p>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
-            <Card className="lg:col-span-3 border-none shadow-sm rounded-3xl bg-white overflow-hidden">
-              {costingData ? (
-                <>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div>
-                      <CardTitle className="text-2xl font-black">Project Governance: {costingData.project_name}</CardTitle>
-                      <CardDescription>Real-time fiscal position against authorized budget.</CardDescription>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Project Health</p>
-                      <Badge className={costingData.budget_remaining >= 0 ? "bg-green-100 text-green-700 border-none font-bold" : "bg-red-100 text-red-700 border-none font-bold"}>
-                        {costingData.budget_remaining >= 0 ? "ON BUDGET" : "OVER BUDGET"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
+          <div className="flex flex-col gap-6">
+            {/* Project Selector - Horizontal on Mobile, Sidebar on Desktop */}
+            <div className="lg:grid lg:grid-cols-4 gap-6">
+              <Card className="lg:col-span-1 border-none shadow-sm rounded-3xl bg-white overflow-hidden h-fit">
+                <div className="p-4 bg-[#F5F5F5]/30 border-b border-[#F5F5F5] lg:hidden">
+                  <p className="text-[10px] font-black text-[#8E9299] uppercase tracking-widest">Select Project</p>
+                </div>
+                <CardContent className="p-0 flex lg:flex-col overflow-x-auto lg:overflow-y-auto lg:max-h-[600px] no-scrollbar">
+                  {filtered.map(p => (
+                    <button 
+                      key={p.id} 
+                      onClick={() => { setSelectedProject(p); fetchJobCosting(p.id); }}
+                      className={`flex-none lg:w-full text-left p-4 border-b border-[#F5F5F5] hover:bg-blue-50 transition-all ${selectedProject?.id === p.id ? 'bg-blue-50 border-r-0 lg:border-r-4 border-r-blue-600 font-bold' : 'text-[#8E9299]'}`}
+                    >
+                      <p className="font-bold text-sm truncate max-w-[150px] lg:max-w-full text-[#141414]">{p.name}</p>
+                      <p className="text-[10px] opacity-70">{p.client}</p>
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card className="lg:col-span-3 border-none shadow-sm rounded-3xl bg-white overflow-hidden">
+                {costingData ? (
+                  <>
+                    <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
+                      <div>
+                        <CardTitle className="text-xl lg:text-2xl font-black">Project Governance: {costingData.project_name}</CardTitle>
+                        <CardDescription>Real-time fiscal position against authorized budget.</CardDescription>
+                      </div>
+                      <div className="sm:text-right">
+                        <p className="text-[10px] font-bold text-[#8E9299] uppercase tracking-widest">Project Health</p>
+                        <Badge className={costingData.budget_remaining >= 0 ? "bg-green-100 text-green-700 border-none font-bold" : "bg-red-100 text-red-700 border-none font-bold"}>
+                          {costingData.budget_remaining >= 0 ? "ON BUDGET" : "OVER BUDGET"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Governance Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 lg:px-6 py-2">
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
-                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Total Budget</p>
-                        <p className="text-xl font-black text-[#141414]">{currSym}{Number(costingData.revised_budget).toLocaleString()}</p>
+                        <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Total Budget</p>
+                        <p className="text-base lg:text-xl font-black text-[#141414]">{currSym}{Number(costingData.revised_budget).toLocaleString()}</p>
                       </div>
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
-                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Spent to Date</p>
-                        <p className="text-xl font-black text-orange-600">{currSym}{Number(costingData.total_actuals).toLocaleString()}</p>
+                        <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Spent to Date</p>
+                        <p className="text-base lg:text-xl font-black text-orange-600">{currSym}{Number(costingData.total_actuals).toLocaleString()}</p>
                       </div>
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
-                        <p className="text-[10px] font-black text-[#8E9299] uppercase mb-1">Open Commitments</p>
-                        <p className="text-xl font-black text-blue-600">{currSym}{Number(costingData.total_committed).toLocaleString()}</p>
+                        <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Open Commitments</p>
+                        <p className="text-base lg:text-xl font-black text-blue-600">{currSym}{Number(costingData.total_committed).toLocaleString()}</p>
                       </div>
                       <div className="bg-[#141414] p-4 rounded-2xl shadow-xl shadow-slate-200">
-                        <p className="text-[10px] font-black text-white/50 uppercase mb-1">Budget Remaining</p>
-                        <p className={`text-xl font-black ${costingData.budget_remaining >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <p className="text-[9px] lg:text-[10px] font-black text-white/50 uppercase mb-1">Budget Remaining</p>
+                        <p className={`text-base lg:text-xl font-black ${costingData.budget_remaining >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {currSym}{Number(costingData.budget_remaining).toLocaleString()}
                         </p>
                       </div>
@@ -361,13 +366,14 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                   </CardContent>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center p-20 text-[#8E9299]">
-                  <Calculator className="w-12 h-12 mb-4 opacity-20" />
-                  <p className="font-medium">Select a project to analyze job costing</p>
+                <div className="flex flex-col items-center justify-center p-12 lg:p-20 text-[#8E9299]">
+                  <Calculator className="w-10 h-10 lg:w-12 lg:h-12 mb-4 opacity-20" />
+                  <p className="font-medium text-sm lg:text-base">Select a project to analyze job costing</p>
                 </div>
               )}
             </Card>
           </div>
+        </div>
         );
       }
       case 'projects-contracts': {
