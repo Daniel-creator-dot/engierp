@@ -194,14 +194,16 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
       .select('employee_id');
     
     const existingIds = new Set(existingPayroll.map(p => p.employee_id));
-    const employeesToProcess = employees.filter(e => !existingIds.has(e.id) && e.wage_type !== 'Hourly');
+    let employeesToProcess = employees.filter(e => !existingIds.has(e.id) && e.wage_type !== 'Hourly');
+    
+    if (req.body.employee_ids && Array.isArray(req.body.employee_ids)) {
+      employeesToProcess = employeesToProcess.filter(e => req.body.employee_ids.includes(e.id));
+    }
+
     const skippedHourlyCount = employees.filter(e => !existingIds.has(e.id) && e.wage_type === 'Hourly').length;
 
     if (employeesToProcess.length === 0) {
-      if (skippedHourlyCount > 0) {
-         return res.status(400).json({ message: `No salaried employees left to process. ${skippedHourlyCount} hourly employee(s) were skipped and must be processed manually.` });
-      }
-      return res.status(400).json({ message: 'Payroll already processed for all active employees for this period.' });
+      return res.status(400).json({ message: 'No eligible employees found or payroll already processed.' });
     }
 
     // 4. Insert batch with compliant calculations

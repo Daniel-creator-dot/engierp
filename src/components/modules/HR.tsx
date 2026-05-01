@@ -57,6 +57,7 @@ import {
   SelectValue 
 } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
 import { hrApi, settingsApi } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
@@ -92,6 +93,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [newEmployeeWageType, setNewEmployeeWageType] = useState('Salaried');
   const [editEmployeeWageType, setEditEmployeeWageType] = useState('Salaried');
   const [isIndividualPayrollOpen, setIsIndividualPayrollOpen] = useState(false);
+  const [selectedBatchEmployees, setSelectedBatchEmployees] = useState<number[]>([]);
   const [payrollData, setPayrollData] = useState<any>({
     base_salary: 0,
     allowances: 0,
@@ -209,7 +211,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     const formData = new FormData(e.target as HTMLFormElement);
     const data = {
       month: formData.get('month') as string,
-      year: Number(formData.get('year'))
+      year: Number(formData.get('year')),
+      payment_date: formData.get('payment_date') as string,
+      employee_ids: selectedBatchEmployees
     };
     try {
       const res = await hrApi.batchProcessPayroll(data);
@@ -306,6 +310,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
         employee_id: selectedEmployee.id,
         month: payrollData.month,
         year: payrollData.year,
+        payment_date: payrollData.payment_date,
         base_salary: payrollData.base_salary,
         allowances: payrollData.allowances,
         deductions: totalDeductions,
@@ -838,7 +843,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
         return (
           <div className="space-y-6">
             <div className="flex justify-end gap-4">
-              <Dialog open={isBatchPayrollOpen} onOpenChange={setIsBatchPayrollOpen}>
+              <Dialog open={isBatchPayrollOpen} onOpenChange={(open) => {
+                setIsBatchPayrollOpen(open);
+                if (open) {
+                  setSelectedBatchEmployees(employees.filter(e => e.status === 'active' && e.wage_type !== 'Hourly').map(e => e.id));
+                }
+              }}>
                 <DialogTrigger asChild><Button variant="outline" className="text-[#141414] border-[#141414] gap-2 rounded-xl h-11"><TrendingUp className="w-4 h-4" /> Batch Process Month</Button></DialogTrigger>
                 <DialogContent>
                   <form onSubmit={handleBatchPayroll}>
@@ -858,6 +868,36 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="grid gap-2"><Label>Year</Label><Input name="year" type="number" defaultValue={2026} className="bg-[#F5F5F5] border-none" required /></div>
                         <div className="grid gap-2"><Label>Payment Date</Label><Input name="payment_date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" required /></div>
+                      </div>
+                      
+                      <div className="space-y-3 mt-2">
+                        <Label>Select Salaried Staff for this run</Label>
+                        <div className="max-h-48 overflow-y-auto border border-[#F5F5F5] rounded-xl p-2 space-y-1">
+                          <div className="flex items-center space-x-3 p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors">
+                             <Checkbox 
+                               id="select-all"
+                               checked={selectedBatchEmployees.length > 0 && selectedBatchEmployees.length === employees.filter(e => e.status === 'active' && e.wage_type !== 'Hourly').length} 
+                               onCheckedChange={(checked) => checked ? setSelectedBatchEmployees(employees.filter(e => e.status === 'active' && e.wage_type !== 'Hourly').map(e => e.id)) : setSelectedBatchEmployees([])} 
+                             />
+                             <Label htmlFor="select-all" className="font-bold cursor-pointer">Select All Eligible Staff</Label>
+                          </div>
+                          {employees.filter(e => e.status === 'active' && e.wage_type !== 'Hourly').map(e => (
+                             <div key={e.id} className="flex items-center space-x-3 p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors">
+                               <Checkbox 
+                                 id={`emp-${e.id}`}
+                                 checked={selectedBatchEmployees.includes(e.id)} 
+                                 onCheckedChange={(checked) => {
+                                   if (checked) setSelectedBatchEmployees([...selectedBatchEmployees, e.id]);
+                                   else setSelectedBatchEmployees(selectedBatchEmployees.filter(id => id !== e.id));
+                                 }} 
+                               />
+                               <Label htmlFor={`emp-${e.id}`} className="cursor-pointer">{e.name} <span className="text-[#8E9299]">({e.department})</span></Label>
+                             </div>
+                          ))}
+                          {employees.filter(e => e.status === 'active' && e.wage_type !== 'Hourly').length === 0 && (
+                            <div className="p-4 text-center text-sm text-[#8E9299]">No eligible salaried staff found.</div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11" disabled={isProcessing}>{isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Execute Compliant Run</Button></DialogFooter>
