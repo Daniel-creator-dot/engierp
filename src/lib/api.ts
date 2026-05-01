@@ -38,6 +38,8 @@ export const hrApi = {
   getPayroll: () => api.get('/hr/payroll'),
   processPayroll: (data: any) => api.post('/hr/payroll', data),
   batchProcessPayroll: (data: { month: string, year: number }) => api.post('/hr/payroll/batch', data),
+  approvePayroll: (id: number, status: string) => api.patch(`/hr/payroll/${id}`, { status }),
+  approveBatchPayroll: (data: { month: string, year: number }) => api.patch('/hr/payroll/batch/approve', data),
   getAppraisals: () => api.get('/hr/appraisals'),
   submitAppraisal: (data: any) => api.post('/hr/appraisals', data),
 };

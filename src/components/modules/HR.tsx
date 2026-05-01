@@ -206,14 +206,34 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       year: Number(formData.get('year'))
     };
     try {
-      await hrApi.batchProcessPayroll(data);
-      toast.success('Bulk payroll processing complete');
+      const res = await hrApi.batchProcessPayroll(data);
+      toast.success(res.data.message);
       setIsBatchPayrollOpen(false);
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to process bulk payroll');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleApprovePayroll = async (id: number, status: string) => {
+    try {
+      await hrApi.approvePayroll(id, status);
+      toast.success(`Payroll entry ${status.toLowerCase()}`);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update payroll status');
+    }
+  };
+
+  const handleApproveBatchPayroll = async (month: string, year: number) => {
+    try {
+      const res = await hrApi.approveBatchPayroll({ month, year });
+      toast.success(res.data.message);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to approve batch payroll');
     }
   };
 
@@ -771,7 +791,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
             <Card className="border-none shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <Table>
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Employee</TableHead><TableHead>Gross</TableHead><TableHead>Deductions</TableHead><TableHead className="text-right">Net Pay (GH₵)</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Employee</TableHead><TableHead>Gross</TableHead><TableHead>Deductions</TableHead><TableHead className="text-right">Net Pay (GH₵)</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {Object.entries(
                       payrollEntries.reduce((acc, curr) => {
@@ -780,13 +800,24 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         acc[period].push(curr);
                         return acc;
                       }, {} as Record<string, PayrollRecord[]>)
-                    ).map(([period, entries]: [string, PayrollRecord[]]) => (
+                    ).map(([period, entries]: [string, PayrollRecord[]]) => {
+                      const hasPending = entries.some(e => e.status === 'Pending');
+                      const [periodMonth, periodYear] = period.split(' ');
+                      return (
                       <React.Fragment key={period}>
                         <TableRow className="bg-[#F5F5F5] hover:bg-[#F5F5F5] cursor-pointer" onClick={() => togglePeriod(period)}>
-                          <TableCell colSpan={5} className="font-black text-[#141414] uppercase text-xs tracking-wider border-b border-[#E4E3E0] py-4">
-                            <div className="flex items-center gap-2">
-                              {expandedPeriods[period] ? <ChevronDown className="w-4 h-4 text-[#8E9299]" /> : <ChevronRight className="w-4 h-4 text-[#8E9299]" />}
-                              {period} PAYROLL RUN ({entries.length} EMPLOYEES)
+                          <TableCell colSpan={6} className="font-black text-[#141414] uppercase text-xs tracking-wider border-b border-[#E4E3E0] py-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {expandedPeriods[period] ? <ChevronDown className="w-4 h-4 text-[#8E9299]" /> : <ChevronRight className="w-4 h-4 text-[#8E9299]" />}
+                                {period} PAYROLL RUN ({entries.length} EMPLOYEES)
+                                {hasPending && <Badge className="bg-yellow-100 text-yellow-700 ml-2">PENDING APPROVAL</Badge>}
+                              </div>
+                              {hasPending && user?.role === 'admin' && (
+                                <Button size="sm" className="bg-green-600 text-white rounded-xl h-8 px-4 text-xs font-bold" onClick={(e) => { e.stopPropagation(); handleApproveBatchPayroll(periodMonth, Number(periodYear)); }}>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Approve All
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -796,19 +827,37 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             <TableCell>GH₵{Number(p.base_salary).toLocaleString()}</TableCell>
                             <TableCell className="text-red-500">-GH₵{Number(p.deductions).toLocaleString()}</TableCell>
                             <TableCell className="text-right font-bold text-green-600">GH₵{Number(p.net_pay).toLocaleString()}</TableCell>
-                            <TableCell className="text-right space-x-2">
+                            <TableCell>
+                              <Badge className={
+                                p.status === 'Paid' ? 'bg-green-100 text-green-700' :
+                                p.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }>
+                                {p.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right space-x-1">
+                              {p.status === 'Pending' && user?.role === 'admin' && (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Paid')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full"><CheckCircle2 className="w-4 h-4" /></Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Rejected')} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-full"><XCircle className="w-4 h-4" /></Button>
+                                </>
+                              )}
                               <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => { setSelectedPayrollEntry(p); setIsViewPayrollOpen(true); }}>
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={(e) => { e.stopPropagation(); handlePrintDocument(`PAYSLIP - ${p.name}`, `<h3>Employee: ${p.name}</h3><p>Period: ${p.month} ${p.year}</p><p>Gross Salary: GH₵${Number(p.base_salary).toLocaleString()}</p><p>Total Deductions: GH₵${Number(p.deductions).toLocaleString()}</p><h2 style="color: green;">Net Pay: GH₵${Number(p.net_pay).toLocaleString()}</h2>`); }}>
-                                <Printer className="w-4 h-4" />
-                              </Button>
+                              {p.status === 'Paid' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={(e) => { e.stopPropagation(); handlePrintDocument(`PAYSLIP - ${p.name}`, `<h3>Employee: ${p.name}</h3><p>Period: ${p.month} ${p.year}</p><p>Gross Salary: GH₵${Number(p.base_salary).toLocaleString()}</p><p>Total Deductions: GH₵${Number(p.deductions).toLocaleString()}</p><h2 style="color: green;">Net Pay: GH₵${Number(p.net_pay).toLocaleString()}</h2>`); }}>
+                                  <Printer className="w-4 h-4" />
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
                       </React.Fragment>
-                    ))}
-                    {payrollEntries.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No payroll records to display.</TableCell></TableRow>}
+                    );
+                    })}
+                    {payrollEntries.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-10 text-[#8E9299]">No payroll records to display.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </CardContent>

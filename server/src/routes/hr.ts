@@ -146,11 +146,12 @@ router.get('/payroll', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 // POST to process payroll (Admin/HR/Accountant only)
-router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req, res) => {
+router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req: AuthRequest, res) => {
   try {
     const { employee_id, month, year, base_salary, allowances, deductions, detailed_deductions } = req.body;
     
     const net_pay = Number(base_salary) + Number(allowances || 0) - Number(deductions || 0);
+    const isAdmin = req.user?.role === 'admin';
     
     const [id] = await db('payroll').insert({
       employee_id,
@@ -161,20 +162,21 @@ router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'a
       deductions,
       detailed_deductions: detailed_deductions ? JSON.stringify(detailed_deductions) : null,
       net_pay,
-      status: 'Paid',
-      paid_at: db.fn.now()
+      status: isAdmin ? 'Paid' : 'Pending',
+      paid_at: isAdmin ? db.fn.now() : null
     }).returning('id');
 
-    res.status(201).json({ id, message: 'Payroll processed' });
+    res.status(201).json({ id, message: isAdmin ? 'Payroll processed and approved' : 'Payroll submitted for admin approval' });
   } catch (error) {
     res.status(500).json({ message: 'Error processing payroll' });
   }
 });
 
 // Bulk process payroll for all active employees
-router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'admin']), async (req, res) => {
+router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req: AuthRequest, res) => {
   try {
     const { month, year } = req.body;
+    const isAdmin = req.user?.role === 'admin';
     
     // 1. Get Payroll Configuration (Ghana SSNIT/PAYE)
     const payrollConfigRaw = await db('settings').where('key', 'payroll_config').first();
@@ -201,11 +203,7 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'admin']),
       const gross = Number(emp.salary);
       const ssnit = gross * ssnitRate;
       const taxableIncome = gross - ssnit;
-      
-      // Simplified PAYE for batch (In real world, this would use the graduated tiers from config)
-      // For now, let's assume a flat 15% on taxable income for the simplified version or just use gross-ssnit
-      // The user asked for PAYE integration, so let's stick to a robust calculation.
-      const net_pay = taxableIncome * 0.85; // Simple approximation of 15% tax for demonstration
+      const net_pay = taxableIncome * 0.85;
 
       return {
         employee_id: emp.id,
@@ -213,22 +211,53 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'admin']),
         year,
         base_salary: gross,
         allowances: 0,
-        deductions: ssnit, // SSNIT is a mandatory deduction
+        deductions: ssnit,
         net_pay,
-        status: 'Paid',
-        paid_at: db.fn.now()
+        status: isAdmin ? 'Paid' : 'Pending',
+        paid_at: isAdmin ? db.fn.now() : null
       };
     });
 
     await db('payroll').insert(batchData);
 
     res.status(201).json({ 
-      message: `Successfully processed compliant payroll for ${employeesToProcess.length} employees.`,
+      message: isAdmin 
+        ? `Successfully processed and approved payroll for ${employeesToProcess.length} employees.`
+        : `Payroll submitted for ${employeesToProcess.length} employees. Awaiting admin approval.`,
       count: employeesToProcess.length 
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Error batch processing payroll' });
+  }
+});
+
+// Approve/Reject payroll entries (Admin only)
+router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'Paid' or 'Rejected'
+    await db('payroll').where({ id }).update({ 
+      status, 
+      paid_at: status === 'Paid' ? db.fn.now() : null,
+      updated_at: db.fn.now() 
+    });
+    res.json({ message: `Payroll entry ${status.toLowerCase()}` });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating payroll status' });
+  }
+});
+
+// Approve all pending payroll for a period (Admin only)
+router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { month, year } = req.body;
+    const count = await db('payroll')
+      .where({ month, year, status: 'Pending' })
+      .update({ status: 'Paid', paid_at: db.fn.now(), updated_at: db.fn.now() });
+    res.json({ message: `Approved ${count} payroll entries for ${month} ${year}` });
+  } catch (error) {
+    res.status(500).json({ message: 'Error approving batch payroll' });
   }
 });
 
