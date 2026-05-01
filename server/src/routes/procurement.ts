@@ -50,7 +50,7 @@ router.get('/inventory', authenticateToken, async (req, res) => {
 });
 
 // POST new inventory item
-router.post('/inventory', authenticateToken, authorizeRole(['procurement', 'admin']), async (req, res) => {
+router.post('/inventory', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   try {
     const data = req.body;
     await db('inventory_items').insert(data);
@@ -75,7 +75,7 @@ router.get('/purchase-orders', authenticateToken, async (req, res) => {
 });
 
 // POST new purchase order
-router.post('/purchase-orders', authenticateToken, authorizeRole(['procurement', 'admin']), async (req, res) => {
+router.post('/purchase-orders', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   const trx = await db.transaction();
   try {
     const { supplier_id, project_id, items, order_date, total_amount } = req.body;
@@ -110,7 +110,7 @@ router.post('/purchase-orders', authenticateToken, authorizeRole(['procurement',
 });
 
 // PATCH to update PO shipping/logistics status
-router.patch('/purchase-orders/:id', authenticateToken, authorizeRole(['procurement', 'admin']), async (req, res) => {
+router.patch('/purchase-orders/:id', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   try {
     const { id } = req.params;
     const { carrier, tracking_number, shipping_status, estimated_delivery } = req.body;

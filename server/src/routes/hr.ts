@@ -234,7 +234,7 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
 });
 
 // Approve/Reject payroll entries (Admin only)
-router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body; // 'Paid' or 'Rejected'
@@ -270,7 +270,7 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async 
 });
 
 // Approve all pending payroll for a period (Admin only)
-router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
   try {
     const { month, year } = req.body;
 
