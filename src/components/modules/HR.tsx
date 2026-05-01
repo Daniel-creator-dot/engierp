@@ -145,7 +145,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       ssnit: formData.get('ssnit'),
       ghana_card: formData.get('ghana_card'),
       phone: formData.get('phone'),
-      address: formData.get('address')
+      address: formData.get('address'),
+      bank_name: formData.get('bank_name'),
+      account_name: formData.get('account_name'),
+      account_number: formData.get('account_number'),
+      branch: formData.get('branch')
     };
     try {
       await hrApi.addEmployee(data);
@@ -170,7 +174,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       ssnit: formData.get('ssnit'),
       ghana_card: formData.get('ghana_card'),
       phone: formData.get('phone'),
-      address: formData.get('address')
+      address: formData.get('address'),
+      bank_name: formData.get('bank_name'),
+      account_name: formData.get('account_name'),
+      account_number: formData.get('account_number'),
+      branch: formData.get('branch')
     };
     try {
       await hrApi.updateEmployee(selectedEmployee.id, data);
@@ -360,6 +368,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" placeholder="E123..." /></div>
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" placeholder="GHA-7..." /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Bank Name</Label><Input name="bank_name" placeholder="Ecobank..." /></div>
+                        <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" placeholder="John Doe..." /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Account Number</Label><Input name="account_number" placeholder="144..." /></div>
+                        <div className="grid gap-2"><Label>Branch</Label><Input name="branch" placeholder="Accra Central..." /></div>
+                      </div>
                       <div className="grid gap-2"><Label>Residential Address</Label><Textarea name="address" placeholder="Street name, City..." /></div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-[#141414] text-white w-full rounded-xl">Register Staff</Button></DialogFooter>
@@ -408,6 +424,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" defaultValue={selectedEmployee.ssnit} /></div>
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" defaultValue={selectedEmployee.ghana_card} /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Bank Name</Label><Input name="bank_name" defaultValue={selectedEmployee.bank_name} /></div>
+                        <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" defaultValue={selectedEmployee.account_name} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Account Number</Label><Input name="account_number" defaultValue={selectedEmployee.account_number} /></div>
+                        <div className="grid gap-2"><Label>Branch</Label><Input name="branch" defaultValue={selectedEmployee.branch} /></div>
+                      </div>
                       <div className="grid gap-2"><Label>Residential Address</Label><Textarea name="address" defaultValue={selectedEmployee.address} /></div>
                       <div className="grid gap-2">
                         <Label>Status</Label>

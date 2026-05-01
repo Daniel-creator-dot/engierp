@@ -47,6 +47,10 @@ export interface Employee {
   ghana_card?: string;
   phone?: string;
   address?: string;
+  bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  branch?: string;
 }
 
 export interface Invoice {
