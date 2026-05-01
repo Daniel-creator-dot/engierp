@@ -76,6 +76,7 @@ const typeColors: Record<string, string> = {
 const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const selectedAccount = accounts.find((a: any) => String(a.id) === value);
 
@@ -84,65 +85,78 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
     a.code.toLowerCase().includes(search.toLowerCase())
   );
 
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={false}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80 text-[#141414]"
-        >
-          <span className="truncate">
-            {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent 
-        className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border border-[#F5F5F5] shadow-2xl bg-white z-[9999]" 
-        align="start"
-        sideOffset={4}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
+    <div className="relative w-full" ref={containerRef}>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setOpen(!open)}
+        className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80 text-[#141414] transition-all"
       >
-        <div className="flex items-center border-b border-[#F5F5F5] px-3 sticky top-0 bg-white z-10">
-          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
-          <input
-            placeholder="Search accounts..."
-            className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-[#8E9299] font-medium"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoFocus
-          />
-        </div>
-        <ScrollArea className="h-[300px]">
-          <div className="p-1">
-            {filtered.map((account: any) => (
-              <div
-                key={account.id}
-                onClick={() => {
-                  onValueChange(String(account.id));
-                  setOpen(false);
-                  setSearch('');
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors cursor-pointer group"
-              >
-                <div className={`w-2 h-2 rounded-full ${typeColors[account.type] || 'bg-gray-400'}`} />
-                <div className="flex flex-col flex-1 truncate">
-                  <span className="font-mono font-bold text-blue-600 text-[10px] leading-tight">{account.code}</span>
-                  <span className="font-bold text-[#141414] truncate">{account.name}</span>
-                </div>
-                {value === String(account.id) && <Check className="h-4 w-4 text-blue-600" />}
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div className="py-8 text-center text-xs font-bold text-[#8E9299] uppercase tracking-widest">No accounts found</div>
-            )}
+        <span className="truncate">
+          {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
+        </span>
+        <ChevronsUpDown className={`ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </Button>
+
+      {open && (
+        <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#F5F5F5] z-[1000] overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          <div className="flex items-center border-b border-[#F5F5F5] px-3 sticky top-0 bg-white z-10">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
+            <input
+              placeholder="Search accounts..."
+              className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-[#8E9299] font-medium"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setOpen(false);
+              }}
+            />
           </div>
-        </ScrollArea>
-      </PopoverContent>
-    </Popover>
+          <ScrollArea className="h-[250px] bg-white">
+            <div className="p-1">
+              {filtered.map((account: any) => (
+                <div
+                  key={account.id}
+                  onClick={() => {
+                    onValueChange(String(account.id));
+                    setOpen(false);
+                    setSearch('');
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors cursor-pointer group"
+                >
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${typeColors[account.type] || 'bg-gray-400'}`} />
+                  <div className="flex flex-col flex-1 truncate">
+                    <span className="font-mono font-bold text-blue-600 text-[10px] leading-tight tracking-wider">{account.code}</span>
+                    <span className="font-bold text-[#141414] truncate">{account.name}</span>
+                  </div>
+                  {value === String(account.id) && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div className="py-12 text-center flex flex-col items-center justify-center gap-2">
+                  <AlertCircle className="w-6 h-6 text-[#8E9299] opacity-20" />
+                  <p className="text-[10px] font-black text-[#8E9299] uppercase tracking-widest">No matching accounts</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+    </div>
   );
 };
 
