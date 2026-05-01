@@ -91,7 +91,7 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4"
+          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80"
         >
           <span className="truncate">
             {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
@@ -99,34 +99,40 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-none shadow-2xl overflow-hidden bg-white">
-        <div className="flex items-center border-b border-[#F5F5F5] px-3">
+      <PopoverContent 
+        className="w-[400px] p-0 rounded-2xl border-none shadow-2xl bg-white z-[9999]" 
+        align="start"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="flex items-center border-b border-[#F5F5F5] px-3 py-1">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
           <input
             placeholder="Search accounts..."
             className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-[#8E9299] font-medium"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoFocus
           />
         </div>
         <ScrollArea className="h-[300px]">
           <div className="p-1">
             {filtered.map((account: any) => (
-              <button
+              <div
                 key={account.id}
-                type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onValueChange(String(account.id));
                   setOpen(false);
                   setSearch('');
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors cursor-pointer"
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${typeColors[account.type] || 'bg-gray-400'}`} />
                 <span className="font-mono font-bold text-blue-600 w-12">{account.code}</span>
                 <span className="font-medium text-[#141414] flex-1 truncate">{account.name}</span>
                 {value === String(account.id) && <Check className="h-4 w-4 text-blue-600" />}
-              </button>
+              </div>
             ))}
             {filtered.length === 0 && (
               <div className="py-6 text-center text-sm text-[#8E9299] font-medium">No accounts found.</div>
