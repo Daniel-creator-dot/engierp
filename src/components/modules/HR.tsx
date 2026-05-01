@@ -1068,7 +1068,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                                 {period} PAYROLL RUN ({entries.length} EMPLOYEES)
                                 {hasPending && <Badge className="bg-yellow-100 text-yellow-700 ml-2">PENDING APPROVAL</Badge>}
                               </div>
-                              {hasPending && user?.role === 'admin' && (
+                              {hasPending && (user?.role === 'admin' || user?.role === 'accountant') && (
                                 <Button size="sm" className="bg-green-600 text-white rounded-xl h-8 px-4 text-xs font-bold" onClick={(e) => { e.stopPropagation(); handleApproveBatchPayroll(periodMonth, Number(periodYear)); }}>
                                   <CheckCircle2 className="w-3 h-3 mr-1" /> Approve All
                                 </Button>
@@ -1092,12 +1092,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right space-x-1">
-                              {p.status === 'Pending' && user?.role === 'admin' && (
-                                <>
-                                  <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Paid')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full"><CheckCircle2 className="w-4 h-4" /></Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Rejected')} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-full"><XCircle className="w-4 h-4" /></Button>
-                                </>
-                              )}
+                               {(p.status === 'Pending' || p.status === 'Draft') && (user?.role === 'admin' || user?.role === 'accountant') && (
+                                  <>
+                                    <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Paid')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full" title="Approve"><CheckCircle2 className="w-4 h-4" /></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => handleApprovePayroll(p.id, 'Rejected')} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-full" title="Reject"><XCircle className="w-4 h-4" /></Button>
+                                  </>
+                                )}
                               <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => { setSelectedPayrollEntry(p); setIsViewPayrollOpen(true); }}>
                                 <Eye className="w-4 h-4" />
                               </Button>

@@ -160,21 +160,19 @@ router.post('/purchase-orders', authenticateToken, authorizeRole(['procurement',
 router.patch('/purchase-orders/:id', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { carrier, tracking_number, shipping_status, estimated_delivery } = req.body;
+    const { carrier, tracking_number, shipping_status, estimated_delivery, status } = req.body;
     
-    await db('purchase_orders')
-      .where({ id })
-      .update({
-        carrier,
-        tracking_number,
-        shipping_status,
-        estimated_delivery,
-        updated_at: db.fn.now()
-      });
+    const updateData: any = {};
+    if (carrier) updateData.carrier = carrier;
+    if (tracking_number) updateData.tracking_number = tracking_number;
+    if (shipping_status) updateData.shipping_status = shipping_status;
+    if (estimated_delivery) updateData.estimated_delivery = estimated_delivery;
+    if (status) updateData.status = status;
 
-    res.json({ message: 'Logistics status updated' });
+    await db('purchase_orders').where({ id }).update(updateData);
+    res.json({ message: 'Purchase order updated' });
   } catch (error) {
-    res.status(500).json({ message: 'Error updating logistics status' });
+    res.status(500).json({ message: 'Error updating purchase order' });
   }
 });
 

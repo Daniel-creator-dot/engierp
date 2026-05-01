@@ -19,7 +19,9 @@ import {
   Printer,
   FileText,
   CreditCard,
-  Receipt
+  Receipt,
+  XCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { 
   Card, 
@@ -58,12 +60,14 @@ import {
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { procurementApi, projectsApi, settingsApi } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ProcurementProps {
   activeSub?: string;
 }
 
 export default function Procurement({ activeSub = 'procurement-pos' }: ProcurementProps) {
+  const { user } = useAuth();
   const [isAddPOModalOpen, setIsAddPOModalOpen] = useState(false);
   const [isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
   const [isEditSupplierModalOpen, setIsEditSupplierModalOpen] = useState(false);
@@ -213,6 +217,16 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
     }
   };
 
+  const handleApprovePO = async (id: string, status: string) => {
+    try {
+      await procurementApi.updatePOStatus(id, { status });
+      toast.success(`Purchase order ${status.toLowerCase()}`);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update PO status');
+    }
+  };
+
   const handleViewHistory = async (supplier: any) => {
     setSelectedSupplier(supplier);
     try {
@@ -359,40 +373,56 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                       <TableCell className="text-[#8E9299] text-xs font-bold">{po.item_name || 'N/A'}</TableCell>
                       <TableCell className="font-bold">{po.quantity} {po.unit}</TableCell>
                       <TableCell className="text-right font-black text-[#141414]">{currSym}{Number(po.total_amount).toLocaleString()}</TableCell>
-                      <TableCell><Badge className="bg-yellow-50 text-yellow-700 border-none font-bold text-[10px]">{po.status.toUpperCase()}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => handlePrintDocument(`PURCHASE ORDER - ${po.id}`, `
-                          <div style="margin-bottom: 20px;">
-                            <h3 style="margin: 0; color: #141414;">Vendor: ${po.supplier_name}</h3>
-                            <p style="margin: 5px 0; color: #8E9299;">Project: ${po.project_name || 'General Inventory'}</p>
-                            <p style="margin: 5px 0; font-weight: bold;">Status: ${po.status.toUpperCase()}</p>
-                          </div>
-                          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                            <thead style="background: #F5F5F5;">
-                              <tr>
-                                <th style="padding: 12px; text-align: left;">Item Description</th>
-                                <th style="padding: 12px; text-align: center;">Quantity</th>
-                                <th style="padding: 12px; text-align: right;">Total Cost</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0;">${po.item_name || 'N/A'}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: center;">${po.quantity} ${po.unit}</td>
-                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: right; font-weight: bold;">${currSym}${Number(po.total_amount).toLocaleString()}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div style="margin-top: 30px; text-align: right;">
-                            <h2 style="color: #141414; margin: 0;">Total Authorized: ${currSym}${Number(po.total_amount).toLocaleString()}</h2>
-                          </div>
-                        `)}>
-                          <Printer className="w-4 h-4" />
-                        </Button>
+                      <TableCell>
+                        <Badge className={`${
+                          po.status.includes('Approved') || po.status === 'Paid' ? 'bg-green-100 text-green-700' :
+                          po.status.includes('Rejected') ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        } border-none font-bold text-[10px]`}>
+                          {po.status.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <div className="flex items-center justify-end gap-1">
+                          {po.status === 'Pending Approval' && (user?.role === 'admin' || user?.role === 'accountant') && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => handleApprovePO(po.id, 'Approved')} className="h-8 w-8 text-green-600 hover:bg-green-50 rounded-full" title="Approve"><CheckCircle2 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleApprovePO(po.id, 'Rejected')} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-full" title="Reject"><XCircle className="w-4 h-4" /></Button>
+                            </>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => handlePrintDocument(`PURCHASE ORDER - ${po.id}`, `
+                            <div style="margin-bottom: 20px;">
+                              <h3 style="margin: 0; color: #141414;">Vendor: ${po.supplier_name}</h3>
+                              <p style="margin: 5px 0; color: #8E9299;">Project: ${po.project_name || 'General Inventory'}</p>
+                              <p style="margin: 5px 0; font-weight: bold;">Status: ${po.status.toUpperCase()}</p>
+                            </div>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                              <thead style="background: #F5F5F5;">
+                                <tr>
+                                  <th style="padding: 12px; text-align: left;">Item Description</th>
+                                  <th style="padding: 12px; text-align: center;">Quantity</th>
+                                  <th style="padding: 12px; text-align: right;">Total Cost</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td style="padding: 12px; border-bottom: 1px solid #E4E3E0;">${po.item_name || 'N/A'}</td>
+                                  <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: center;">${po.quantity} ${po.unit}</td>
+                                  <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: right; font-weight: bold;">${currSym}${Number(po.total_amount).toLocaleString()}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div style="margin-top: 30px; text-align: right;">
+                              <h2 style="color: #141414; margin: 0;">Total Authorized: ${currSym}${Number(po.total_amount).toLocaleString()}</h2>
+                            </div>
+                          `)}>
+                            <Printer className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {purchaseOrders.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No active purchase orders found.</TableCell></TableRow>}
+                  {purchaseOrders.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-12 text-[#8E9299]">No active purchase orders found.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>

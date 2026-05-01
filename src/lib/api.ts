@@ -54,6 +54,7 @@ export const procurementApi = {
   getPurchaseOrders: () => api.get('/procurement/purchase-orders'),
   createPurchaseOrder: (data: any) => api.post('/procurement/purchase-orders', data),
   updateLogistics: (id: string, data: any) => api.patch(`/procurement/purchase-orders/${id}`, data),
+  updatePOStatus: (id: string, data: { status: string }) => api.patch(`/procurement/purchase-orders/${id}`, data),
 };
 
 export const accountingApi = {
