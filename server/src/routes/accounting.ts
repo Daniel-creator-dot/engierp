@@ -359,11 +359,60 @@ router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), 
 });
 
 router.post('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  const trx = await db.transaction();
   try {
-    const data = req.body;
-    await db('bills').insert(data);
-    res.status(201).json({ message: 'Bill recorded' });
+    const { supplier_id, quantity, unit_price, amount, due_date, category, project_id, account_id } = req.body;
+    
+    // 1. Record the Bill
+    const [bill_id] = await trx('bills').insert({
+      supplier_id,
+      quantity,
+      unit_price,
+      amount,
+      due_date,
+      category,
+      project_id,
+      account_id,
+      status: 'Unpaid'
+    }).returning('id');
+
+    // 2. Create Journal Entry for the Expense
+    const [journal_id] = await trx('journal_entries').insert({
+      date: new Date().toISOString().split('T')[0],
+      description: `Vendor Bill: ${category} (Bill ID: ${bill_id})`,
+      project_id: project_id !== 'none' ? project_id : null,
+      reference_type: 'bill',
+      reference_id: String(bill_id)
+    }).returning('id');
+
+    // 3. Double Entry: Debit Expense, Credit Accounts Payable (ID: 61)
+    const ap_account_id = 61; 
+    
+    // Debit Expense
+    await trx('ledger_entries').insert({
+      journal_id,
+      account_id: account_id,
+      debit: amount,
+      credit: 0
+    });
+
+    // Credit Accounts Payable
+    await trx('ledger_entries').insert({
+      journal_id,
+      account_id: ap_account_id,
+      debit: 0,
+      credit: amount
+    });
+
+    // 4. Update Balances
+    await trx('chart_of_accounts').where({ id: account_id }).increment('balance', amount);
+    await trx('chart_of_accounts').where({ id: ap_account_id }).decrement('balance', amount); // Liabilities increase with credit (debit - credit < 0)
+
+    await trx.commit();
+    res.status(201).json({ message: 'Bill recorded and posted to ledger' });
   } catch (error) {
+    await trx.rollback();
+    console.error(error);
     res.status(500).json({ message: 'Error recording bill' });
   }
 });

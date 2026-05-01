@@ -284,7 +284,9 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       unit_price: Number(formData.get('unit_price')),
       amount: Number(formData.get('amount')),
       due_date: formData.get('due_date'),
-      category: formData.get('category'),
+      category: coa.find(a => String(a.id) === formData.get('account_id'))?.name,
+      account_id: Number(formData.get('account_id')),
+      project_id: formData.get('project_id')
     };
     try {
       await accountingApi.recordBill(data);
@@ -335,6 +337,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const data = {
       date: formData.get('date'),
       description: formData.get('description'),
+      project_id: formData.get('project_id'),
       items: journalItems.filter(item => item.account_id !== '')
     };
     try {
@@ -529,7 +532,27 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
-                        <div className="space-y-2"><Label>Category</Label><Input name="category" placeholder="e.g. Materials, Software" required className="bg-[#F5F5F5] border-none" /></div>
+                        <div className="space-y-2">
+                          <Label>Project Assignment</Label>
+                          <Select name="project_id">
+                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">General Office / No Project</SelectItem>
+                              {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.id} - {p.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Expense Account (Job Cost Category)</Label>
+                        <Select name="account_id" required>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
+                          <SelectContent>
+                            {coa.filter(a => a.type === 'Expense').map(a => (
+                              <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">AUTHORIZE PAYABLE</Button></DialogFooter>
@@ -937,7 +960,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             </div>
 
             <div className="flex gap-2 border-b border-[#F5F5F5] overflow-x-auto pb-2">
-              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance'].map(tab => (
+              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance', 'project-analysis'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setReportTab(tab)}
@@ -1043,6 +1066,54 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   </Table>
                 </CardContent>
               </Card>
+            )}
+
+            {reportTab === 'project-analysis' && (
+              <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-3">
+                  {projects.map(p => {
+                    const projectInvoices = invoices.filter(inv => inv.project_id === p.id);
+                    const projectBills = bills.filter(b => b.project_id === p.id);
+                    const projectRevenue = projectInvoices.reduce((s, inv) => s + Number(inv.subtotal || inv.amount), 0);
+                    const projectCost = projectBills.reduce((s, b) => s + Number(b.amount), 0);
+                    const projectProfit = projectRevenue - projectCost;
+                    
+                    return (
+                      <Card key={p.id} className="border-none shadow-sm rounded-2xl overflow-hidden border-l-4 border-l-blue-600">
+                        <CardHeader className="bg-[#F5F5F5]/30">
+                          <CardTitle className="text-lg">{p.id} - {p.name}</CardTitle>
+                          <CardDescription>{p.client}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#8E9299] text-sm">Total Revenue</span>
+                            <span className="font-bold text-green-600">{currSym}{projectRevenue.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#8E9299] text-sm">Total Direct Costs</span>
+                            <span className="font-bold text-red-600">{currSym}{projectCost.toLocaleString()}</span>
+                          </div>
+                          <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
+                            <span className="font-black text-[#141414]">Net Project Profit</span>
+                            <span className={`font-black text-xl ${projectProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                              {currSym}{projectProfit.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="w-full bg-[#F5F5F5] h-2 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-blue-600 h-full" 
+                              style={{ width: `${Math.min(100, (projectRevenue > 0 ? (projectProfit / projectRevenue) * 100 : 0))}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-center text-[#8E9299] uppercase font-bold tracking-wider">
+                            Margin: {projectRevenue > 0 ? ((projectProfit / projectRevenue) * 100).toFixed(1) : 0}%
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             {reportTab === 'trial-balance' && (

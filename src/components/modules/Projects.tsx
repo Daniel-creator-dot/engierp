@@ -136,7 +136,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const data = {
-      id: `PRJ-${Math.floor(100 + Math.random() * 900)}`,
+      id: formData.get('project_id') || `PRJ-${Math.floor(100 + Math.random() * 900)}`,
       name: formData.get('name'),
       client: formData.get('client'),
       budget: Number(formData.get('budget')),
@@ -255,13 +255,19 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                     </div>
                     <div className="grid grid-cols-2 gap-4 py-4 border-t border-[#F5F5F5]">
                       <div>
-                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Actual Spent</p>
-                        <p className="text-lg font-black text-[#141414]">{currSym}{Number(project.spent || 0).toLocaleString()}</p>
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Revenue (Billed)</p>
+                        <p className="text-lg font-black text-green-600">{currSym}{Number(project.revenue || 0).toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Profitability</p>
-                        <p className="text-lg font-black text-green-600">+{project.profitability}%</p>
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Actual Costs</p>
+                        <p className="text-lg font-black text-red-600">{currSym}{Number(project.spent || 0).toLocaleString()}</p>
                       </div>
+                    </div>
+                    <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
+                      <span className="text-xs font-bold uppercase text-[#8E9299]">Project Profit</span>
+                      <span className={`text-xl font-black ${Number(project.revenue || 0) - Number(project.spent || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        {currSym}{(Number(project.revenue || 0) - Number(project.spent || 0)).toLocaleString()}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-[10px] font-bold text-[#8E9299] uppercase tracking-wider">
                       <Clock className="w-3.5 h-3.5" />
@@ -482,9 +488,15 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                   <DialogDescription className="text-blue-700 mt-2">Establish baseline constraints and fiscal budget.</DialogDescription>
                 </DialogHeader>
                 <div className="p-8 space-y-6">
-                  <div className="space-y-2">
-                    <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Project Identification</Label>
-                    <Input name="name" placeholder="e.g. Volta Dam Expansion Phase II" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Project Code (e.g. PRJ001)</Label>
+                      <Input name="project_id" placeholder="PRJ001" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-black uppercase" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Project Title</Label>
+                      <Input name="name" placeholder="e.g. Volta Dam Expansion" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -528,7 +540,10 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                 <form onSubmit={handleEditProject}>
                   <DialogHeader><DialogTitle>Refine Project Charter</DialogTitle></DialogHeader>
                   <div className="p-8 space-y-6">
-                    <div className="space-y-2"><Label>Title</Label><Input name="name" defaultValue={selectedProject.name} required /></div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2"><Label>Project Code</Label><Input name="project_id" defaultValue={selectedProject.id} readOnly className="bg-[#F5F5F5] border-none font-black" /></div>
+                      <div className="space-y-2"><Label>Title</Label><Input name="name" defaultValue={selectedProject.name} required /></div>
+                    </div>
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Client</Label><Input name="client" defaultValue={selectedProject.client} required /></div>
                       <div className="space-y-2">
