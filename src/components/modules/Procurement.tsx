@@ -80,6 +80,10 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const [isLoading, setIsLoading] = useState(true);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
 
+  // PO Calculation State
+  const [poQty, setPoQty] = useState(1);
+  const [poUnitPrice, setPoUnitPrice] = useState(0);
+
   useEffect(() => {
     fetchData();
   }, [activeSub]);
@@ -130,9 +134,9 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
       items: [
         { 
           name: formData.get('item_name'), 
-          quantity: Number(formData.get('quantity') || 1), 
+          quantity: poQty, 
           unit: formData.get('unit') || 'pcs',
-          price: Number(formData.get('amount')) 
+          price: poUnitPrice 
         }
       ]
     };
@@ -318,10 +322,14 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                         </div>
                       </div>
                       <div className="space-y-2"><Label>Item Description</Label><Input name="item_name" required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-2"><Label>Qty</Label><Input name="quantity" type="number" required defaultValue="1" className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="space-y-2"><Label>Qty</Label><Input name="quantity" type="number" value={poQty} onChange={(e) => setPoQty(Number(e.target.value))} required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
                         <div className="space-y-2"><Label>Unit</Label><Input name="unit" placeholder="e.g. Bags" required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
-                        <div className="space-y-2"><Label>Total ({currSym})</Label><Input name="amount" type="number" required className="bg-[#F5F5F5] border-none h-11 rounded-xl font-bold" /></div>
+                        <div className="space-y-2"><Label>Unit Price</Label><Input name="unit_price" type="number" value={poUnitPrice} onChange={(e) => setPoUnitPrice(Number(e.target.value))} required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
+                        <div className="space-y-2">
+                          <Label>Total ({currSym})</Label>
+                          <Input name="amount" value={(poQty * poUnitPrice).toFixed(2)} readOnly className="bg-blue-50 border-none h-11 rounded-xl font-black text-blue-600" />
+                        </div>
                       </div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full h-11 rounded-xl shadow-lg shadow-blue-500/20 font-bold">AUTHORIZE PROCUREMENT</Button></DialogFooter>
