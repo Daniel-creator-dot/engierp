@@ -8,7 +8,48 @@ const router = Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const projects = await db('projects').select('*');
-    res.json(projects);
+    
+    // Enrich projects with dynamic financial data
+    const enrichedProjects = await Promise.all(projects.map(async (p) => {
+      // 1. Sum actual costs from ledger
+      const actualsRes = await db('ledger_entries')
+        .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+        .join('chart_of_accounts', 'ledger_entries.account_id', 'chart_of_accounts.id')
+        .where('journal_entries.project_id', p.id)
+        .where('chart_of_accounts.type', 'Expense')
+        .sum(db.raw('debit - credit') as any)
+        .first() as any;
+      
+      const actualCosts = Number(actualsRes?.sum || 0);
+
+      // 2. Sum committed costs from Approved POs
+      const committedRes = await db('purchase_orders')
+        .where({ project_id: p.id })
+        .whereIn('status', ['Approved', 'Paid', 'Partially Received'])
+        .sum('total_amount as total')
+        .first() as any;
+      
+      const committedCosts = Number(committedRes?.total || 0);
+
+      // 3. Sum Billed Revenue (from invoices)
+      const revenueRes = await db('invoices')
+        .where({ project_id: p.id })
+        .where('status', 'Paid')
+        .sum('total_amount as total')
+        .first() as any;
+      
+      const revenue = Number(revenueRes?.total || 0);
+
+      return {
+        ...p,
+        spent: actualCosts,
+        committed: committedCosts,
+        revenue: revenue,
+        budget_remaining: Number(p.revised_budget || p.budget || 0) - (actualCosts + committedCosts)
+      };
+    }));
+
+    res.json(enrichedProjects);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching projects' });
   }

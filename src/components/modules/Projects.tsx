@@ -249,19 +249,21 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                   <CardContent className="space-y-6">
                     <div className="space-y-3">
                       <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-[#8E9299]">
-                        <span>Budget Utilization</span>
-                        <span>{Math.round((Number(project.spent || 0) / Number(project.budget || 1)) * 100)}%</span>
+                        <span>Budget Burn</span>
+                        <span>{Math.round(((Number(project.spent || 0) + Number(project.committed || 0)) / Number(project.revised_budget || project.budget || 1)) * 100)}%</span>
                       </div>
-                      <Progress value={(Number(project.spent || 0) / Number(project.budget || 1)) * 100} className="h-2 bg-[#F5F5F5]" />
+                      <Progress value={((Number(project.spent || 0) + Number(project.committed || 0)) / Number(project.revised_budget || project.budget || 1)) * 100} className="h-2 bg-[#F5F5F5]" />
                     </div>
                     <div className="grid grid-cols-2 gap-4 py-4 border-t border-[#F5F5F5]">
                       <div>
-                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Revenue (Billed)</p>
-                        <p className="text-lg font-black text-green-600">{currSym}{Number(project.revenue || 0).toLocaleString()}</p>
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Spent + Committed</p>
+                        <p className="text-lg font-black text-[#141414]">{currSym}{(Number(project.spent || 0) + Number(project.committed || 0)).toLocaleString()}</p>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest">Actual Costs</p>
-                        <p className="text-lg font-black text-red-600">{currSym}{Number(project.spent || 0).toLocaleString()}</p>
+                      <div className="text-right">
+                        <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Remaining Budget</p>
+                        <p className={`text-lg font-black ${Number(project.budget_remaining || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {currSym}{Number(project.budget_remaining || 0).toLocaleString()}
+                        </p>
                       </div>
                     </div>
                     <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
