@@ -54,11 +54,20 @@ router.get('/:id/job-costing', authenticateToken, async (req, res) => {
       .select(db.raw('SUM(debit - credit) as amount'))
       .groupBy('chart_of_accounts.name');
 
-    // 3. Return combined budget vs actual
+    // 3. Sum Purchase Orders (Committed)
+    const committedRes = await db('purchase_orders')
+      .where('project_id', id)
+      .sum('total_amount as total')
+      .first() as any;
+    
+    const totalCommitted = Number(committedRes?.total || 0);
+
+    // 4. Return combined budget vs actual
     res.json({
       project_name: project.name,
       total_budget: Number(project.budget || 0),
       revised_budget: Number(project.revised_budget || project.budget),
+      total_committed: totalCommitted,
       actuals: actualCosts.map(c => ({
         category: c.category,
         amount: Number(c.amount || 0)

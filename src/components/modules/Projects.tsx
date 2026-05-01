@@ -327,9 +327,13 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                               <TableCell className="text-right font-bold">{currSym}{c.amount.toLocaleString()}</TableCell>
                             </TableRow>
                           ))}
-                          <TableRow className="bg-[#F5F5F5]/50 font-black">
-                            <TableCell>Total Committed Cost</TableCell>
-                            <TableCell className="text-right">{currSym}{costingData.actuals.reduce((s:any,c:any)=>s+c.amount,0).toLocaleString()}</TableCell>
+                          <TableRow className="bg-blue-50/50">
+                            <TableCell className="font-bold text-blue-700">Open Commitments (POs)</TableCell>
+                            <TableCell className="text-right font-black text-blue-700">{currSym}{Number(costingData.total_committed || 0).toLocaleString()}</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-[#141414] text-white font-black">
+                            <TableCell className="text-lg">TOTAL COMMITTED COST</TableCell>
+                            <TableCell className="text-right text-lg">{currSym}{(costingData.actuals.reduce((s:any,c:any)=>s+c.amount,0) + Number(costingData.total_committed || 0)).toLocaleString()}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
