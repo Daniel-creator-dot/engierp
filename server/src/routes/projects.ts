@@ -51,7 +51,7 @@ router.get('/:id/job-costing', authenticateToken, async (req, res) => {
       .where('journal_entries.project_id', id)
       .where('chart_of_accounts.type', 'Expense')
       .select('chart_of_accounts.name as category')
-      .sum(db.raw('debit - credit as amount'))
+      .select(db.raw('SUM(debit - credit) as amount'))
       .groupBy('chart_of_accounts.name');
 
     // 3. Return combined budget vs actual
