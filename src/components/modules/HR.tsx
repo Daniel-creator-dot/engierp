@@ -60,6 +60,7 @@ import { toast } from 'sonner';
 import { hrApi, settingsApi } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { GHANA_BANKS } from '../../lib/constants';
 
 interface HRProps {
   activeSub?: string;
@@ -369,7 +370,17 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" placeholder="GHA-7..." /></div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label>Bank Name</Label><Input name="bank_name" placeholder="Ecobank..." /></div>
+                        <div className="grid gap-2">
+                          <Label>Bank Name</Label>
+                          <Select name="bank_name">
+                            <SelectTrigger className="bg-white border-slate-200 rounded-xl">
+                              <SelectValue placeholder="Select bank..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {GHANA_BANKS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" placeholder="John Doe..." /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -425,7 +436,17 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" defaultValue={selectedEmployee.ghana_card} /></div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label>Bank Name</Label><Input name="bank_name" defaultValue={selectedEmployee.bank_name} /></div>
+                        <div className="grid gap-2">
+                          <Label>Bank Name</Label>
+                          <Select name="bank_name" defaultValue={selectedEmployee.bank_name}>
+                            <SelectTrigger className="bg-white border-slate-200 rounded-xl">
+                              <SelectValue placeholder="Select bank..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {GHANA_BANKS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" defaultValue={selectedEmployee.account_name} /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
