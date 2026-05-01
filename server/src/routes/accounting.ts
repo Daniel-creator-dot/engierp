@@ -54,52 +54,8 @@ router.get('/taxes', authenticateToken, authorizeRole(['accountant', 'admin']), 
   }
 });
 
-// Reports
-router.get('/reports/receivables', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
-  try {
-    const data = await db('invoices')
-      .whereNot('status', 'paid')
-      .select('client', 'amount', 'dueDate', 'status');
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating receivables report' });
-  }
-});
+// Advanced Ledger-Driven Reports are defined below
 
-router.get('/reports/payables', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
-  try {
-    // Payables = Expenses + Payroll
-    const expenses = await db('transactions')
-      .where('type', 'expense')
-      .select('description as item', 'amount', 'date', 'status');
-    
-    const payroll = await db('employees')
-      .select('name as item', 'salary as amount', 'status');
-      
-    res.json([...expenses, ...payroll.map(p => ({ ...p, date: 'Monthly', status: 'pending' }))]);
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating payables report' });
-  }
-});
-
-router.get('/reports/profit-loss', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
-  try {
-    const income = await db('transactions').where('type', 'income').sum('amount as total').first();
-    const expenses = await db('transactions').where('type', 'expense').sum('amount as total').first();
-    const payroll = await db('employees').sum('salary as total').first();
-    
-    const totalIncome = Number(income?.total || 0);
-    const totalExpenses = Number(expenses?.total || 0) + Number(payroll?.total || 0);
-    
-    res.json({
-      income: totalIncome,
-      expenses: totalExpenses,
-      profit: totalIncome - totalExpenses
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating P&L report' });
-  }
-});
 
 // --- ADVANCED ACCOUNTING (ERP v3) ---
 
@@ -195,13 +151,145 @@ router.post('/journal', authenticateToken, authorizeRole(['accountant', 'admin']
   }
 });
 
-// Trial Balance Report
+// --- ADVANCED LEDGER REPORTS ---
+
 router.get('/reports/trial-balance', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   try {
-    const coa = await db('chart_of_accounts').orderBy('code', 'asc');
-    res.json(coa);
+    const { startDate, endDate } = req.query;
+    
+    let query = db('chart_of_accounts')
+      .leftJoin('ledger_entries', 'chart_of_accounts.id', 'ledger_entries.account_id')
+      .leftJoin('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .select(
+        'chart_of_accounts.id',
+        'chart_of_accounts.code',
+        'chart_of_accounts.name',
+        'chart_of_accounts.type',
+        db.raw('COALESCE(SUM(ledger_entries.debit), 0) as total_debit'),
+        db.raw('COALESCE(SUM(ledger_entries.credit), 0) as total_credit')
+      )
+      .groupBy('chart_of_accounts.id');
+
+    if (startDate) query = query.where('journal_entries.date', '>=', startDate as string);
+    if (endDate) query = query.where('journal_entries.date', '<=', endDate as string);
+
+    const balances = await query;
+    res.json(balances);
   } catch (error) {
     res.status(500).json({ message: 'Error generating trial balance' });
+  }
+});
+
+router.get('/reports/income-statement', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let query = db('chart_of_accounts')
+      .leftJoin('ledger_entries', 'chart_of_accounts.id', 'ledger_entries.account_id')
+      .leftJoin('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .whereIn('chart_of_accounts.type', ['Income', 'Expense'])
+      .select(
+        'chart_of_accounts.id',
+        'chart_of_accounts.code',
+        'chart_of_accounts.name',
+        'chart_of_accounts.type',
+        db.raw('COALESCE(SUM(ledger_entries.credit), 0) as total_credit'),
+        db.raw('COALESCE(SUM(ledger_entries.debit), 0) as total_debit')
+      )
+      .groupBy('chart_of_accounts.id');
+
+    if (startDate) query = query.where('journal_entries.date', '>=', startDate as string);
+    if (endDate) query = query.where('journal_entries.date', '<=', endDate as string);
+
+    const accounts = await query;
+    res.json(accounts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error generating income statement' });
+  }
+});
+
+router.get('/reports/balance-sheet', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { asOfDate } = req.query;
+    
+    let query = db('chart_of_accounts')
+      .leftJoin('ledger_entries', 'chart_of_accounts.id', 'ledger_entries.account_id')
+      .leftJoin('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .whereIn('chart_of_accounts.type', ['Asset', 'Liability', 'Equity'])
+      .select(
+        'chart_of_accounts.id',
+        'chart_of_accounts.code',
+        'chart_of_accounts.name',
+        'chart_of_accounts.type',
+        db.raw('COALESCE(SUM(ledger_entries.debit), 0) as total_debit'),
+        db.raw('COALESCE(SUM(ledger_entries.credit), 0) as total_credit')
+      )
+      .groupBy('chart_of_accounts.id');
+
+    if (asOfDate) query = query.where('journal_entries.date', '<=', asOfDate as string);
+
+    const accounts = await query;
+
+    // Need to compute Retained Earnings from Income - Expense
+    let incomeQuery = db('chart_of_accounts')
+      .leftJoin('ledger_entries', 'chart_of_accounts.id', 'ledger_entries.account_id')
+      .leftJoin('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .whereIn('chart_of_accounts.type', ['Income', 'Expense'])
+      .select(
+        'chart_of_accounts.type',
+        db.raw('COALESCE(SUM(ledger_entries.debit), 0) as total_debit'),
+        db.raw('COALESCE(SUM(ledger_entries.credit), 0) as total_credit')
+      )
+      .groupBy('chart_of_accounts.type');
+      
+    if (asOfDate) incomeQuery = incomeQuery.where('journal_entries.date', '<=', asOfDate as string);
+
+    const incomeExp = await incomeQuery;
+    let retainedEarnings = 0;
+    incomeExp.forEach(r => {
+      if (r.type === 'Income') retainedEarnings += Number(r.total_credit) - Number(r.total_debit);
+      if (r.type === 'Expense') retainedEarnings -= Number(r.total_debit) - Number(r.total_credit);
+    });
+
+    res.json({ accounts, retainedEarnings });
+  } catch (error) {
+    res.status(500).json({ message: 'Error generating balance sheet' });
+  }
+});
+
+router.get('/reports/management', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    // Quick summary fetching for dashboard
+    let query = db('chart_of_accounts')
+      .leftJoin('ledger_entries', 'chart_of_accounts.id', 'ledger_entries.account_id')
+      .leftJoin('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .select(
+        'chart_of_accounts.type',
+        db.raw('COALESCE(SUM(ledger_entries.debit), 0) as total_debit'),
+        db.raw('COALESCE(SUM(ledger_entries.credit), 0) as total_credit')
+      )
+      .groupBy('chart_of_accounts.type');
+
+    if (startDate) query = query.where('journal_entries.date', '>=', startDate as string);
+    if (endDate) query = query.where('journal_entries.date', '<=', endDate as string);
+
+    const rawStats = await query;
+    const stats: Record<string, number> = { Asset: 0, Liability: 0, Equity: 0, Income: 0, Expense: 0 };
+    
+    rawStats.forEach(s => {
+      if (s.type === 'Asset' || s.type === 'Expense') {
+        stats[s.type] = Number(s.total_debit) - Number(s.total_credit);
+      } else {
+        stats[s.type] = Number(s.total_credit) - Number(s.total_debit);
+      }
+    });
+
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: 'Error generating management reports' });
   }
 });
 

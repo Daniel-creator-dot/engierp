@@ -54,7 +54,7 @@ export default function Dashboard() {
     employees: [],
     reports: [],
     equipment: [],
-    profitLoss: null
+    managementAccounts: null
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currency, setCurrency] = useState('GHS');
@@ -66,13 +66,13 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [projRes, txRes, empRes, reportRes, assetRes, plRes, settingsRes] = await Promise.all([
+      const [projRes, txRes, empRes, reportRes, assetRes, mgmtRes, settingsRes] = await Promise.all([
         projectsApi.getProjects(),
         accountingApi.getTransactions(),
         hrApi.getEmployees(),
         fieldOpsApi.getReports(),
         assetsApi.getEquipment(),
-        accountingApi.getProfitLoss(),
+        accountingApi.getManagementAccounts(),
         settingsApi.getSettings()
       ]);
       
@@ -85,7 +85,7 @@ export default function Dashboard() {
         employees: empRes.data,
         reports: reportRes.data,
         equipment: assetRes.data,
-        profitLoss: plRes.data
+        managementAccounts: mgmtRes.data
       });
     } catch (error) {
       console.error('Failed to fetch dashboard data');
@@ -140,7 +140,7 @@ export default function Dashboard() {
         <KPI 
           icon={TrendingUp} 
           label="Gross Revenue" 
-          value={formatCurrency(data.profitLoss?.income || 0, currency)} 
+          value={formatCurrency(data.managementAccounts?.Income || 0, currency)} 
           trend="+12.4%" 
           positive={true}
           color="red"
@@ -148,7 +148,7 @@ export default function Dashboard() {
         <KPI 
           icon={Activity} 
           label="Operating Costs" 
-          value={formatCurrency(data.profitLoss?.expenses || 0, currency)} 
+          value={formatCurrency(data.managementAccounts?.Expense || 0, currency)} 
           trend="-2.1%" 
           positive={true}
           color="green"
@@ -228,7 +228,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Net Position</p>
-                  <p className="text-3xl font-black text-white mt-1">{formatCurrency(data.profitLoss?.profit || 0, currency)}</p>
+                  <p className="text-3xl font-black text-white mt-1">{formatCurrency((data.managementAccounts?.Income || 0) - (data.managementAccounts?.Expense || 0), currency)}</p>
                 </div>
                 <div className="bg-white/10 p-3 rounded-2xl">
                   <Activity className="w-6 h-6 text-blue-400" />

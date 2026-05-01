@@ -72,9 +72,15 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   
-  const [profitLoss, setProfitLoss] = useState<any>(null);
   const [coa, setCOA] = useState<any[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
+  const [incomeStatement, setIncomeStatement] = useState<any[]>([]);
+  const [balanceSheet, setBalanceSheet] = useState<any>({ accounts: [], retainedEarnings: 0 });
+  const [managementAccounts, setManagementAccounts] = useState<any>(null);
+  
+  const [reportTab, setReportTab] = useState('dashboard');
+  const [reportStartDate, setReportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
@@ -99,7 +105,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
   useEffect(() => {
     fetchData();
-  }, [activeSub]);
+  }, [activeSub, reportStartDate, reportEndDate]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -143,16 +149,16 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         const coaRes = await accountingApi.getCOA();
         setCOA(coaRes.data);
       } else if (activeSub === 'accounting-reports') {
-        const [rec, pay, pl, tb] = await Promise.all([
-          accountingApi.getReceivables(),
-          accountingApi.getPayables(),
-          accountingApi.getProfitLoss(),
-          accountingApi.getTrialBalance()
+        const [tb, inc, bs, mgmt] = await Promise.all([
+          accountingApi.getTrialBalance(reportStartDate, reportEndDate),
+          accountingApi.getIncomeStatement(reportStartDate, reportEndDate),
+          accountingApi.getBalanceSheet(reportEndDate),
+          accountingApi.getManagementAccounts(reportStartDate, reportEndDate)
         ]);
-        setReceivables(rec.data);
-        setPayables(pay.data);
-        setProfitLoss(pl.data);
         setTrialBalance(tb.data);
+        setIncomeStatement(inc.data);
+        setBalanceSheet(bs.data);
+        setManagementAccounts(mgmt.data);
       }
     } catch (error) {
       toast.error('Failed to load accounting data');
@@ -716,34 +722,159 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       case 'accounting-reports':
         return (
           <div className="space-y-8">
-            <div className="flex items-center justify-between">
-              <div><h2 className="text-2xl font-bold text-[#141414]">Financial Position</h2><p className="text-[#8E9299]">Executive reporting and trial balance generated in real-time.</p></div>
-              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('trial_balance', ['Code','Account Name','Debit','Credit'], trialBalance.map((a: any) => [a.code, a.name, a.balance >= 0 ? String(a.balance) : '', a.balance < 0 ? String(Math.abs(a.balance)) : '']))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-[#141414]">Financial Position</h2>
+                <p className="text-[#8E9299]">Enterprise Reporting driven by Double-Entry Ledger.</p>
+              </div>
+              <div className="flex items-center gap-2 bg-[#F5F5F5] p-1 rounded-xl">
+                <Input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} className="bg-transparent border-none w-36 text-sm font-bold" />
+                <span className="text-[#8E9299] font-bold">to</span>
+                <Input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} className="bg-transparent border-none w-36 text-sm font-bold" />
+                <Button size="icon" className="bg-[#141414] text-white rounded-lg h-8 w-8 ml-2" onClick={fetchData}><Search className="w-4 h-4" /></Button>
+              </div>
             </div>
-            
-            {profitLoss && (
+
+            <div className="flex gap-2 border-b border-[#F5F5F5] overflow-x-auto pb-2">
+              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setReportTab(tab)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold capitalize whitespace-nowrap transition-all ${reportTab === tab ? 'bg-[#141414] text-white' : 'text-[#8E9299] hover:bg-[#F5F5F5]'}`}
+                >
+                  {tab.replace('-', ' ')}
+                </button>
+              ))}
+            </div>
+
+            {reportTab === 'dashboard' && managementAccounts && (
               <div className="grid gap-6 md:grid-cols-3">
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-green-500"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Revenue</CardDescription><CardTitle className="text-3xl font-black text-green-600">{currSym}{profitLoss.income.toLocaleString()}</CardTitle></CardHeader></Card>
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-red-500"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Operating Expenses</CardDescription><CardTitle className="text-3xl font-black text-red-600">{currSym}{profitLoss.expenses.toLocaleString()}</CardTitle></CardHeader></Card>
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden bg-[#141414] text-white"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold text-white/50">Net Margin</CardDescription><CardTitle className="text-4xl font-black text-white">{((profitLoss.profit / (profitLoss.income || 1)) * 100).toFixed(1)}%</CardTitle></CardHeader></Card>
+                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-blue-500">
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Operating Profit</CardDescription>
+                    <CardTitle className="text-3xl font-black text-blue-600">{currSym}{(managementAccounts.Income - managementAccounts.Expense).toLocaleString()}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-green-500">
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Revenue</CardDescription>
+                    <CardTitle className="text-3xl font-black text-green-600">{currSym}{managementAccounts.Income.toLocaleString()}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-red-500">
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Expenses</CardDescription>
+                    <CardTitle className="text-3xl font-black text-red-600">{currSym}{managementAccounts.Expense.toLocaleString()}</CardTitle>
+                  </CardHeader>
+                </Card>
               </div>
             )}
 
-            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
-              <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Code</TableHead><TableHead>Account Name</TableHead><TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {trialBalance.map(a => (
-                    <TableRow key={a.id} className="hover:bg-[#F5F5F5]/50">
-                      <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
-                      <TableCell className="font-bold">{a.name}</TableCell>
-                      <TableCell className="text-right font-black text-green-600">{a.balance >= 0 ? `${currSym}${Number(a.balance).toLocaleString()}` : '-'}</TableCell>
-                      <TableCell className="text-right font-black text-red-600">{a.balance < 0 ? `${currSym}${Math.abs(Number(a.balance)).toLocaleString()}` : '-'}</TableCell>
+            {reportTab === 'income-statement' && (
+              <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
+                  <CardTitle>Income Statement</CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-green-50/30 hover:bg-green-50/30"><TableCell colSpan={2} className="font-bold text-green-700">Revenue</TableCell></TableRow>
+                      {incomeStatement.filter(a => a.type === 'Income').map(a => (
+                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                      ))}
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{currSym}{incomeStatement.filter(a => a.type === 'Income').reduce((s,a) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+                      
+                      <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Operating Expenses</TableCell></TableRow>
+                      {incomeStatement.filter(a => a.type === 'Expense').map(a => (
+                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                      ))}
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{incomeStatement.filter(a => a.type === 'Expense').reduce((s,a) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+                      
+                      <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
+                        <TableCell className="font-black text-lg">Net Income</TableCell>
+                        <TableCell className="text-right font-black text-xl">
+                          {currSym}{(incomeStatement.filter(a => a.type === 'Income').reduce((s,a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s,a) => s + (a.total_debit - a.total_credit), 0)).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {reportTab === 'balance-sheet' && (
+              <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
+                  <CardTitle>Balance Sheet <span className="text-sm font-normal text-[#8E9299]">As of {reportEndDate}</span></CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Account</TableHead><TableHead className="text-right">Balance</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-blue-50/30 hover:bg-blue-50/30"><TableCell colSpan={2} className="font-bold text-blue-700">Assets</TableCell></TableRow>
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Asset').map((a: any) => (
+                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                      ))}
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number,a: any) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+                      
+                      <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Liabilities</TableCell></TableRow>
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Liability').map((a: any) => (
+                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                      ))}
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number,a: any) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+
+                      <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Equity</TableCell></TableRow>
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Equity').map((a: any) => (
+                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                      ))}
+                      <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{currSym}{balanceSheet.retainedEarnings.toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number,a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {reportTab === 'trial-balance' && (
+              <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+                <Table className="bg-white">
+                  <TableHeader>
+                    <TableRow className="bg-[#F5F5F5]/50 border-none">
+                      <TableHead colSpan={4}>
+                        <div className="flex justify-between items-center w-full">
+                          <span>Trial Balance</span>
+                          <Button variant="outline" size="sm" onClick={() => handleExportCSV('trial_balance', ['Code','Account Name','Type','Debit','Credit'], trialBalance.map(a => [a.code, a.name, a.type, String(a.total_debit), String(a.total_credit)]))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
+                        </div>
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                    <TableRow className="bg-[#F5F5F5]/50">
+                      <TableHead className="font-bold text-[#141414]">Code</TableHead>
+                      <TableHead className="font-bold text-[#141414]">Account Name</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Debit</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Credit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {trialBalance.map(a => (
+                      <TableRow key={a.id} className="hover:bg-[#F5F5F5]/50">
+                        <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
+                        <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
+                        <TableCell className="text-right font-mono text-[#8E9299]">{Number(a.total_debit) > 0 ? `${currSym}${Number(a.total_debit).toLocaleString()}` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-[#8E9299]">{Number(a.total_credit) > 0 ? `${currSym}${Number(a.total_credit).toLocaleString()}` : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
+                      <TableCell colSpan={2} className="font-black text-right text-lg">BALANCING TOTAL</TableCell>
+                      <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_debit), 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_credit), 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         );
 
