@@ -128,7 +128,12 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
       order_date: new Date().toISOString().split('T')[0],
       total_amount: Number(formData.get('amount')),
       items: [
-        { name: formData.get('item_name'), quantity: 1, price: Number(formData.get('amount')) }
+        { 
+          name: formData.get('item_name'), 
+          quantity: Number(formData.get('quantity') || 1), 
+          unit: formData.get('unit') || 'pcs',
+          price: Number(formData.get('amount')) 
+        }
       ]
     };
     try {
@@ -313,7 +318,11 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                         </div>
                       </div>
                       <div className="space-y-2"><Label>Item Description</Label><Input name="item_name" required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
-                      <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input name="amount" type="number" required className="bg-[#F5F5F5] border-none h-11 rounded-xl font-bold" /></div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2"><Label>Qty</Label><Input name="quantity" type="number" required defaultValue="1" className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
+                        <div className="space-y-2"><Label>Unit</Label><Input name="unit" placeholder="e.g. Bags" required className="bg-[#F5F5F5] border-none h-11 rounded-xl" /></div>
+                        <div className="space-y-2"><Label>Total ({currSym})</Label><Input name="amount" type="number" required className="bg-[#F5F5F5] border-none h-11 rounded-xl font-bold" /></div>
+                      </div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full h-11 rounded-xl shadow-lg shadow-blue-500/20 font-bold">AUTHORIZE PROCUREMENT</Button></DialogFooter>
                   </form>
@@ -324,18 +333,52 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#F5F5F5]/50"><TableHead>PO ID</TableHead><TableHead>Vendor</TableHead><TableHead>Project</TableHead><TableHead className="text-right">Total ({currSym})</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow>
+                  <TableRow className="bg-[#F5F5F5]/50">
+                    <TableHead>PO ID</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead className="text-right">Total ({currSym})</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
                 </TableHeader>
                 <TableBody>
                   {purchaseOrders.map((po) => (
                     <TableRow key={po.id} className="hover:bg-blue-50/20 transition-colors">
                       <TableCell className="font-black text-blue-600">{po.id}</TableCell>
                       <TableCell className="font-medium">{po.supplier_name}</TableCell>
-                      <TableCell className="text-[#8E9299] text-xs font-bold">{po.project_name || 'General Inventory'}</TableCell>
+                      <TableCell className="text-[#8E9299] text-xs font-bold">{po.item_name || 'N/A'}</TableCell>
+                      <TableCell className="font-bold">{po.quantity} {po.unit}</TableCell>
                       <TableCell className="text-right font-black text-[#141414]">{currSym}{Number(po.total_amount).toLocaleString()}</TableCell>
                       <TableCell><Badge className="bg-yellow-50 text-yellow-700 border-none font-bold text-[10px]">{po.status.toUpperCase()}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => handlePrintDocument(`PURCHASE ORDER - ${po.id}`, `<h3>Vendor: ${po.supplier_name}</h3><p>Project: ${po.project_name || 'General Inventory'}</p><p>Status: ${po.status.toUpperCase()}</p><h2 style="color: #141414;">Total Authorized: ${currSym}${Number(po.total_amount).toLocaleString()}</h2>`)}>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 text-blue-600 p-0" onClick={() => handlePrintDocument(`PURCHASE ORDER - ${po.id}`, `
+                          <div style="margin-bottom: 20px;">
+                            <h3 style="margin: 0; color: #141414;">Vendor: ${po.supplier_name}</h3>
+                            <p style="margin: 5px 0; color: #8E9299;">Project: ${po.project_name || 'General Inventory'}</p>
+                            <p style="margin: 5px 0; font-weight: bold;">Status: ${po.status.toUpperCase()}</p>
+                          </div>
+                          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                            <thead style="background: #F5F5F5;">
+                              <tr>
+                                <th style="padding: 12px; text-align: left;">Item Description</th>
+                                <th style="padding: 12px; text-align: center;">Quantity</th>
+                                <th style="padding: 12px; text-align: right;">Total Cost</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0;">${po.item_name || 'N/A'}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: center;">${po.quantity} ${po.unit}</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #E4E3E0; text-align: right; font-weight: bold;">${currSym}${Number(po.total_amount).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div style="margin-top: 30px; text-align: right;">
+                            <h2 style="color: #141414; margin: 0;">Total Authorized: ${currSym}${Number(po.total_amount).toLocaleString()}</h2>
+                          </div>
+                        `)}>
                           <Printer className="w-4 h-4" />
                         </Button>
                       </TableCell>

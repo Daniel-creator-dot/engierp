@@ -93,9 +93,26 @@ router.post('/inventory', authenticateToken, authorizeRole(['procurement', 'admi
 router.get('/purchase-orders', authenticateToken, async (req, res) => {
   try {
     const pos = await db('purchase_orders')
-      .select('purchase_orders.*', 'suppliers.name as supplier_name', 'projects.name as project_name')
+      .select(
+        'purchase_orders.*', 
+        'suppliers.name as supplier_name', 
+        'projects.name as project_name',
+        'po_items.item_name',
+        'po_items.quantity',
+        'po_items.unit'
+      )
       .join('suppliers', 'purchase_orders.supplier_id', 'suppliers.id')
       .leftJoin('projects', 'purchase_orders.project_id', 'projects.id')
+      .leftJoin(
+        db('po_items')
+          .distinctOn('po_id')
+          .select('*')
+          .orderBy('po_id')
+          .orderBy('id')
+          .as('po_items'),
+        'purchase_orders.id',
+        'po_items.po_id'
+      )
       .orderBy('order_date', 'desc');
     res.json(pos);
   } catch (error) {
@@ -124,6 +141,7 @@ router.post('/purchase-orders', authenticateToken, authorizeRole(['procurement',
         po_id: newPoId,
         item_name: item.name,
         quantity: item.quantity,
+        unit: item.unit,
         unit_price: item.price,
         total_price: item.quantity * item.price
       }));
