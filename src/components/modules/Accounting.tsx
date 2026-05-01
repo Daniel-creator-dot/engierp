@@ -91,7 +91,7 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80"
+          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80 text-[#141414]"
         >
           <span className="truncate">
             {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
@@ -100,11 +100,11 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[400px] p-0 rounded-2xl border-none shadow-2xl bg-white z-[9999]" 
+        className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border border-[#F5F5F5] shadow-2xl bg-white z-[9999]" 
         align="start"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        sideOffset={4}
       >
-        <div className="flex items-center border-b border-[#F5F5F5] px-3 py-1">
+        <div className="flex items-center border-b border-[#F5F5F5] px-3 sticky top-0 bg-white z-10">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
           <input
             placeholder="Search accounts..."
@@ -119,23 +119,23 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
             {filtered.map((account: any) => (
               <div
                 key={account.id}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
+                onClick={() => {
                   onValueChange(String(account.id));
                   setOpen(false);
                   setSearch('');
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors cursor-pointer"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors cursor-pointer group"
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${typeColors[account.type] || 'bg-gray-400'}`} />
-                <span className="font-mono font-bold text-blue-600 w-12">{account.code}</span>
-                <span className="font-medium text-[#141414] flex-1 truncate">{account.name}</span>
+                <div className={`w-2 h-2 rounded-full ${typeColors[account.type] || 'bg-gray-400'}`} />
+                <div className="flex flex-col flex-1 truncate">
+                  <span className="font-mono font-bold text-blue-600 text-[10px] leading-tight">{account.code}</span>
+                  <span className="font-bold text-[#141414] truncate">{account.name}</span>
+                </div>
                 {value === String(account.id) && <Check className="h-4 w-4 text-blue-600" />}
               </div>
             ))}
             {filtered.length === 0 && (
-              <div className="py-6 text-center text-sm text-[#8E9299] font-medium">No accounts found.</div>
+              <div className="py-8 text-center text-xs font-bold text-[#8E9299] uppercase tracking-widest">No accounts found</div>
             )}
           </div>
         </ScrollArea>
