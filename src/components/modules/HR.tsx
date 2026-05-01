@@ -89,6 +89,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
+  const [newEmployeeWageType, setNewEmployeeWageType] = useState('Salaried');
+  const [editEmployeeWageType, setEditEmployeeWageType] = useState('Salaried');
   const [isIndividualPayrollOpen, setIsIndividualPayrollOpen] = useState(false);
   const [payrollData, setPayrollData] = useState<any>({
     base_salary: 0,
@@ -156,12 +158,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       bank_name: formData.get('bank_name'),
       account_name: formData.get('account_name'),
       account_number: formData.get('account_number'),
-      branch: formData.get('branch')
+      branch: formData.get('branch'),
+      wage_type: formData.get('wage_type')
     };
     try {
       await hrApi.addEmployee(data);
-      toast.success('Employee onboarded');
+      toast.success('Employee registered successfully');
       setIsAddEmployeeOpen(false);
+      setNewEmployeeWageType('Salaried'); // Reset state
       fetchData();
     } catch (error) {
       toast.error('Failed to add employee');
@@ -185,7 +189,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       bank_name: formData.get('bank_name'),
       account_name: formData.get('account_name'),
       account_number: formData.get('account_number'),
-      branch: formData.get('branch')
+      branch: formData.get('branch'),
+      wage_type: formData.get('wage_type')
     };
     try {
       await hrApi.updateEmployee(selectedEmployee.id, data);
@@ -389,7 +394,19 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" required /></div>
                       </div>
-                      <div className="grid gap-2"><Label>Annual Gross Salary (GH₵)</Label><Input name="salary" type="number" required /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Wage Type</Label>
+                          <Select name="wage_type" value={newEmployeeWageType} onValueChange={setNewEmployeeWageType}>
+                            <SelectTrigger className="bg-white border-slate-200 rounded-xl"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Salaried">Salaried</SelectItem>
+                              <SelectItem value="Hourly">Hourly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2"><Label>{newEmployeeWageType === 'Hourly' ? 'Hourly Rate (GH₵)' : 'Monthly Gross Salary (GH₵)'}</Label><Input name="salary" type="number" required /></div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Phone Number</Label><Input name="phone" placeholder="+233..." /></div>
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" placeholder="E123..." /></div>
@@ -427,11 +444,28 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                   {employees.map(e => (
                     <TableRow key={e.id} className="hover:bg-blue-50/30">
                       <TableCell className="font-mono text-xs font-bold">{e.id}</TableCell>
-                      <TableCell className="font-bold">{e.name}</TableCell>
-                      <TableCell>{e.department} / {e.role}</TableCell>
+                      <TableCell>
+                        <div className="font-bold">{e.name}</div>
+                        <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                          {e.wage_type === 'Hourly' ? 'HOURLY WAGE' : 'FIXED SALARY'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-[#8E9299]">{e.department}</TableCell>
                       <TableCell><Badge className={e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>{e.status}</Badge></TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsIndividualPayrollOpen(true); }} className="h-8 px-2 rounded-xl hover:bg-green-50 text-green-600 gap-1 mr-2">
+                        <Button variant="ghost" size="sm" onClick={() => { 
+                          setSelectedEmployee(e); 
+                          setPayrollData({
+                            base_salary: e.salary,
+                            allowances: 0,
+                            deductions: [],
+                            month: new Date().toLocaleString('default', { month: 'long' }),
+                            year: 2026,
+                            days_worked: 0,
+                            hours_per_day: 10
+                          });
+                          setIsIndividualPayrollOpen(true); 
+                        }} className="h-8 px-2 rounded-xl hover:bg-green-50 text-green-600 gap-1 mr-2">
                           <CreditCard className="w-3.5 h-3.5" /> Pay
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsViewEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
@@ -549,7 +583,19 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" defaultValue={selectedEmployee.role} required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" defaultValue={selectedEmployee.department} required /></div>
                       </div>
-                      <div className="grid gap-2"><Label>Annual Gross Salary (GH₵)</Label><Input name="salary" type="number" defaultValue={selectedEmployee.salary} required /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Wage Type</Label>
+                          <Select name="wage_type" defaultValue={selectedEmployee.wage_type || 'Salaried'} onValueChange={setEditEmployeeWageType}>
+                            <SelectTrigger className="bg-white border-slate-200 rounded-xl"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Salaried">Salaried</SelectItem>
+                              <SelectItem value="Hourly">Hourly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2"><Label>{(editEmployeeWageType || selectedEmployee.wage_type) === 'Hourly' ? 'Hourly Rate (GH₵)' : 'Monthly Gross Salary (GH₵)'}</Label><Input name="salary" type="number" defaultValue={selectedEmployee.salary} required /></div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Phone Number</Label><Input name="phone" defaultValue={selectedEmployee.phone} /></div>
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" defaultValue={selectedEmployee.ssnit} /></div>
@@ -611,10 +657,33 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         <div className="grid gap-2"><Label>Year</Label><Input type="number" value={payrollData.year} onChange={(e) => setPayrollData({...payrollData, year: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label>Base Salary (GH₵)</Label><Input type="number" value={payrollData.base_salary} onChange={(e) => setPayrollData({...payrollData, base_salary: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
-                        <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
-                      </div>
+                      {selectedEmployee.wage_type === 'Hourly' ? (
+                        <div className="grid grid-cols-4 gap-4 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                          <div className="grid gap-2"><Label>Days Worked</Label><Input type="number" value={payrollData.days_worked || ''} onChange={(e) => {
+                            const days = Number(e.target.value);
+                            const hours = days * (payrollData.hours_per_day || 10);
+                            setPayrollData({...payrollData, days_worked: days, base_salary: hours * selectedEmployee.salary});
+                          }} className="bg-white border-none rounded-xl h-11" placeholder="e.g. 22.7" step="0.1" /></div>
+                          <div className="grid gap-2"><Label>Hours/Day</Label><Input type="number" value={payrollData.hours_per_day || ''} onChange={(e) => {
+                            const hpday = Number(e.target.value);
+                            const hours = (payrollData.days_worked || 0) * hpday;
+                            setPayrollData({...payrollData, hours_per_day: hpday, base_salary: hours * selectedEmployee.salary});
+                          }} className="bg-white border-none rounded-xl h-11" placeholder="10" step="0.1" /></div>
+                          <div className="grid gap-2"><Label>Total Hrs</Label><Input type="number" value={(payrollData.days_worked || 0) * (payrollData.hours_per_day || 10)} readOnly className="bg-blue-100/50 border-none rounded-xl h-11 font-bold text-blue-800" /></div>
+                          <div className="grid gap-2"><Label>Gross Pay (Rate: {selectedEmployee.salary})</Label><Input type="number" value={payrollData.base_salary} readOnly className="bg-blue-100/50 border-none rounded-xl h-11 font-bold text-blue-800" /></div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Base Salary (GH₵)</Label><Input type="number" value={payrollData.base_salary} onChange={(e) => setPayrollData({...payrollData, base_salary: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                          <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                        </div>
+                      )}
+                      
+                      {selectedEmployee.wage_type === 'Hourly' && (
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                        </div>
+                      )}
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">

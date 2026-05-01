@@ -193,9 +193,13 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
       .select('employee_id');
     
     const existingIds = new Set(existingPayroll.map(p => p.employee_id));
-    const employeesToProcess = employees.filter(e => !existingIds.has(e.id));
+    const employeesToProcess = employees.filter(e => !existingIds.has(e.id) && e.wage_type !== 'Hourly');
+    const skippedHourlyCount = employees.filter(e => !existingIds.has(e.id) && e.wage_type === 'Hourly').length;
 
     if (employeesToProcess.length === 0) {
+      if (skippedHourlyCount > 0) {
+         return res.status(400).json({ message: `No salaried employees left to process. ${skippedHourlyCount} hourly employee(s) were skipped and must be processed manually.` });
+      }
       return res.status(400).json({ message: 'Payroll already processed for all active employees for this period.' });
     }
 
@@ -221,10 +225,12 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
 
     await db('payroll').insert(batchData);
 
+    const skippedMsg = skippedHourlyCount > 0 ? ` Skipped ${skippedHourlyCount} hourly employee(s) (process manually).` : '';
+
     res.status(201).json({ 
       message: isAdmin 
-        ? `Successfully processed and approved payroll for ${employeesToProcess.length} employees.`
-        : `Payroll submitted for ${employeesToProcess.length} employees. Awaiting admin approval.`,
+        ? `Processed and approved payroll for ${employeesToProcess.length} salaried employees.${skippedMsg}`
+        : `Payroll submitted for ${employeesToProcess.length} salaried employees.${skippedMsg}`,
       count: employeesToProcess.length 
     });
   } catch (error) {
