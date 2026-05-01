@@ -59,7 +59,7 @@ import {
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
-import { hrApi, settingsApi } from '../../lib/api';
+import { hrApi, settingsApi, projectsApi } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { GHANA_BANKS } from '../../lib/constants';
@@ -73,6 +73,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [payrollEntries, setPayrollEntries] = useState<PayrollRecord[]>([]);
   const [appraisals, setAppraisals] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   
@@ -157,6 +158,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
         setAppraisals(appRes.data);
         setEmployees(empRes.data);
       }
+
+      const projRes = await projectsApi.getProjects();
+      setProjects(projRes.data);
     } catch (error) {
       toast.error('Failed to load HR data');
     } finally {
@@ -234,7 +238,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       month: formData.get('month') as string,
       year: Number(formData.get('year')),
       payment_date: formData.get('payment_date') as string,
-      employee_ids: selectedBatchEmployees
+      employee_ids: selectedBatchEmployees,
+      project_id: formData.get('project_id')
     };
     try {
       const res = await hrApi.batchProcessPayroll(data);
@@ -989,8 +994,18 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid gap-2"><Label>Year</Label><Input name="year" type="number" defaultValue={2026} className="bg-[#F5F5F5] border-none" required /></div>
                         <div className="grid gap-2"><Label>Payment Date</Label><Input name="payment_date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" required /></div>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <Label>Assign to Project (for Job Costing)</Label>
+                        <Select name="project_id">
+                          <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select project (Optional)" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">General Administration (None)</SelectItem>
+                            {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.id} - {p.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       <div className="space-y-3 mt-2">

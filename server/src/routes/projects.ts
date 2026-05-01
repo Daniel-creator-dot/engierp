@@ -92,10 +92,14 @@ router.get('/reports/wip', authenticateToken, authorizeRole(['pm', 'accountant',
         .first() as any;
 
       const actualCost = Number(costRes?.total || 0);
-      const budgetedCost = Number(project.estimated_cost_at_completion || project.budget);
-      
       // 3. Calculate POC (Percentage of Completion)
-      const poc = budgetedCost > 0 ? Math.min(actualCost / budgetedCost, 1) : 0;
+      const budgetedCost = Number(project.estimated_cost_at_completion || project.budget);
+      let poc = 0;
+      if (project.completion_rate > 0) {
+        poc = Number(project.completion_rate) / 100;
+      } else {
+        poc = budgetedCost > 0 ? Math.min(actualCost / budgetedCost, 1) : 0;
+      }
       
       // 4. Calculate Earned Revenue
       const contractValue = Number(project.contract_value || project.budget);

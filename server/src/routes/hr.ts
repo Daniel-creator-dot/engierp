@@ -260,7 +260,8 @@ router.post('/payroll/batch', authenticateToken, authorizeRole(['hr', 'accountan
         detailed_deductions: JSON.stringify(detailed_deductions),
         net_pay,
         status: isAdmin ? 'Paid' : 'Pending',
-        paid_at: isAdmin ? db.fn.now() : null
+        paid_at: isAdmin ? db.fn.now() : null,
+        project_id: req.body.project_id === 'none' ? null : req.body.project_id
       };
     });
 
@@ -291,21 +292,61 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async 
       updated_at: db.fn.now() 
     });
 
-    // Send SMS notification if approved
+    // Send SMS notification and Post to Ledger if approved
     if (status === 'Paid') {
+      const trx = await db.transaction();
       try {
         const payrollEntry = await db('payroll')
           .join('employees', 'payroll.employee_id', 'employees.id')
           .where('payroll.id', id)
-          .select('employees.phone', 'employees.name', 'payroll.net_pay')
+          .select('employees.phone', 'employees.name', 'payroll.net_pay', 'payroll.base_salary', 'payroll.project_id', 'payroll.month', 'payroll.year')
           .first();
 
-        if (payrollEntry && payrollEntry.phone) {
-          const message = `Hello ${payrollEntry.name}, your payroll of GHS ${Number(payrollEntry.net_pay).toLocaleString()} has been approved and paid. - BytzForge`;
-          await sendSMS(payrollEntry.phone, message);
+        if (payrollEntry) {
+          // 1. Post to Ledger
+          const [journal_id] = await trx('journal_entries').insert({
+            date: new Date().toISOString().split('T')[0],
+            description: `Payroll: ${payrollEntry.name} - ${payrollEntry.month}/${payrollEntry.year}`,
+            project_id: payrollEntry.project_id,
+            reference_type: 'payroll',
+            reference_id: String(id)
+          }).returning('id');
+
+          // Account Mapping: 79 (Site Workers) if project_id exists, else 86 (Office Salaries)
+          const expense_account_id = payrollEntry.project_id ? 79 : 86;
+          const bank_account_id = 44;
+
+          // Debit Expense
+          await trx('ledger_entries').insert({
+            journal_id,
+            account_id: expense_account_id,
+            debit: payrollEntry.base_salary,
+            credit: 0
+          });
+
+          // Credit Bank
+          await trx('ledger_entries').insert({
+            journal_id,
+            account_id: bank_account_id,
+            debit: 0,
+            credit: payrollEntry.base_salary
+          });
+
+          // Update Balances
+          await trx('chart_of_accounts').where({ id: expense_account_id }).increment('balance', payrollEntry.base_salary);
+          await trx('chart_of_accounts').where({ id: bank_account_id }).decrement('balance', payrollEntry.base_salary);
+
+          await trx.commit();
+
+          // 2. Send SMS
+          if (payrollEntry.phone) {
+            const message = `Hello ${payrollEntry.name}, your payroll of GHS ${Number(payrollEntry.net_pay).toLocaleString()} has been approved and paid. - BytzForge`;
+            await sendSMS(payrollEntry.phone, message);
+          }
         }
-      } catch (smsError) {
-        console.error('Failed to send SMS for individual payroll approval:', smsError);
+      } catch (ledgerError) {
+        await trx.rollback();
+        console.error('Failed to post payroll to ledger:', ledgerError);
       }
     }
 

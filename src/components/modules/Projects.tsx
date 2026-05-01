@@ -166,7 +166,8 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
       budget: Number(formData.get('budget')),
       startDate: formData.get('startDate'),
       endDate: formData.get('endDate'),
-      status: formData.get('status')
+      status: formData.get('status'),
+      completion_rate: Number(formData.get('completion_rate'))
     };
     try {
       await projectsApi.updateProject(selectedProject.id, data);
@@ -559,10 +560,13 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                         </Select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Budget</Label><Input name="budget" type="number" defaultValue={selectedProject.budget} required /></div>
-                      <div className="space-y-2"><Label>Start</Label><Input name="startDate" type="date" defaultValue={selectedProject.startDate} required /></div>
-                      <div className="space-y-2"><Label>End</Label><Input name="endDate" type="date" defaultValue={selectedProject.endDate} required /></div>
+                      <div className="space-y-2"><Label>Completion %</Label><Input name="completion_rate" type="number" step="0.1" min="0" max="100" defaultValue={selectedProject.completion_rate || 0} required className="bg-green-50 border-green-100 font-bold text-green-700" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2"><Label>Start Date</Label><Input name="startDate" type="date" defaultValue={selectedProject.startDate} required /></div>
+                      <div className="space-y-2"><Label>End Date</Label><Input name="endDate" type="date" defaultValue={selectedProject.endDate} required /></div>
                     </div>
                   </div>
                   <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold">COMMIT REVISIONS</Button></DialogFooter>
