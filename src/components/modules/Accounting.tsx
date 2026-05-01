@@ -99,6 +99,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [invoiceItems, setInvoiceItems] = useState<{description: string, quantity: number, unitPrice: number}[]>([{description: '', quantity: 1, unitPrice: 0}]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
+  const [invoiceTaxOverride, setInvoiceTaxOverride] = useState<string>('');
+  const [invoiceTaxNameOverride, setInvoiceTaxNameOverride] = useState<string>('');
 
   // Journal Items state
   const [journalItems, setJournalItems] = useState([
@@ -220,8 +222,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const project = projects.find(p => p.id === projId);
     
     const subtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const taxRate = Number(accountingConfig.sales_tax_rate) / 100;
-    const taxAmount = subtotal * taxRate;
+    const currentTaxRate = invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate);
+    const taxAmount = subtotal * (currentTaxRate / 100);
     const totalAmount = subtotal + taxAmount;
     
     const data = {
@@ -229,6 +231,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       client: project?.client || formData.get('client_name'),
       amount: totalAmount,
       tax_amount: taxAmount,
+      tax_rate: currentTaxRate,
+      tax_name: invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name,
       subtotal: subtotal,
       dueDate: formData.get('dueDate'),
       project_id: projId,
@@ -621,17 +625,23 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="font-bold">Invoice Line Items</Label>
-                          <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => setInvoiceItems([...invoiceItems, {description: '', quantity: 1, unitPrice: 0}])}>
-                            <Plus className="w-3 h-3 mr-1" /> Add Line
+                          <Label className="font-bold text-blue-600">Invoice Line Items</Label>
+                          <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => setInvoiceItems([...invoiceItems, {description: '', quantity: 1, unitPrice: 0}])}>
+                            <Plus className="w-3 h-3 mr-1" /> Add New Row
                           </Button>
+                        </div>
+                        <div className="grid grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase text-[#8E9299]">
+                          <div className="col-span-6">Description</div>
+                          <div className="col-span-2 text-center">Qty</div>
+                          <div className="col-span-2 text-right">Price</div>
+                          <div className="col-span-2 text-right">Total</div>
                         </div>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                           {invoiceItems.map((item, idx) => (
-                            <div key={idx} className="flex gap-2 items-start bg-[#F5F5F5]/30 p-3 rounded-xl border border-[#F5F5F5]">
-                              <div className="flex-1 space-y-1">
+                            <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#F5F5F5]/50 p-2 rounded-xl border border-[#F5F5F5]">
+                              <div className="col-span-6">
                                 <Input 
-                                  placeholder="Item description..." 
+                                  placeholder="Item/Service name" 
                                   value={item.description} 
                                   onChange={(e) => {
                                     const newItems = [...invoiceItems];
@@ -639,13 +649,12 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                                     setInvoiceItems(newItems);
                                   }}
                                   required
-                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                  className="bg-white border-none h-9 rounded-lg text-xs"
                                 />
                               </div>
-                              <div className="w-20 space-y-1">
+                              <div className="col-span-2">
                                 <Input 
                                   type="number" 
-                                  placeholder="Qty" 
                                   value={item.quantity} 
                                   onChange={(e) => {
                                     const newItems = [...invoiceItems];
@@ -653,13 +662,12 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                                     setInvoiceItems(newItems);
                                   }}
                                   required
-                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                  className="bg-white border-none h-9 rounded-lg text-xs text-center"
                                 />
                               </div>
-                              <div className="w-28 space-y-1">
+                              <div className="col-span-2">
                                 <Input 
                                   type="number" 
-                                  placeholder="Price" 
                                   value={item.unitPrice} 
                                   onChange={(e) => {
                                     const newItems = [...invoiceItems];
@@ -667,25 +675,27 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                                     setInvoiceItems(newItems);
                                   }}
                                   required
-                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                  className="bg-white border-none h-9 rounded-lg text-xs text-right"
                                 />
                               </div>
-                              <div className="w-24 text-right pt-2 font-bold text-sm">
-                                {currSym}{(item.quantity * item.unitPrice).toLocaleString()}
+                              <div className="col-span-1 text-right font-bold text-xs text-[#141414]">
+                                {(item.quantity * item.unitPrice).toLocaleString()}
                               </div>
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-lg"
-                                onClick={() => {
-                                  if (invoiceItems.length > 1) {
-                                    setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
-                                  }
-                                }}
-                              >
-                                ×
-                              </Button>
+                              <div className="col-span-1 flex justify-end">
+                                <Button 
+                                  type="button" 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
+                                  onClick={() => {
+                                    if (invoiceItems.length > 1) {
+                                      setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
+                                    }
+                                  }}
+                                >
+                                  ×
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -697,8 +707,22 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           <span className="font-bold">{currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-blue-600 font-medium">{accountingConfig.tax_name} ({accountingConfig.sales_tax_rate}%)</span>
-                          <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (Number(accountingConfig.sales_tax_rate) / 100)).toLocaleString()}</span>
+                          <div className="flex items-center gap-2">
+                            <Input 
+                              value={invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name}
+                              onChange={(e) => setInvoiceTaxNameOverride(e.target.value)}
+                              placeholder="Tax Name"
+                              className="w-20 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold uppercase"
+                            />
+                            <Input 
+                              type="number" 
+                              value={invoiceTaxOverride !== '' ? invoiceTaxOverride : accountingConfig.sales_tax_rate}
+                              onChange={(e) => setInvoiceTaxOverride(e.target.value)}
+                              className="w-16 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold"
+                            />
+                            <span className="text-blue-600 font-medium">%</span>
+                          </div>
+                          <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * ((invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t border-blue-100">
                           <div>
@@ -707,7 +731,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-black text-blue-700">
-                              {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + Number(accountingConfig.sales_tax_rate) / 100)).toLocaleString()}
+                              {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + (invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}
                             </p>
                           </div>
                         </div>
@@ -778,7 +802,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                                     <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.subtotal || inv.amount).toLocaleString()}</td>
                                   </tr>
                                   <tr>
-                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">${accountingConfig.tax_name} (${accountingConfig.sales_tax_rate}%):</td>
+                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">${inv.tax_name || accountingConfig.tax_name} (${inv.tax_rate || accountingConfig.sales_tax_rate}%):</td>
                                     <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.tax_amount || 0).toLocaleString()}</td>
                                   </tr>
                                   <tr style="font-size: 1.2rem; font-weight: bold;">
