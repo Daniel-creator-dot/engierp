@@ -85,7 +85,7 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -103,6 +103,8 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
         className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border border-[#F5F5F5] shadow-2xl bg-white z-[9999]" 
         align="start"
         sideOffset={4}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex items-center border-b border-[#F5F5F5] px-3 sticky top-0 bg-white z-10">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
