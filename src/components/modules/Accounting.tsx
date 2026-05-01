@@ -96,6 +96,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<{description: string, quantity: number, unitPrice: number}[]>([{description: '', quantity: 1, unitPrice: 0}]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
 
@@ -217,18 +218,22 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const projId = formData.get('project_id') as string;
     const project = projects.find(p => p.id === projId);
     
+    const totalAmount = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    
     const data = {
       id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       client: project?.client || formData.get('client_name'),
-      amount: Number(formData.get('amount')),
+      amount: totalAmount,
       dueDate: formData.get('dueDate'),
       project_id: projId,
-      status: 'unpaid'
+      status: 'unpaid',
+      items: JSON.stringify(invoiceItems)
     };
     try {
       await accountingApi.createInvoice(data);
       toast.success('Sales invoice generated');
       setIsCreateInvoiceOpen(false);
+      setInvoiceItems([{description: '', quantity: 1, unitPrice: 0}]);
       fetchData();
     } catch (error) {
       toast.error('Failed to generate invoice');
@@ -581,23 +586,106 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID','Customer','Due Date','Amount','Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
               <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
                 <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
-                <DialogContent className="rounded-2xl">
+                <DialogContent className="max-w-2xl rounded-2xl">
                   <form onSubmit={handleCreateInvoice}>
                     <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label>Project / Client</Label>
-                        <Select name="project_id" required>
-                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select project..." /></SelectTrigger>
-                          <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.client})</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
+                    <div className="grid gap-6 py-4">
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Amount ({currSym})</Label><Input name="amount" type="number" required className="bg-[#F5F5F5] border-none font-bold" /></div>
-                        <div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required className="bg-[#F5F5F5] border-none" /></div>
+                        <div className="space-y-2">
+                          <Label>Project / Client</Label>
+                          <Select name="project_id" required>
+                            <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select project..." /></SelectTrigger>
+                            <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.client})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-bold">Invoice Line Items</Label>
+                          <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => setInvoiceItems([...invoiceItems, {description: '', quantity: 1, unitPrice: 0}])}>
+                            <Plus className="w-3 h-3 mr-1" /> Add Line
+                          </Button>
+                        </div>
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                          {invoiceItems.map((item, idx) => (
+                            <div key={idx} className="flex gap-2 items-start bg-[#F5F5F5]/30 p-3 rounded-xl border border-[#F5F5F5]">
+                              <div className="flex-1 space-y-1">
+                                <Input 
+                                  placeholder="Item description..." 
+                                  value={item.description} 
+                                  onChange={(e) => {
+                                    const newItems = [...invoiceItems];
+                                    newItems[idx].description = e.target.value;
+                                    setInvoiceItems(newItems);
+                                  }}
+                                  required
+                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div className="w-20 space-y-1">
+                                <Input 
+                                  type="number" 
+                                  placeholder="Qty" 
+                                  value={item.quantity} 
+                                  onChange={(e) => {
+                                    const newItems = [...invoiceItems];
+                                    newItems[idx].quantity = Number(e.target.value);
+                                    setInvoiceItems(newItems);
+                                  }}
+                                  required
+                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div className="w-28 space-y-1">
+                                <Input 
+                                  type="number" 
+                                  placeholder="Price" 
+                                  value={item.unitPrice} 
+                                  onChange={(e) => {
+                                    const newItems = [...invoiceItems];
+                                    newItems[idx].unitPrice = Number(e.target.value);
+                                    setInvoiceItems(newItems);
+                                  }}
+                                  required
+                                  className="bg-white border-none h-10 rounded-lg text-sm"
+                                />
+                              </div>
+                              <div className="w-24 text-right pt-2 font-bold text-sm">
+                                {currSym}{(item.quantity * item.unitPrice).toLocaleString()}
+                              </div>
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-lg"
+                                onClick={() => {
+                                  if (invoiceItems.length > 1) {
+                                    setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
+                                  }
+                                }}
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl flex justify-between items-center">
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
+                          <p className="text-sm text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-blue-700">
+                            {currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11">GENERATE INVOICE</Button></DialogFooter>
+                    <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-12 shadow-lg shadow-blue-500/20 uppercase tracking-wider">GENERATE & POST INVOICE</Button></DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
@@ -621,7 +709,52 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                             RECEIVE
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => handlePrintDocument(`INVOICE - ${inv.id}`, `<h3>To: ${inv.client}</h3><p>Amount: ${currSym}${inv.amount}</p>`)}><Printer className="w-3 h-3" /></Button>
+                        <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => {
+                          const itemsHtml = inv.items ? JSON.parse(inv.items).map((it: any) => `
+                            <tr>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0;">${it.description}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: center;">${it.quantity}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${Number(it.unitPrice).toLocaleString()}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${(it.quantity * it.unitPrice).toLocaleString()}</td>
+                            </tr>
+                          `).join('') : `<tr><td colspan="4" style="padding: 20px; text-align: center;">Standard Service Charge</td></tr>`;
+
+                          const content = `
+                            <div style="margin-top: 40px;">
+                              <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
+                                <div>
+                                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Bill To:</h4>
+                                  <h3 style="margin: 0;">${inv.client}</h3>
+                                </div>
+                                <div style="text-align: right;">
+                                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Invoice Details:</h4>
+                                  <p style="margin: 0;"><strong>Invoice ID:</strong> ${inv.id}</p>
+                                  <p style="margin: 0;"><strong>Due Date:</strong> ${inv.dueDate}</p>
+                                </div>
+                              </div>
+                              <table style="width: 100%; border-collapse: collapse;">
+                                <thead style="background: #F5F5F5;">
+                                  <tr>
+                                    <th style="padding: 10px; text-align: left;">Description</th>
+                                    <th style="padding: 10px; text-align: center;">Qty</th>
+                                    <th style="padding: 10px; text-align: right;">Unit Price</th>
+                                    <th style="padding: 10px; text-align: right;">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${itemsHtml}
+                                </tbody>
+                                <tfoot>
+                                  <tr style="font-size: 1.2rem; font-weight: bold;">
+                                    <td colspan="3" style="padding: 20px 10px; text-align: right;">Grand Total:</td>
+                                    <td style="padding: 20px 10px; text-align: right; color: #2563eb;">${currSym}${Number(inv.amount).toLocaleString()}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          `;
+                          handlePrintDocument(`SALES INVOICE - ${inv.id}`, content);
+                        }}><Printer className="w-3 h-3" /></Button>
                       </TableCell>
                     </TableRow>
                   ))}
