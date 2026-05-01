@@ -268,15 +268,15 @@ export default function Settings() {
           <TabsTrigger value="general" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
             <Globe className="w-4 h-4 mr-2" /> General
           </TabsTrigger>
+          {(currentUser?.role === 'admin' || currentUser?.role === 'hr' || currentUser?.role === 'accountant') && (
+            <TabsTrigger value="payroll" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
+              <Calculator className="w-4 h-4 mr-2" /> Payroll & Tax
+            </TabsTrigger>
+          )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
-            <>
-              <TabsTrigger value="payroll" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
-                <Calculator className="w-4 h-4 mr-2" /> Payroll & Tax
-              </TabsTrigger>
-              <TabsTrigger value="users" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
-                <User className="w-4 h-4 mr-2" /> Users
-              </TabsTrigger>
-            </>
+            <TabsTrigger value="users" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
+              <User className="w-4 h-4 mr-2" /> Users
+            </TabsTrigger>
           )}
           {currentUser?.role === 'admin' && (
             <>

@@ -14,13 +14,13 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: AuthRequest, res) => {
+router.post('/', authenticateToken, authorizeRole(['admin', 'hr', 'accountant']), async (req: AuthRequest, res) => {
   try {
     const { key, value } = req.body;
     
-    // Security: HR can only update payroll settings
-    if (req.user?.role === 'hr' && key !== 'payroll_config') {
-      return res.status(403).json({ message: 'HR can only update payroll settings' });
+    // Security: HR and Accountant can only update payroll settings
+    if ((req.user?.role === 'hr' || req.user?.role === 'accountant') && key !== 'payroll_config') {
+      return res.status(403).json({ message: 'HR and Accountants can only update payroll settings' });
     }
 
     const existing = await db('settings').where({ key }).first();
