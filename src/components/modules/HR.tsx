@@ -373,34 +373,44 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
           <title>${title}</title>
           <style>
             body { font-family: 'Inter', sans-serif; padding: 40px; color: #141414; line-height: 1.5; }
-            .header { border-bottom: 2px solid #141414; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
-            .logo { max-height: 60px; max-width: 200px; }
-            .footer { margin-top: 60px; border-top: 1px solid #E4E3E0; padding-top: 20px; display: flex; justify-content: space-between; }
+            .header { border-bottom: 2px solid #141414; padding-bottom: 20px; margin-bottom: 40px; }
+            .logo-container { text-align: center; margin-bottom: 30px; }
+            .logo { max-height: 120px; max-width: 400px; }
+            .meta-header { display: flex; justify-content: space-between; align-items: flex-end; }
+            .footer { margin-top: 60px; border-top: 1px solid #E4E3E0; padding-top: 20px; }
+            .footer-grid { display: flex; justify-content: space-between; }
             .signature { max-height: 60px; }
-            .branding-banner { display: flex; flex-direction: column; }
-            .address-block { font-size: 0.8rem; color: #8E9299; margin-top: 4px; }
+            .footer-note { margin-top: 30px; padding: 20px; background: #F5F5F5; border-radius: 12px; font-size: 0.85rem; text-align: center; font-style: italic; color: #4B5563; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="branding-banner">
+            <div class="logo-container">
               ${logo ? `<img src="${logo}" class="logo" />` : `<h1>${getSetting('company_name') || 'ENGINEERING ERP'}</h1>`}
-              <div class="address-block">${getSetting('company_address') || ''}</div>
             </div>
-            <div style="text-align: right">
-              <h2>${title}</h2>
-              <p>Generated: ${new Date().toLocaleDateString()}</p>
+            <div class="meta-header">
+              <div class="address-block">
+                <strong>${getSetting('company_name') || 'ENGINEERING ERP'}</strong><br/>
+                ${getSetting('company_address') || ''}
+              </div>
+              <div style="text-align: right">
+                <h2>${title}</h2>
+                <p>Generated: ${new Date().toLocaleDateString()}</p>
+              </div>
             </div>
           </div>
           ${content}
           <div class="footer">
-            <div>
-              <p>Authorized Signature</p>
-              ${signature ? `<img src="${signature}" class="signature" />` : '<div style="height: 60px; width: 200px; border-bottom: 1px solid #000;"></div>'}
+            <div class="footer-grid">
+              <div>
+                <p>Authorized Signature</p>
+                ${signature ? `<img src="${signature}" class="signature" />` : '<div style="height: 60px; width: 200px; border-bottom: 1px solid #000;"></div>'}
+              </div>
+              <div style="text-align: right; color: #8E9299; font-size: 0.75rem;">
+                <p>Digital ERP Hash: ${Math.random().toString(36).substring(7).toUpperCase()}</p>
+              </div>
             </div>
-            <div style="text-align: right; color: #8E9299; font-size: 0.75rem;">
-              <p>Digital ERP Hash: ${Math.random().toString(36).substring(7).toUpperCase()}</p>
-            </div>
+            ${getSetting('company_footer_note') ? `<div class="footer-note">${getSetting('company_footer_note')}</div>` : ''}
           </div>
         </body>
       </html>

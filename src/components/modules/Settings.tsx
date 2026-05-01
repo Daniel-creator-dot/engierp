@@ -109,6 +109,7 @@ export default function Settings() {
   const [newDeduction, setNewDeduction] = useState({ name: '', type: 'fixed' as 'fixed' | 'percentage', value: 0 });
   const [logo, setLogo] = useState('');
   const [signature, setSignature] = useState('');
+  const [footerNote, setFooterNote] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -129,6 +130,9 @@ export default function Settings() {
 
       const sigSetting = res.data.find((s: any) => s.key === 'company_signature');
       if (sigSetting) setSignature(sigSetting.value);
+
+      const footerSetting = res.data.find((s: any) => s.key === 'company_footer_note');
+      if (footerSetting) setFooterNote(footerSetting.value);
 
       const payrollSetting = res.data.find((s: any) => s.key === 'payroll_config');
       if (payrollSetting) {
@@ -253,7 +257,8 @@ export default function Settings() {
     try {
       await Promise.all([
         settingsApi.updateSetting('company_logo', logo),
-        settingsApi.updateSetting('company_signature', signature)
+        settingsApi.updateSetting('company_signature', signature),
+        settingsApi.updateSetting('company_footer_note', footerNote)
       ]);
       toast.success('Branding updated successfully');
     } catch (error) {
@@ -681,6 +686,17 @@ export default function Settings() {
             <Card className="border-none shadow-sm"><CardHeader><CardTitle>Corporate Identity</CardTitle></CardHeader><CardContent className="space-y-4"><div className="w-full h-40 bg-[#F5F5F5] rounded-2xl flex items-center justify-center overflow-hidden">{logo ? <img src={logo} className="max-h-full" /> : <ImageIcon className="w-10 h-10 text-[#8E9299]" />}</div><Input type="file" onChange={(e) => handleFileUpload(e, 'logo')} /></CardContent></Card>
             <Card className="border-none shadow-sm"><CardHeader><CardTitle>Legal Signature</CardTitle></CardHeader><CardContent className="space-y-4"><div className="w-full h-40 bg-[#F5F5F5] rounded-2xl flex items-center justify-center overflow-hidden">{signature ? <img src={signature} className="max-h-full" /> : <Signature className="w-10 h-10 text-[#8E9299]" />}</div><Input type="file" onChange={(e) => handleFileUpload(e, 'signature')} /></CardContent></Card>
           </div>
+          <Card className="border-none shadow-sm">
+            <CardHeader><CardTitle>Document Footer Note</CardTitle><CardDescription>This text appears at the bottom of all generated documents (Invoices, PVs, etc.)</CardDescription></CardHeader>
+            <CardContent>
+              <textarea 
+                value={footerNote} 
+                onChange={(e) => setFooterNote(e.target.value)} 
+                placeholder="e.g. Thank you for your business! Please make payments to... / This is a computer generated document."
+                className="w-full min-h-[100px] p-4 bg-[#F5F5F5] border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </CardContent>
+          </Card>
           <div className="flex justify-end"><Button onClick={saveBranding} className="bg-blue-600 text-white rounded-xl px-12 h-11 shadow-lg shadow-blue-500/20" disabled={isSaving}>Deploy Branding</Button></div>
         </TabsContent>
 
