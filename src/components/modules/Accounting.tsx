@@ -355,7 +355,10 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const logo = getSetting('company_logo');
     const signature = getSetting('company_signature');
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) {
+      toast.error('Print window was blocked. Please allow popups for this site.');
+      return;
+    }
 
     printWindow.document.write(`
       <html>
@@ -785,12 +788,19 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           </Button>
                         )}
                         <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => {
-                          const itemsHtml = inv.items ? JSON.parse(inv.items).map((it: any) => `
+                          let itemsArr = [];
+                          try {
+                            itemsArr = typeof inv.items === 'string' ? JSON.parse(inv.items) : (inv.items || []);
+                          } catch (e) {
+                            itemsArr = [];
+                          }
+                          
+                          const itemsHtml = itemsArr.length > 0 ? itemsArr.map((it: any) => `
                             <tr>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0;">${it.description}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: center;">${it.quantity}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${Number(it.unitPrice).toLocaleString()}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${(it.quantity * it.unitPrice).toLocaleString()}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0;">${it.description || 'Service'}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: center;">${it.quantity || 1}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${Number(it.unitPrice || 0).toLocaleString()}</td>
+                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${(Number(it.quantity || 1) * Number(it.unitPrice || 0)).toLocaleString()}</td>
                             </tr>
                           `).join('') : `<tr><td colspan="4" style="padding: 20px; text-align: center;">Standard Service Charge</td></tr>`;
 
