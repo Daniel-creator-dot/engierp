@@ -17,7 +17,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Create new contract
-router.post('/', authenticateToken, authorizeRole(['pm', 'admin']), async (req, res) => {
+router.post('/', authenticateToken, authorizeRole(['pm', 'admin', 'accountant']), async (req, res) => {
   try {
     const data = req.body;
     await db('contracts').insert({
@@ -31,7 +31,7 @@ router.post('/', authenticateToken, authorizeRole(['pm', 'admin']), async (req, 
 });
 
 // Update contract status/variations
-router.patch('/:id', authenticateToken, authorizeRole(['pm', 'admin']), async (req, res) => {
+router.patch('/:id', authenticateToken, authorizeRole(['pm', 'admin', 'accountant']), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
