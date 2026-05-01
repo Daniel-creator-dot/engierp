@@ -151,7 +151,7 @@ export default function App() {
       case 'hr':
         return ['hr', 'projects', 'settings'].includes(item.id);
       case 'accountant':
-        return ['accounting', 'hr', 'projects', 'procurement', 'settings'].includes(item.id);
+        return ['dashboard', 'accounting', 'hr', 'projects', 'procurement', 'settings'].includes(item.id);
       case 'pm':
         return ['projects', 'hr', 'field-ops'].includes(item.id);
       case 'procurement':

@@ -37,6 +37,35 @@ router.patch('/suppliers/:id', authenticateToken, authorizeRole(['procurement', 
   }
 });
 
+// GET supplier history (Bills, POs, Payments)
+router.get('/suppliers/:id/history', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const purchaseOrders = await db('purchase_orders')
+      .where({ supplier_id: id })
+      .orderBy('order_date', 'desc');
+      
+    const bills = await db('bills')
+      .where({ supplier_id: id })
+      .orderBy('date', 'desc');
+      
+    const billIds = bills.map(b => b.id);
+    let payments: any[] = [];
+    
+    if (billIds.length > 0) {
+      payments = await db('payments')
+        .where('target_type', 'Bill')
+        .whereIn('target_id', billIds)
+        .orderBy('date', 'desc');
+    }
+    
+    res.json({ purchaseOrders, bills, payments });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching supplier history' });
+  }
+});
+
 // GET site inventory
 router.get('/inventory', authenticateToken, async (req, res) => {
   try {

@@ -16,7 +16,10 @@ import {
   Mail,
   Star,
   Pencil,
-  Printer
+  Printer,
+  FileText,
+  CreditCard,
+  Receipt
 } from 'lucide-react';
 import { 
   Card, 
@@ -66,6 +69,8 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const [isEditSupplierModalOpen, setIsEditSupplierModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
   const [isAddInventoryModalOpen, setIsAddInventoryModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [supplierHistory, setSupplierHistory] = useState<any>(null);
   
   const [inventory, setInventory] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -196,6 +201,17 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
       fetchData();
     } catch (error) {
       toast.error('Failed to initialize stock');
+    }
+  };
+
+  const handleViewHistory = async (supplier: any) => {
+    setSelectedSupplier(supplier);
+    try {
+      const res = await procurementApi.getSupplierHistory(supplier.id);
+      setSupplierHistory(res.data);
+      setIsHistoryModalOpen(true);
+    } catch (error) {
+      toast.error('Failed to load supplier account history');
     }
   };
 
@@ -428,7 +444,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                       <div className="flex items-center gap-2 text-[#8E9299] font-medium"><Phone className="w-3.5 h-3.5" /> <span>{s.contact_person}</span></div>
                       <div className="flex items-center gap-2 text-[#8E9299] font-medium"><Mail className="w-3.5 h-3.5" /> <span>{s.email}</span></div>
                     </div>
-                    <Button variant="outline" className="w-full rounded-xl border-[#F5F5F5] font-bold text-xs h-10 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all">VIEW ACCOUNT HISTORY</Button>
+                    <Button onClick={() => handleViewHistory(s)} variant="outline" className="w-full rounded-xl border-[#F5F5F5] font-bold text-xs h-10 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all">VIEW ACCOUNT HISTORY</Button>
                   </CardContent>
                 </Card>
               ))}
@@ -461,6 +477,124 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full h-11 rounded-xl font-bold">COMMIT VENDOR UPDATES</Button></DialogFooter>
                   </form>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
+              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto rounded-3xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black">Account History</DialogTitle>
+                  <DialogDescription>
+                    {selectedSupplier?.name} - {selectedSupplier?.category}
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {supplierHistory && (
+                  <div className="grid gap-8 py-4">
+                    {/* Purchase Orders Section */}
+                    <div className="space-y-4">
+                      <h3 className="font-bold flex items-center gap-2"><FileText className="w-5 h-5 text-blue-600" /> Purchase Orders</h3>
+                      {supplierHistory.purchaseOrders.length > 0 ? (
+                        <div className="rounded-xl border overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-slate-50">
+                              <TableRow>
+                                <TableHead>PO ID</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {supplierHistory.purchaseOrders.map((po: any) => (
+                                <TableRow key={po.id}>
+                                  <TableCell className="font-bold text-blue-600">{po.id}</TableCell>
+                                  <TableCell>{new Date(po.order_date).toLocaleDateString()}</TableCell>
+                                  <TableCell className="text-right font-black">{currency === 'USD' ? '$' : 'GH₵'}{Number(po.total_amount).toLocaleString()}</TableCell>
+                                  <TableCell>
+                                    <Badge className="bg-yellow-50 text-yellow-700 border-none font-bold text-[10px]">{po.status.toUpperCase()}</Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-50 rounded-xl text-center text-sm text-slate-500 font-medium">No purchase orders found.</div>
+                      )}
+                    </div>
+
+                    {/* Bills Section */}
+                    <div className="space-y-4">
+                      <h3 className="font-bold flex items-center gap-2"><Receipt className="w-5 h-5 text-blue-600" /> Accounts Payable (Bills)</h3>
+                      {supplierHistory.bills.length > 0 ? (
+                        <div className="rounded-xl border overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-slate-50">
+                              <TableRow>
+                                <TableHead>Bill ID</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Due Date</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {supplierHistory.bills.map((bill: any) => (
+                                <TableRow key={bill.id}>
+                                  <TableCell className="font-bold">{bill.id}</TableCell>
+                                  <TableCell>{new Date(bill.date).toLocaleDateString()}</TableCell>
+                                  <TableCell className={new Date(bill.due_date) < new Date() && bill.status !== 'Paid' ? 'text-red-500 font-bold' : ''}>
+                                    {new Date(bill.due_date).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell className="text-right font-black">{currency === 'USD' ? '$' : 'GH₵'}{Number(bill.total_amount).toLocaleString()}</TableCell>
+                                  <TableCell>
+                                    <Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                                      {bill.status.toUpperCase()}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-50 rounded-xl text-center text-sm text-slate-500 font-medium">No bills found.</div>
+                      )}
+                    </div>
+
+                    {/* Payments Section */}
+                    <div className="space-y-4">
+                      <h3 className="font-bold flex items-center gap-2"><CreditCard className="w-5 h-5 text-blue-600" /> Payments Made</h3>
+                      {supplierHistory.payments.length > 0 ? (
+                        <div className="rounded-xl border overflow-hidden">
+                          <Table>
+                            <TableHeader className="bg-slate-50">
+                              <TableRow>
+                                <TableHead>Payment Ref</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Method</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {supplierHistory.payments.map((pmt: any) => (
+                                <TableRow key={pmt.payment_id}>
+                                  <TableCell className="font-bold text-slate-500">{pmt.payment_id}</TableCell>
+                                  <TableCell>{new Date(pmt.date).toLocaleDateString()}</TableCell>
+                                  <TableCell><Badge variant="outline">{pmt.method}</Badge></TableCell>
+                                  <TableCell className="text-right font-black text-green-600">{currency === 'USD' ? '$' : 'GH₵'}{Number(pmt.amount).toLocaleString()}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-slate-50 rounded-xl text-center text-sm text-slate-500 font-medium">No payments recorded yet.</div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </DialogContent>
             </Dialog>

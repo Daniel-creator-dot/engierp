@@ -48,6 +48,7 @@ export const procurementApi = {
   getSuppliers: () => api.get('/procurement/suppliers'),
   addSupplier: (data: any) => api.post('/procurement/suppliers', data),
   updateSupplier: (id: string, data: any) => api.patch(`/procurement/suppliers/${id}`, data),
+  getSupplierHistory: (id: string) => api.get(`/procurement/suppliers/${id}/history`),
   getInventory: () => api.get('/procurement/inventory'),
   addInventory: (data: any) => api.post('/procurement/inventory', data),
   getPurchaseOrders: () => api.get('/procurement/purchase-orders'),
