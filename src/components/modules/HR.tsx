@@ -18,7 +18,8 @@ import {
   Pencil,
   Printer,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-react';
 import { 
   Card, 
@@ -76,6 +77,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false);
+  const [isViewEmployeeOpen, setIsViewEmployeeOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isLeaveRequestOpen, setIsLeaveRequestOpen] = useState(false);
   const [isBatchPayrollOpen, setIsBatchPayrollOpen] = useState(false);
@@ -372,7 +374,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Bank Name</Label>
-                          <Select name="bank_name">
+                          <Select name="bank_name" key={isAddEmployeeOpen ? 'new' : 'none'}>
                             <SelectTrigger className="bg-white border-slate-200 rounded-xl">
                               <SelectValue placeholder="Select bank..." />
                             </SelectTrigger>
@@ -405,8 +407,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <TableCell>{e.department} / {e.role}</TableCell>
                       <TableCell><Badge className={e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>{e.status}</Badge></TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setPayrollData({...payrollData, base_salary: e.salary}); setIsIndividualPayrollOpen(true); }} className="h-8 px-2 rounded-xl hover:bg-green-50 text-green-600 gap-1 mr-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsIndividualPayrollOpen(true); }} className="h-8 px-2 rounded-xl hover:bg-green-50 text-green-600 gap-1 mr-2">
                           <CreditCard className="w-3.5 h-3.5" /> Pay
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsViewEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsEditEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
                           <Pencil className="w-3.5 h-3.5" />
@@ -417,6 +422,97 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                 </TableBody>
               </Table>
             </CardContent>
+
+            <Dialog open={isViewEmployeeOpen} onOpenChange={setIsViewEmployeeOpen}>
+              <DialogContent className="max-w-2xl">
+                {selectedEmployee && (
+                  <div>
+                    <DialogHeader>
+                      <DialogTitle>Personnel Profile: {selectedEmployee.name}</DialogTitle>
+                      <DialogDescription>Comprehensive employee record and compliance data.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6 space-y-6">
+                      <div className="grid grid-cols-2 gap-8">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Full Name</p>
+                          <p className="font-bold text-lg">{selectedEmployee.name}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Employee ID</p>
+                          <p className="font-mono font-bold text-blue-600">{selectedEmployee.id}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-8">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Role</p>
+                          <p className="font-medium">{selectedEmployee.role}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Department</p>
+                          <p className="font-medium">{selectedEmployee.department}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Status</p>
+                          <Badge className={selectedEmployee.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                            {selectedEmployee.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-8 p-4 bg-[#F5F5F5] rounded-2xl">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Phone</p>
+                          <p className="font-medium">{selectedEmployee.phone || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">SSNIT Number</p>
+                          <p className="font-medium">{selectedEmployee.ssnit || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Ghana Card ID</p>
+                          <p className="font-medium">{selectedEmployee.ghana_card || 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Gross Salary</p>
+                          <p className="font-bold text-green-600">GH₵{Number(selectedEmployee.salary).toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-[#141414]">Banking Details</h4>
+                        <div className="grid grid-cols-2 gap-4 border-t border-[#F5F5F5] pt-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Bank</p>
+                            <p className="font-medium">{selectedEmployee.bank_name || 'Not Configured'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Account Name</p>
+                            <p className="font-medium">{selectedEmployee.account_name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Account Number</p>
+                            <p className="font-mono font-bold">{selectedEmployee.account_number || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Branch</p>
+                            <p className="font-medium">{selectedEmployee.branch || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-[#8E9299]">Residential Address</p>
+                        <p className="text-sm">{selectedEmployee.address || 'No address provided.'}</p>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={() => setIsViewEmployeeOpen(false)} className="bg-[#141414] text-white w-full rounded-xl">Close Profile</Button>
+                    </DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={isEditEmployeeOpen} onOpenChange={setIsEditEmployeeOpen}>
               <DialogContent>
@@ -438,7 +534,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Bank Name</Label>
-                          <Select name="bank_name" defaultValue={selectedEmployee.bank_name}>
+                          <Select name="bank_name" defaultValue={selectedEmployee.bank_name} key={selectedEmployee.id}>
                             <SelectTrigger className="bg-white border-slate-200 rounded-xl">
                               <SelectValue placeholder="Select bank..." />
                             </SelectTrigger>
@@ -456,7 +552,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid gap-2"><Label>Residential Address</Label><Textarea name="address" defaultValue={selectedEmployee.address} /></div>
                       <div className="grid gap-2">
                         <Label>Status</Label>
-                        <Select name="status" defaultValue={selectedEmployee.status}>
+                        <Select name="status" defaultValue={selectedEmployee.status} key={`${selectedEmployee.id}-status`}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="active">Active</SelectItem>
