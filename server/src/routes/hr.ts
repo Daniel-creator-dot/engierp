@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
+import { sendSMS } from '../utils/sms';
 
 const router = Router();
 
@@ -242,6 +243,26 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async 
       paid_at: status === 'Paid' ? db.fn.now() : null,
       updated_at: db.fn.now() 
     });
+
+    // Send SMS notification if approved
+    if (status === 'Paid') {
+      try {
+        const payrollEntry = await db('payroll')
+          .select('payroll.*', 'employees.name', 'employees.phone')
+          .join('employees', 'payroll.employee_id', 'employees.id')
+          .where('payroll.id', id)
+          .first();
+        
+        if (payrollEntry?.phone) {
+          const msg = `Hi ${payrollEntry.name}, your ${payrollEntry.month} ${payrollEntry.year} payroll of GHS ${Number(payrollEntry.net_pay).toLocaleString()} has been approved. - ByTzForge ERP`;
+          await sendSMS(payrollEntry.phone, msg);
+          console.log(`[Payroll SMS] Sent to ${payrollEntry.name}`);
+        }
+      } catch (smsErr) {
+        console.error('[Payroll SMS] Failed:', smsErr);
+      }
+    }
+
     res.json({ message: `Payroll entry ${status.toLowerCase()}` });
   } catch (error) {
     res.status(500).json({ message: 'Error updating payroll status' });
@@ -252,10 +273,29 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async 
 router.patch('/payroll/batch/approve', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { month, year } = req.body;
+
+    // Get all pending entries with employee details before updating
+    const pendingEntries = await db('payroll')
+      .select('payroll.*', 'employees.name', 'employees.phone')
+      .join('employees', 'payroll.employee_id', 'employees.id')
+      .where({ 'payroll.month': month, 'payroll.year': year, 'payroll.status': 'Pending' });
+
     const count = await db('payroll')
       .where({ month, year, status: 'Pending' })
       .update({ status: 'Paid', paid_at: db.fn.now(), updated_at: db.fn.now() });
-    res.json({ message: `Approved ${count} payroll entries for ${month} ${year}` });
+
+    // Send SMS to all affected employees
+    const smsPromises = pendingEntries
+      .filter(e => e.phone)
+      .map(e => {
+        const msg = `Hi ${e.name}, your ${month} ${year} payroll of GHS ${Number(e.net_pay).toLocaleString()} has been approved. - ByTzForge ERP`;
+        return sendSMS(e.phone, msg).catch(err => console.error(`[Payroll SMS] Failed for ${e.name}:`, err));
+      });
+    
+    await Promise.allSettled(smsPromises);
+    console.log(`[Payroll SMS] Batch notifications sent to ${smsPromises.length} employees`);
+
+    res.json({ message: `Approved ${count} payroll entries for ${month} ${year}. SMS notifications sent.` });
   } catch (error) {
     res.status(500).json({ message: 'Error approving batch payroll' });
   }
