@@ -748,7 +748,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             </div>
 
             {reportTab === 'dashboard' && managementAccounts && (
-              <div className="grid gap-6 md:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-4">
                 <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-blue-500">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Operating Profit</CardDescription>
@@ -765,6 +765,12 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Expenses</CardDescription>
                     <CardTitle className="text-3xl font-black text-red-600">{currSym}{managementAccounts.Expense.toLocaleString()}</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-purple-500">
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Payroll Paid</CardDescription>
+                    <CardTitle className="text-3xl font-black text-purple-600">{currSym}{(managementAccounts.TotalPayroll || 0).toLocaleString()}</CardTitle>
                   </CardHeader>
                 </Card>
               </div>

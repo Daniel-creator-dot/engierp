@@ -287,6 +287,13 @@ router.get('/reports/management', authenticateToken, authorizeRole(['accountant'
       }
     });
 
+    let payrollQuery = db('payroll').where('status', 'Paid').sum('net_pay as total_paid');
+    if (startDate) payrollQuery = payrollQuery.where('payment_date', '>=', startDate as string);
+    if (endDate) payrollQuery = payrollQuery.where('payment_date', '<=', endDate as string);
+    
+    const [payrollResult] = await payrollQuery;
+    stats['TotalPayroll'] = Number(payrollResult?.total_paid || 0);
+
     res.json(stats);
   } catch (error) {
     res.status(500).json({ message: 'Error generating management reports' });

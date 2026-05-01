@@ -97,7 +97,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     allowances: 0,
     deductions: [] as { type: string, amount: number }[],
     month: new Date().toLocaleString('default', { month: 'long' }),
-    year: 2026
+    year: 2026,
+    payment_date: new Date().toISOString().split('T')[0]
   });
 
   const togglePeriod = (period: string) => {
@@ -463,6 +464,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             deductions: [],
                             month: new Date().toLocaleString('default', { month: 'long' }),
                             year: 2026,
+                            payment_date: new Date().toISOString().split('T')[0],
                             days_worked: 0,
                             hours_per_day: 10
                           });
@@ -651,7 +653,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <DialogDescription>Enter monthly earnings and detailed deductions.</DialogDescription>
                     </DialogHeader>
                     <div className="p-4 space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div className="grid gap-2"><Label>Month</Label>
                           <Select value={payrollData.month} onValueChange={(v) => setPayrollData({...payrollData, month: v})}>
                             <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue /></SelectTrigger>
@@ -659,6 +661,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           </Select>
                         </div>
                         <div className="grid gap-2"><Label>Year</Label><Input type="number" value={payrollData.year} onChange={(e) => setPayrollData({...payrollData, year: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                        <div className="grid gap-2"><Label>Payment Date</Label><Input type="date" value={payrollData.payment_date || ''} onChange={(e) => setPayrollData({...payrollData, payment_date: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl h-11" required /></div>
                       </div>
 
                       {selectedEmployee.wage_type === 'Hourly' ? (
@@ -841,7 +844,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                   <form onSubmit={handleBatchPayroll}>
                     <DialogHeader><DialogTitle>Corporate Bulk Payroll</DialogTitle></DialogHeader>
                     <div className="p-6 grid gap-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div className="grid gap-2">
                           <Label>Month</Label>
                           <Select name="month" required>
@@ -853,7 +856,8 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid gap-2"><Label>Year</Label><Input name="year" type="number" defaultValue={2026} required /></div>
+                        <div className="grid gap-2"><Label>Year</Label><Input name="year" type="number" defaultValue={2026} className="bg-[#F5F5F5] border-none" required /></div>
+                        <div className="grid gap-2"><Label>Payment Date</Label><Input name="payment_date" type="date" defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" required /></div>
                       </div>
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11" disabled={isProcessing}>{isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Execute Compliant Run</Button></DialogFooter>
