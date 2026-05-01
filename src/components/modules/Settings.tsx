@@ -102,9 +102,9 @@ export default function Settings() {
 
   useEffect(() => {
     fetchSettings();
-    if (currentUser?.role === 'admin') {
+    if (currentUser?.role === 'admin' || currentUser?.role === 'hr') {
       fetchUsers();
-      fetchSMSConfig();
+      if (currentUser?.role === 'admin') fetchSMSConfig();
     }
   }, [currentUser]);
 
@@ -265,7 +265,7 @@ export default function Settings() {
           <TabsTrigger value="general" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
             <Globe className="w-4 h-4 mr-2" /> General
           </TabsTrigger>
-          {currentUser?.role === 'admin' && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
             <>
               <TabsTrigger value="payroll" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
                 <Calculator className="w-4 h-4 mr-2" /> Payroll & Tax
@@ -273,6 +273,10 @@ export default function Settings() {
               <TabsTrigger value="users" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
                 <User className="w-4 h-4 mr-2" /> Users
               </TabsTrigger>
+            </>
+          )}
+          {currentUser?.role === 'admin' && (
+            <>
               <TabsTrigger value="sms" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
                 <MessageSquare className="w-4 h-4 mr-2" /> SMS Gateway
               </TabsTrigger>
@@ -305,7 +309,7 @@ export default function Settings() {
                       <SelectItem value="USD">USD - US Dollar ($)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button onClick={handleSaveCurrency} className="bg-[#141414] text-white rounded-xl px-6" disabled={isSaving}>Apply</Button>
+                  <Button onClick={handleSaveCurrency} className="bg-[#141414] text-white rounded-xl px-6" disabled={isSaving || currentUser?.role !== 'admin'}>Apply</Button>
                 </div>
               </div>
             </CardContent>

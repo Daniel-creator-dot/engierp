@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db';
-import { authenticateToken, authorizeRole } from '../middleware/auth';
+import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -14,9 +14,15 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: AuthRequest, res) => {
   try {
     const { key, value } = req.body;
+    
+    // Security: HR can only update payroll settings
+    if (req.user?.role === 'hr' && key !== 'payroll_config') {
+      return res.status(403).json({ message: 'HR can only update payroll settings' });
+    }
+
     const existing = await db('settings').where({ key }).first();
     if (existing) {
       await db('settings').where({ key }).update({ value });
@@ -30,7 +36,7 @@ router.post('/', authenticateToken, authorizeRole(['admin']), async (req, res) =
 });
 
 // User Management
-router.get('/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.get('/users', authenticateToken, authorizeRole(['admin', 'hr']), async (req, res) => {
   try {
     const users = await db('users').select('id', 'email', 'role', 'phone', 'employee_id');
     res.json(users);
@@ -39,7 +45,7 @@ router.get('/users', authenticateToken, authorizeRole(['admin']), async (req, re
   }
 });
 
-router.post('/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.post('/users', authenticateToken, authorizeRole(['admin', 'hr']), async (req, res) => {
   try {
     const { email, role, phone, name, department } = req.body;
     const defaultPassword = 'zxcv123$$';
