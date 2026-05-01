@@ -16,7 +16,9 @@ import {
   PiggyBank,
   FileSpreadsheet,
   Edit,
-  Trash2
+  Trash2,
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
 import { 
   Card, 
@@ -53,6 +55,8 @@ import {
   SelectValue 
 } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { accountingApi, settingsApi, projectsApi, procurementApi } from '../../lib/api';
 import { Transaction, Invoice } from '../../types';
@@ -60,6 +64,79 @@ import { Transaction, Invoice } from '../../types';
 interface AccountingProps {
   activeSub?: string;
 }
+
+const typeColors: Record<string, string> = {
+  'Asset': 'bg-blue-500',
+  'Liability': 'bg-red-500',
+  'Equity': 'bg-purple-500',
+  'Income': 'bg-green-500',
+  'Expense': 'bg-orange-500',
+};
+
+const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+
+  const selectedAccount = accounts.find((a: any) => String(a.id) === value);
+
+  const filtered = accounts.filter((a: any) => 
+    a.name.toLowerCase().includes(search.toLowerCase()) || 
+    a.code.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4"
+        >
+          <span className="truncate">
+            {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl border-none shadow-2xl overflow-hidden bg-white">
+        <div className="flex items-center border-b border-[#F5F5F5] px-3">
+          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
+          <input
+            placeholder="Search accounts..."
+            className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-[#8E9299] font-medium"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <ScrollArea className="h-[300px]">
+          <div className="p-1">
+            {filtered.map((account: any) => (
+              <button
+                key={account.id}
+                type="button"
+                onClick={() => {
+                  onValueChange(String(account.id));
+                  setOpen(false);
+                  setSearch('');
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm hover:bg-blue-50 text-left transition-colors"
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${typeColors[account.type] || 'bg-gray-400'}`} />
+                <span className="font-mono font-bold text-blue-600 w-12">{account.code}</span>
+                <span className="font-medium text-[#141414] flex-1 truncate">{account.name}</span>
+                {value === String(account.id) && <Check className="h-4 w-4 text-blue-600" />}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="py-6 text-center text-sm text-[#8E9299] font-medium">No accounts found.</div>
+            )}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 export default function Accounting({ activeSub = 'accounting-transactions' }: AccountingProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -910,10 +987,16 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                          {journalItems.map((item, idx) => (
                            <div key={idx} className="grid grid-cols-12 gap-2">
                              <div className="col-span-6">
-                               <Select onValueChange={(val) => { const n = [...journalItems]; n[idx].account_id = val; setJournalItems(n); }}>
-                                 <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select Account" /></SelectTrigger>
-                                 <SelectContent>{coa.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
-                               </Select>
+                                <AccountSelect 
+                                  value={String(item.account_id)} 
+                                  onValueChange={(val: string) => { 
+                                    const n = [...journalItems]; 
+                                    n[idx].account_id = val; 
+                                    setJournalItems(n); 
+                                  }} 
+                                  accounts={coa} 
+                                  placeholder="Select Account" 
+                                />
                              </div>
                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.debit} onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-green-600" /></div>
                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.credit} onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-red-600" /></div>
