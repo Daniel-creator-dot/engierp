@@ -15,7 +15,7 @@ router.get('/suppliers', authenticateToken, async (req, res) => {
 });
 
 // POST new supplier
-router.post('/suppliers', authenticateToken, authorizeRole(['procurement', 'admin']), async (req, res) => {
+router.post('/suppliers', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   try {
     const data = req.body;
     await db('suppliers').insert(data);
@@ -26,7 +26,7 @@ router.post('/suppliers', authenticateToken, authorizeRole(['procurement', 'admi
 });
 
 // Update supplier
-router.patch('/suppliers/:id', authenticateToken, authorizeRole(['procurement', 'admin']), async (req, res) => {
+router.patch('/suppliers/:id', authenticateToken, authorizeRole(['procurement', 'admin', 'accountant']), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
