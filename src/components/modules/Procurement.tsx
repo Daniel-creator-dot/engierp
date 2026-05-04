@@ -315,7 +315,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                   <form onSubmit={handleCreatePO}>
                     <DialogHeader><DialogTitle>Execute Purchase Order</DialogTitle></DialogHeader>
                     <div className="grid gap-6 py-6">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Supplier</Label>
                           <Select name="supplier_id" required>
@@ -441,7 +441,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     <DialogHeader><DialogTitle>Initialize Site Stock</DialogTitle></DialogHeader>
                     <div className="grid gap-6 py-6">
                       <div className="space-y-2"><Label>Item Name</Label><Input name="name" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Quantity</Label><Input name="quantity" type="number" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         <div className="space-y-2"><Label>Unit (e.g. Bags, m3)</Label><Input name="unit" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                       </div>
@@ -494,7 +494,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     <div className="grid gap-6 py-6">
                       <div className="space-y-2"><Label>Enterprise Name</Label><Input name="name" required className="bg-[#F5F5F5] border-none rounded-xl h-11 font-bold" /></div>
                       <div className="space-y-2"><Label>Service Category</Label><Select name="category" required><SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Specialty..." /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="Heavy Materials">Heavy Materials (Stone/Sand)</SelectItem><SelectItem value="Finishing">Finishing & Fixtures</SelectItem><SelectItem value="Plant Hire">Plant & Equipment Hire</SelectItem><SelectItem value="Safety">Safety & PPE</SelectItem></SelectContent></Select></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Primary Contact</Label><Input name="contact" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         <div className="space-y-2"><Label>Email / Billing</Label><Input name="email" type="email" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                       </div>
@@ -551,7 +551,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Primary Contact</Label><Input name="contact" defaultValue={selectedSupplier.contact_person} required /></div>
                         <div className="space-y-2"><Label>Email / Billing</Label><Input name="email" type="email" defaultValue={selectedSupplier.email} required /></div>
                       </div>

@@ -568,7 +568,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                      <div className="grid gap-4 py-4">
                        <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
                        <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                       <div className="grid grid-cols-2 gap-4">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
                           <div className="space-y-2">
                             <Label>Account Type</Label>
@@ -693,7 +693,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
                         <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
                         <div className="space-y-2">
                           <Label>Project Assignment</Label>
@@ -755,7 +755,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <form onSubmit={handleRecordPayment}>
                   <DialogHeader><DialogTitle>Process Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Amount to Pay</Label><Input name="amount" type="number" defaultValue={selectedTarget?.amount} max={selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2">
                         <Label>Payment Method</Label>
@@ -798,7 +798,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   <form onSubmit={handleCreateInvoice}>
                     <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
                     <div className="grid gap-6 py-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Project / Client</Label>
                           <Select name="project_id" required>
@@ -1021,7 +1021,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <form onSubmit={handleRecordPayment}>
                   <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Amount Received</Label><Input name="amount" type="number" defaultValue={selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2">
                         <Label>Depost Method</Label>
@@ -1061,7 +1061,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                    <form onSubmit={handlePostJournal}>
                      <DialogHeader><DialogTitle>Double-Entry Journal</DialogTitle></DialogHeader>
                      <div className="grid gap-6 py-6">
-                       <div className="grid grid-cols-2 gap-4">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div className="grid gap-2"><Label>Date</Label><Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" /></div>
                          <div className="grid gap-2"><Label>Reference</Label><Input name="description" placeholder="e.g. Asset Depreciation" required className="bg-[#F5F5F5] border-none" /></div>
                        </div>

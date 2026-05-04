@@ -346,7 +346,7 @@ export default function Settings() {
               <CardDescription>Configure SSNIT and mandatory contribution rates.</CardDescription>
             </CardHeader>
             <CardContent className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <Label className="font-bold text-[#141414]">Employee SSNIT Contribution (%)</Label>
                   <Input 
@@ -456,7 +456,7 @@ export default function Settings() {
               </div>
 
               <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <Label className="font-bold text-[#141414]">Sales Tax Name (e.g. VAT)</Label>
                     <Input 
@@ -531,7 +531,7 @@ export default function Settings() {
                         className="bg-[#F5F5F5] border-none rounded-xl"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Value Type</Label>
                         <Select value={newDeduction.type} onValueChange={(v: any) => setNewDeduction({...newDeduction, type: v})}>
@@ -594,7 +594,7 @@ export default function Settings() {
                     <DialogHeader><DialogTitle>Initialize Member Access</DialogTitle></DialogHeader>
                     <div className="p-4 space-y-4">
                       <div className="space-y-2"><Label>Email</Label><Input name="email" type="email" required className="bg-[#F5F5F5] border-none" /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Phone</Label><Input name="phone" required className="bg-[#F5F5F5] border-none" /></div>
                         <div className="space-y-2">
                           <Label>Role</Label>
@@ -646,7 +646,7 @@ export default function Settings() {
                       <Badge className="bg-blue-100 text-blue-700 uppercase">{selectedUser.role}</Badge>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-[10px] font-bold uppercase text-[#8E9299]">Phone Number</p>
                       <p className="font-medium">{selectedUser.phone || 'N/A'}</p>
@@ -668,7 +668,7 @@ export default function Settings() {
             <form onSubmit={handleSaveSMS}>
               <CardHeader><CardTitle>SMS Gateway Governance</CardTitle></CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                   <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>

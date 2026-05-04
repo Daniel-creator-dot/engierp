@@ -271,11 +271,11 @@ export default function Assets() {
                   </div>
                   <div className="grid gap-2"><Label>Daily Cost Rate (GH₵)</Label><Input name="daily_cost" type="number" placeholder="0.00" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Acquisition Cost</Label><Input name="acquisition_cost" type="number" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
                     <div className="grid gap-2"><Label>Residual Value</Label><Input name="residual_value" type="number" defaultValue="0" className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Useful Life (Months)</Label><Input name="useful_life_months" type="number" defaultValue="60" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
                     <div className="grid gap-2"><Label>Location</Label><Input name="location" defaultValue="Warehouse" className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
                   </div>
@@ -287,7 +287,7 @@ export default function Assets() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 grid-cols-2 md:grid-cols-4">
         <Card className="border-none shadow-sm rounded-2xl"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold tracking-wider">Total Units</CardDescription><CardTitle className="text-3xl font-black">{equipment.length}</CardTitle></CardHeader></Card>
         <Card className="border-none shadow-sm rounded-2xl"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold tracking-wider">On Site</CardDescription><CardTitle className="text-3xl font-black text-blue-600">{equipment.filter(e => e.status === 'On Site').length}</CardTitle></CardHeader></Card>
         <Card className="border-none shadow-sm rounded-2xl"><CardHeader className="pb-2"><CardDescription className="text-xs uppercase font-bold tracking-wider">Available</CardDescription><CardTitle className="text-3xl font-black text-green-600">{equipment.filter(e => e.status === 'Available').length}</CardTitle></CardHeader></Card>
