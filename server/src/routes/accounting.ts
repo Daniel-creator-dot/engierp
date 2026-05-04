@@ -300,6 +300,60 @@ router.get('/reports/management', authenticateToken, authorizeRole(['accountant'
   }
 });
 
+router.get('/reports/cash-flow', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    // Direct Method Cash Flow
+    // We analyze ledger entries for accounts of type 'Asset' that are likely Cash/Bank accounts
+    // For this simple implementation, we'll look at all entries in accounts tagged as 'Asset' 
+    // and filter for those with names containing 'Cash' or 'Bank'
+    
+    const cashAccounts = await db('chart_of_accounts')
+      .where('type', 'Asset')
+      .where(function() {
+        this.where('name', 'ilike', '%cash%').orWhere('name', 'ilike', '%bank%');
+      })
+      .select('id');
+    
+    const accountIds = cashAccounts.map(a => a.id);
+    
+    if (accountIds.length === 0) return res.json({ operating: [], investing: [], financing: [] });
+
+    let query = db('ledger_entries')
+      .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .join('chart_of_accounts', 'ledger_entries.account_id', 'chart_of_accounts.id')
+      .whereIn('ledger_entries.account_id', accountIds)
+      .select(
+        'journal_entries.description',
+        'journal_entries.date',
+        'ledger_entries.debit',
+        'ledger_entries.credit',
+        'chart_of_accounts.name as account_name'
+      );
+
+    if (startDate) query = query.where('journal_entries.date', '>=', startDate as string);
+    if (endDate) query = query.where('journal_entries.date', '<=', endDate as string);
+
+    const movements = await query;
+    
+    // Categorize movements (Simplified logic)
+    // Operating: Invoices, Bills, Payroll
+    // Investing: Equipment, Assets
+    // Financing: Loans, Equity
+    
+    const report = {
+      operating: movements.filter(m => !m.description.toLowerCase().includes('equipment') && !m.description.toLowerCase().includes('loan')),
+      investing: movements.filter(m => m.description.toLowerCase().includes('equipment') || m.description.toLowerCase().includes('asset')),
+      financing: movements.filter(m => m.description.toLowerCase().includes('loan') || m.description.toLowerCase().includes('equity'))
+    };
+
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: 'Error generating cash flow statement' });
+  }
+});
+
 // --- ENTERPRISE FINANCE (Bank, AP, AR) ---
 
 // Bank Accounts
@@ -345,6 +399,24 @@ router.post('/bank-transactions', authenticateToken, authorizeRole(['accountant'
   }
 });
 
+router.patch('/bank-transactions/:id/reconcile', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { matched_ledger_id } = req.body;
+    
+    await db('bank_transactions')
+      .where({ id })
+      .update({ 
+        status: 'Reconciled',
+        matched_ledger_id: matched_ledger_id || null
+      });
+      
+    res.json({ message: 'Transaction reconciled successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error reconciling transaction' });
+  }
+});
+
 // Vendor Bills (AP)
 router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   try {
@@ -385,8 +457,10 @@ router.post('/bills', authenticateToken, authorizeRole(['accountant', 'admin']),
       reference_id: String(bill_id)
     }).returning('id');
 
-    // 3. Double Entry: Debit Expense, Credit Accounts Payable (ID: 61)
-    const ap_account_id = 61; 
+    // 3. Double Entry: Debit Expense, Credit Accounts Payable (Code: 2001)
+    const ap_account = await trx('chart_of_accounts').where('code', '2001').first();
+    if (!ap_account) throw new Error('Accounts Payable (2001) not found in COA');
+    const ap_account_id = ap_account.id; 
     
     // Debit Expense
     await trx('ledger_entries').insert({

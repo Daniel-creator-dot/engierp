@@ -61,6 +61,9 @@ export default function Assets() {
   const [selectedEquipment, setSelectedEquipment] = useState<any | null>(null);
   const [isAllocModalOpen, setIsAllocModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'inventory' | 'allocations'>('inventory');
+  const [isDisposeModalOpen, setIsDisposeModalOpen] = useState(false);
+  const [isDepreciateModalOpen, setIsDepreciateModalOpen] = useState(false);
+  const [disposeAmount, setDisposeAmount] = useState<string>('');
 
   useEffect(() => {
     fetchData();
@@ -92,7 +95,11 @@ export default function Assets() {
       name: formData.get('name'),
       category: formData.get('category'),
       daily_cost: Number(formData.get('daily_cost')),
-      status: 'Available'
+      status: 'Available',
+      acquisition_cost: Number(formData.get('acquisition_cost') || 0),
+      useful_life_months: Number(formData.get('useful_life_months') || 60),
+      residual_value: Number(formData.get('residual_value') || 0),
+      location: formData.get('location') || 'Warehouse'
     };
 
     try {
@@ -145,6 +152,31 @@ export default function Assets() {
     }
   };
 
+  const handleDepreciate = async () => {
+    try {
+      await assetsApi.depreciate();
+      toast.success('Depreciation calculated and posted successfully');
+      setIsDepreciateModalOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to run depreciation');
+    }
+  };
+
+  const handleDispose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEquipment) return;
+    try {
+      await assetsApi.dispose(selectedEquipment.id, { disposal_amount: Number(disposeAmount) });
+      toast.success('Asset disposed successfully');
+      setIsDisposeModalOpen(false);
+      setDisposeAmount('');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to dispose asset');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -161,6 +193,22 @@ export default function Assets() {
           <p className="text-[#8E9299]">Heavy machinery, equipment allocation, and fleet maintenance.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Dialog open={isDepreciateModalOpen} onOpenChange={setIsDepreciateModalOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2 border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-xl font-bold">
+                <History className="w-4 h-4" /> Run Depreciation
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-2xl">
+              <DialogHeader><DialogTitle>Run Depreciation</DialogTitle></DialogHeader>
+              <p className="text-sm text-[#8E9299]">Calculate and post monthly depreciation for all active assets based on straight-line method.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDepreciateModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleDepreciate} className="bg-orange-600 text-white font-bold">Confirm Run</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={isAllocModalOpen} onOpenChange={setIsAllocModalOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold">
@@ -222,6 +270,15 @@ export default function Assets() {
                     </Select>
                   </div>
                   <div className="grid gap-2"><Label>Daily Cost Rate (GH₵)</Label><Input name="daily_cost" type="number" placeholder="0.00" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2"><Label>Acquisition Cost</Label><Input name="acquisition_cost" type="number" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
+                    <div className="grid gap-2"><Label>Residual Value</Label><Input name="residual_value" type="number" defaultValue="0" className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2"><Label>Useful Life (Months)</Label><Input name="useful_life_months" type="number" defaultValue="60" required className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
+                    <div className="grid gap-2"><Label>Location</Label><Input name="location" defaultValue="Warehouse" className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
+                  </div>
                 </div>
                 <DialogFooter><Button type="submit" className="bg-[#141414] text-white w-full rounded-xl font-bold h-11">Register Asset</Button></DialogFooter>
               </form>
@@ -246,19 +303,26 @@ export default function Assets() {
           <div className="overflow-x-auto">
             {activeTab === 'inventory' ? (
               <Table>
-                <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset ID</TableHead><TableHead>Unit Name</TableHead><TableHead>Category</TableHead><TableHead>Daily Rate</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/20"><TableHead>Asset ID</TableHead><TableHead>Unit Name</TableHead><TableHead>Cost</TableHead><TableHead>Acc. Depr.</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {equipment.map((item) => (
                     <TableRow key={item.id} className="hover:bg-blue-50/20">
                       <TableCell className="font-mono text-xs font-bold text-blue-600">{item.id}</TableCell>
                       <TableCell className="font-bold text-[#141414]">{item.name}</TableCell>
-                      <TableCell className="text-[#8E9299] font-medium">{item.category}</TableCell>
-                      <TableCell className="font-black">GH₵{Number(item.daily_cost).toLocaleString()}</TableCell>
-                      <TableCell><Badge className={item.status === 'Available' ? 'bg-green-100 text-green-700 font-bold border-none px-3' : item.status === 'On Site' ? 'bg-blue-100 text-blue-700 font-bold border-none px-3' : 'bg-red-100 text-red-700 font-bold border-none px-3'}>{item.status}</Badge></TableCell>
+                      <TableCell className="font-black text-[#141414]">GH₵{Number(item.acquisition_cost || 0).toLocaleString()}</TableCell>
+                      <TableCell className="font-mono text-red-600">GH₵{Number(item.accumulated_depreciation || 0).toLocaleString()}</TableCell>
+                      <TableCell><Badge className={item.status === 'Available' ? 'bg-green-100 text-green-700 font-bold border-none px-3' : item.status === 'On Site' ? 'bg-blue-100 text-blue-700 font-bold border-none px-3' : item.status === 'Disposed' ? 'bg-gray-100 text-gray-700 font-bold border-none px-3' : 'bg-red-100 text-red-700 font-bold border-none px-3'}>{item.status}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => { setSelectedEquipment(item); setIsEditModalOpen(true); }} className="h-8 w-8 hover:bg-white rounded-full">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => { setSelectedEquipment(item); setIsEditModalOpen(true); }} className="h-8 w-8 hover:bg-white rounded-full">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          {item.status !== 'Disposed' && (
+                            <Button variant="ghost" size="icon" onClick={() => { setSelectedEquipment(item); setIsDisposeModalOpen(true); }} className="h-8 w-8 hover:bg-red-50 text-red-600 rounded-full">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -318,6 +382,27 @@ export default function Assets() {
               <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-11">COMMIT SYSTEM UPDATES</Button></DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDisposeModalOpen} onOpenChange={setIsDisposeModalOpen}>
+        <DialogContent className="rounded-2xl">
+          <form onSubmit={handleDispose}>
+            <DialogHeader><DialogTitle>Dispose Asset</DialogTitle></DialogHeader>
+            <div className="py-4 space-y-4">
+              {selectedEquipment && (
+                <div className="p-4 bg-[#F5F5F5] rounded-xl text-sm">
+                  <p><strong>{selectedEquipment.name}</strong></p>
+                  <p>Net Book Value: GH₵{(Number(selectedEquipment.acquisition_cost || 0) - Number(selectedEquipment.accumulated_depreciation || 0)).toLocaleString()}</p>
+                </div>
+              )}
+              <div className="grid gap-2">
+                <Label>Disposal Amount (Sale Value)</Label>
+                <Input type="number" required value={disposeAmount} onChange={e => setDisposeAmount(e.target.value)} placeholder="0.00" className="bg-[#F5F5F5] border-none font-bold h-11" />
+              </div>
+            </div>
+            <DialogFooter><Button type="submit" className="bg-red-600 text-white w-full rounded-xl font-bold h-11">Process Disposal</Button></DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

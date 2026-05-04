@@ -176,6 +176,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [incomeStatement, setIncomeStatement] = useState<any[]>([]);
   const [balanceSheet, setBalanceSheet] = useState<any>({ accounts: [], retainedEarnings: 0 });
   const [managementAccounts, setManagementAccounts] = useState<any>(null);
+  const [cashFlow, setCashFlow] = useState<any>(null);
   
   const [reportTab, setReportTab] = useState('dashboard');
   const [reportStartDate, setReportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
@@ -200,6 +201,10 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
   const [invoiceTaxOverride, setInvoiceTaxOverride] = useState<string>('');
   const [invoiceTaxNameOverride, setInvoiceTaxNameOverride] = useState<string>('');
+
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState<any>(null);
+  const [reconcileLedgerId, setReconcileLedgerId] = useState<string>('');
 
   // Journal Items state
   const [journalItems, setJournalItems] = useState([
@@ -253,16 +258,18 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         const coaRes = await accountingApi.getCOA();
         setCOA(coaRes.data);
       } else if (activeSub === 'accounting-reports') {
-        const [tb, inc, bs, mgmt] = await Promise.all([
+        const [tb, inc, bs, mgmt, cf] = await Promise.all([
           accountingApi.getTrialBalance(reportStartDate, reportEndDate),
           accountingApi.getIncomeStatement(reportStartDate, reportEndDate),
           accountingApi.getBalanceSheet(reportEndDate),
-          accountingApi.getManagementAccounts(reportStartDate, reportEndDate)
+          accountingApi.getManagementAccounts(reportStartDate, reportEndDate),
+          accountingApi.getCashFlow(reportStartDate, reportEndDate)
         ]);
         setTrialBalance(tb.data);
         setIncomeStatement(inc.data);
         setBalanceSheet(bs.data);
         setManagementAccounts(mgmt.data);
+        setCashFlow(cf.data);
       }
     } catch (error) {
       toast.error('Failed to load accounting data');
@@ -293,23 +300,36 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     } catch (error) {
       toast.error('Failed to add bank account');
     }
-  };
-
-  const handleSimulateBankFeed = async () => {
+  };  const handleSimulateBankFeed = async () => {
     if (bankAccounts.length === 0) return toast.error('Add a bank account first');
     const data = {
       bank_account_id: bankAccounts[0].id,
       date: new Date().toISOString().split('T')[0],
-      description: `Feed Import - ${Math.floor(Math.random() * 1000)}`,
-      amount: Math.floor(Math.random() * 10000),
-      type: Math.random() > 0.5 ? 'Credit' : 'Debit'
+      description: 'Incoming Wire Transfer - Client A',
+      amount: Math.floor(1000 + Math.random() * 5000),
+      type: 'Credit',
+      status: 'Unreconciled'
     };
     try {
       await accountingApi.importBankTransaction(data);
-      toast.success('Simulated transaction imported');
+      toast.success('New bank transaction fetched');
       fetchData();
     } catch (error) {
-      toast.error('Feed import failed');
+      toast.error('Failed to fetch feeds');
+    }
+  };
+
+  const handleReconcileTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reconcileTarget) return;
+    try {
+      await accountingApi.reconcileBankTransaction(reconcileTarget.id, reconcileLedgerId ? Number(reconcileLedgerId) : undefined);
+      toast.success('Transaction successfully reconciled');
+      setIsReconcileOpen(false);
+      setReconcileLedgerId('');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to reconcile transaction');
     }
   };
 
@@ -586,7 +606,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {bankTx.map((tx, idx) => (
                       <TableRow key={idx} className="hover:bg-blue-50/20">
@@ -595,12 +615,53 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         <TableCell className="text-xs">{tx.bank_name}</TableCell>
                         <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
                         <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
+                        <TableCell className="text-right">
+                          {tx.status !== 'Reconciled' && (
+                            <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setReconcileTarget(tx); setIsReconcileOpen(true); }}>
+                              RECONCILE
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
-                    {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
+                    {bankTx.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Reconcile Modal */}
+              <Dialog open={isReconcileOpen} onOpenChange={setIsReconcileOpen}>
+                <DialogContent className="rounded-2xl">
+                  <form onSubmit={handleReconcileTransaction}>
+                    <DialogHeader><DialogTitle>Reconcile Transaction</DialogTitle></DialogHeader>
+                    <div className="py-4 space-y-4">
+                      {reconcileTarget && (
+                        <div className="p-4 bg-blue-50 rounded-xl space-y-2">
+                          <p className="font-bold text-[#141414]">{reconcileTarget.description}</p>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-[#8E9299]">{new Date(reconcileTarget.date).toLocaleDateString()}</span>
+                            <span className={`font-black ${reconcileTarget.type === 'Credit' ? 'text-green-600' : 'text-red-600'}`}>
+                              {reconcileTarget.type === 'Credit' ? '+' : '-'}{currSym}{Number(reconcileTarget.amount).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <Label>Match to Ledger Entry (Optional)</Label>
+                        <Select value={reconcileLedgerId} onValueChange={setReconcileLedgerId}>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select ledger entry..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="new">Create New Journal Entry</SelectItem>
+                            <SelectItem value="ignore">Skip Matching (Mark Reconciled)</SelectItem>
+                            {/* In a real app, fetch and display unreconciled ledger entries here */}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">CONFIRM RECONCILIATION</Button></DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           );
 
@@ -1075,7 +1136,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             </div>
 
             <div className="flex gap-2 border-b border-[#F5F5F5] overflow-x-auto pb-2">
-              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance', 'project-analysis'].map(tab => (
+              {['dashboard', 'income-statement', 'balance-sheet', 'cash-flow', 'trial-balance', 'project-analysis'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setReportTab(tab)}
@@ -1177,6 +1238,43 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       ))}
                       <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{currSym}{balanceSheet.retainedEarnings.toLocaleString()}</TableCell></TableRow>
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number,a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {reportTab === 'cash-flow' && cashFlow && (
+              <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
+                  <CardTitle>Cash Flow Statement <span className="text-sm font-normal text-[#8E9299]">For period ending {reportEndDate}</span></CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Cash Activity</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-blue-50/30 hover:bg-blue-50/30"><TableCell colSpan={2} className="font-bold text-blue-700">Cash Flows from Operating Activities</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash received from customers</TableCell><TableCell className="text-right font-mono">{currSym}{cashFlow.operating.inflows.toLocaleString()}</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash paid to suppliers and employees</TableCell><TableCell className="text-right font-mono text-red-600">({currSym}{cashFlow.operating.outflows.toLocaleString()})</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Net Cash from Operating Activities</TableCell><TableCell className={`text-right font-black ${cashFlow.operating.net >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{currSym}{cashFlow.operating.net.toLocaleString()}</TableCell></TableRow>
+
+                      <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Cash Flows from Investing Activities</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash received from asset sales</TableCell><TableCell className="text-right font-mono">{currSym}{cashFlow.investing.inflows.toLocaleString()}</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash paid for equipment purchases</TableCell><TableCell className="text-right font-mono text-red-600">({currSym}{cashFlow.investing.outflows.toLocaleString()})</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Net Cash from Investing Activities</TableCell><TableCell className={`text-right font-black ${cashFlow.investing.net >= 0 ? 'text-purple-600' : 'text-red-600'}`}>{currSym}{cashFlow.investing.net.toLocaleString()}</TableCell></TableRow>
+
+                      <TableRow className="bg-green-50/30 hover:bg-green-50/30"><TableCell colSpan={2} className="font-bold text-green-700">Cash Flows from Financing Activities</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash from loans/equity</TableCell><TableCell className="text-right font-mono">{currSym}{cashFlow.financing.inflows.toLocaleString()}</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 text-[#141414]">Cash paid for loan repayments/dividends</TableCell><TableCell className="text-right font-mono text-red-600">({currSym}{cashFlow.financing.outflows.toLocaleString()})</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Net Cash from Financing Activities</TableCell><TableCell className={`text-right font-black ${cashFlow.financing.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{currSym}{cashFlow.financing.net.toLocaleString()}</TableCell></TableRow>
+
+                      <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
+                        <TableCell className="font-black text-lg">Net Increase (Decrease) in Cash</TableCell>
+                        <TableCell className={`text-right font-black text-xl ${cashFlow.netCashFlow >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {currSym}{cashFlow.netCashFlow.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </CardContent>

@@ -83,6 +83,8 @@ export const accountingApi = {
   recordBill: (data: any) => api.post('/accounting/bills', data),
   
   recordPayment: (data: any) => api.post('/accounting/payments', data),
+  getCashFlow: (startDate?: string, endDate?: string) => api.get('/accounting/reports/cash-flow', { params: { startDate, endDate } }),
+  reconcileBankTransaction: (id: number, matched_ledger_id?: number) => api.patch(`/accounting/bank-transactions/${id}/reconcile`, { matched_ledger_id }),
 };
 
 export const projectsApi = {
@@ -112,6 +114,8 @@ export const assetsApi = {
   updateEquipment: (id: string, data: any) => api.patch(`/assets/${id}`, data),
   getAllocations: () => api.get('/assets/allocations'),
   allocateEquipment: (data: any) => api.post('/assets/allocations', data),
+  depreciate: (periodEndDate?: string) => api.post('/assets/depreciate', { periodEndDate }),
+  dispose: (id: string, data: any) => api.post(`/assets/dispose/${id}`, data),
 };
 
 export const settingsApi = {
