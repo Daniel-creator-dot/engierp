@@ -342,10 +342,25 @@ router.get('/reports/cash-flow', authenticateToken, authorizeRole(['accountant',
     // Investing: Equipment, Assets
     // Financing: Loans, Equity
     
+    const operatingMovements = movements.filter(m => !m.description.toLowerCase().includes('equipment') && !m.description.toLowerCase().includes('loan'));
+    const investingMovements = movements.filter(m => m.description.toLowerCase().includes('equipment') || m.description.toLowerCase().includes('asset'));
+    const financingMovements = movements.filter(m => m.description.toLowerCase().includes('loan') || m.description.toLowerCase().includes('equity'));
+
+    const calculateTotals = (movs: any[]) => {
+      const inflows = movs.reduce((sum, m) => sum + Number(m.debit || 0), 0);
+      const outflows = movs.reduce((sum, m) => sum + Number(m.credit || 0), 0);
+      return { inflows, outflows, net: inflows - outflows };
+    };
+
+    const operating = calculateTotals(operatingMovements);
+    const investing = calculateTotals(investingMovements);
+    const financing = calculateTotals(financingMovements);
+
     const report = {
-      operating: movements.filter(m => !m.description.toLowerCase().includes('equipment') && !m.description.toLowerCase().includes('loan')),
-      investing: movements.filter(m => m.description.toLowerCase().includes('equipment') || m.description.toLowerCase().includes('asset')),
-      financing: movements.filter(m => m.description.toLowerCase().includes('loan') || m.description.toLowerCase().includes('equity'))
+      operating,
+      investing,
+      financing,
+      netCashFlow: operating.net + investing.net + financing.net
     };
 
     res.json(report);
