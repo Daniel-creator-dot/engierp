@@ -9,7 +9,7 @@ export type Module =
   | 'settings'
   | 'profile';
 
-export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'field-ops' | 'settings';
+export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'field-ops' | 'assets' | 'settings';
 
 export interface Project {
   id: string;

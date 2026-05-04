@@ -14,7 +14,8 @@ import {
   User,
   ChevronDown,
   ChevronRight,
-  Loader2
+  Loader2,
+  Truck
 } from 'lucide-react';
 import LogoImg from './thisone.png';
 import { Module, ParentModule } from './types';
@@ -49,6 +50,7 @@ import Procurement from './components/modules/Procurement';
 import FieldOps from './components/modules/FieldOps';
 import SettingsView from './components/modules/Settings';
 import Profile from './components/modules/Profile';
+import Assets from './components/modules/Assets';
 
 interface NavItem {
   id: ParentModule;
@@ -131,6 +133,7 @@ export default function App() {
       ]
     },
     { id: 'field-ops', label: 'Field Operations', icon: HardHat },
+    { id: 'assets', label: 'Fixed Assets', icon: Truck },
   ];
 
   // HR sub-items visible per role
@@ -154,7 +157,7 @@ export default function App() {
       case 'hr':
         return ['hr', 'projects', 'settings'].includes(item.id);
       case 'accountant':
-        return ['dashboard', 'accounting', 'hr', 'projects', 'procurement', 'settings'].includes(item.id);
+        return ['dashboard', 'accounting', 'hr', 'projects', 'procurement', 'assets', 'settings'].includes(item.id);
       case 'pm':
         return ['projects', 'hr', 'field-ops'].includes(item.id);
       case 'procurement':
@@ -193,6 +196,7 @@ export default function App() {
     if (activeModule.startsWith('projects')) return <Projects activeSub={activeModule} />;
     if (activeModule.startsWith('procurement')) return <Procurement activeSub={activeModule} />;
     if (activeModule === 'field-ops') return <FieldOps />;
+    if (activeModule === 'assets') return <Assets />;
     if (activeModule === 'settings') return <SettingsView />;
     if (activeModule === 'profile') return <Profile />;
     return <Dashboard />;
