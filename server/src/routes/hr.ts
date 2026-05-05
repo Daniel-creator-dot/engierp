@@ -98,7 +98,7 @@ router.post('/leave-requests', authenticateToken, async (req: AuthRequest, res) 
       });
     }
 
-    const [id] = await db('leave_requests').insert({
+    const [inserted] = await db('leave_requests').insert({
       employee_id: empId,
       type,
       startDate,
@@ -106,6 +106,7 @@ router.post('/leave-requests', authenticateToken, async (req: AuthRequest, res) 
       reason,
       status: 'Pending'
     }).returning('id');
+    const id = typeof inserted === 'object' ? inserted.id : inserted;
 
     res.status(201).json({ id, message: 'Leave request submitted' });
   } catch (error) {
@@ -154,7 +155,7 @@ router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'a
     const net_pay = Number(base_salary) + Number(allowances || 0) - Number(deductions || 0);
     const isAdmin = req.user?.role === 'admin';
     
-    const [id] = await db('payroll').insert({
+    const [inserted] = await db('payroll').insert({
       employee_id,
       month,
       year,
@@ -167,6 +168,7 @@ router.post('/payroll', authenticateToken, authorizeRole(['hr', 'accountant', 'a
       status: isAdmin ? 'Paid' : 'Pending',
       paid_at: isAdmin ? db.fn.now() : null
     }).returning('id');
+    const id = typeof inserted === 'object' ? inserted.id : inserted;
 
     res.status(201).json({ id, message: isAdmin ? 'Payroll processed and approved' : 'Payroll submitted for admin approval' });
   } catch (error) {
@@ -304,13 +306,14 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(['admin']), async 
 
         if (payrollEntry) {
           // 1. Post to Ledger
-          const [journal_id] = await trx('journal_entries').insert({
+          const [insertedJournal] = await trx('journal_entries').insert({
             date: new Date().toISOString().split('T')[0],
             description: `Payroll: ${payrollEntry.name} - ${payrollEntry.month}/${payrollEntry.year}`,
             project_id: payrollEntry.project_id,
             reference_type: 'payroll',
             reference_id: String(id)
           }).returning('id');
+          const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
 
           // Account Mapping: 79 (Site Workers) if project_id exists, else 86 (Office Salaries)
           const expense_account_id = payrollEntry.project_id ? 79 : 86;

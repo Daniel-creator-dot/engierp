@@ -26,7 +26,7 @@ router.post('/reports', authenticateToken, async (req: AuthRequest, res) => {
 
     if (!author_id) return res.status(401).json({ message: 'User not authenticated' });
 
-    const [id] = await db('site_reports').insert({
+    const [inserted] = await db('site_reports').insert({
       project_id,
       author_id,
       weather,
@@ -37,6 +37,7 @@ router.post('/reports', authenticateToken, async (req: AuthRequest, res) => {
       photos: JSON.stringify(photos || []),
       status: 'Pending Review'
     }).returning('id');
+    const id = typeof inserted === 'object' ? inserted.id : inserted;
 
     res.status(201).json({ id, message: 'Site report submitted successfully' });
   } catch (error) {

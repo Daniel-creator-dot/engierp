@@ -129,12 +129,13 @@ router.post('/journal', authenticateToken, authorizeRole(['accountant', 'admin']
     }
 
     // 2. Create Journal Header
-    const [journal_id] = await trx('journal_entries').insert({
+    const [insertedJournal] = await trx('journal_entries').insert({
       date,
       description,
       project_id: req.body.project_id || null, // Enable project tracking
       reference_type: 'manual'
     }).returning('id');
+    const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
 
     // 3. Create Ledger Entries and Update Account Balances
     for (const item of items) {
@@ -471,7 +472,7 @@ router.post('/bills', authenticateToken, authorizeRole(['accountant', 'admin']),
     const { supplier_id, quantity, unit_price, amount, due_date, category, project_id, account_id } = req.body;
     
     // 1. Record the Bill
-    const [bill_id] = await trx('bills').insert({
+    const [insertedBill] = await trx('bills').insert({
       supplier_id,
       quantity,
       unit_price,
@@ -482,15 +483,17 @@ router.post('/bills', authenticateToken, authorizeRole(['accountant', 'admin']),
       account_id,
       status: 'Unpaid'
     }).returning('id');
+    const bill_id = typeof insertedBill === 'object' ? insertedBill.id : insertedBill;
 
     // 2. Create Journal Entry for the Expense
-    const [journal_id] = await trx('journal_entries').insert({
+    const [insertedJournal] = await trx('journal_entries').insert({
       date: new Date().toISOString().split('T')[0],
       description: `Vendor Bill: ${category} (Bill ID: ${bill_id})`,
       project_id: project_id !== 'none' ? project_id : null,
       reference_type: 'bill',
       reference_id: String(bill_id)
     }).returning('id');
+    const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
 
     // 3. Double Entry: Debit Expense, Credit Accounts Payable (Code: 2001)
     const ap_account = await trx('chart_of_accounts').where('code', '2001').first();

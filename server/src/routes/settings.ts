@@ -65,13 +65,14 @@ router.post('/users', authenticateToken, authorizeRole(['admin', 'hr']), async (
     });
 
     // 2. Create User and link to Employee
-    const [id] = await db('users').insert({
+    const [inserted] = await db('users').insert({
       email,
       role,
       phone,
       password: hashedPassword,
       employee_id: staffId
     }).returning('id');
+    const id = typeof inserted === 'object' ? inserted.id : inserted;
 
     res.status(201).json({ 
       id, 

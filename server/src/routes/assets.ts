@@ -90,11 +90,12 @@ router.post('/depreciate', authenticateToken, authorizeRole(['admin', 'accountan
 
     if (totalDepreciation > 0) {
       // Record Journal Entry
-      const [journal_id] = await trx('journal_entries').insert({
+      const [insertedJournal] = await trx('journal_entries').insert({
         date: periodEndDate || new Date().toISOString().split('T')[0],
         description: `Monthly Depreciation Run - ${periodEndDate || 'Current'}`,
         reference_type: 'depreciation'
       }).returning('id');
+      const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
 
       // Double Entry: Debit Depreciation Expense (Code: 5104), Credit Accumulated Depreciation (Code: 1101)
       const depExpAcc = await trx('chart_of_accounts').where('code', '5104').first();
@@ -141,12 +142,13 @@ router.post('/dispose/:id', authenticateToken, authorizeRole(['admin', 'accounta
     });
 
     // Record Journal Entry for Disposal
-    const [journal_id] = await trx('journal_entries').insert({
+    const [insertedJournal] = await trx('journal_entries').insert({
       date: disposal_date,
       description: `Asset Disposal: ${asset.name} (ID: ${asset.id})`,
       reference_type: 'disposal',
       reference_id: asset.id
     }).returning('id');
+    const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
 
     // Double Entry: 
     // 1. Debit Cash/Bank (Disposal Value)
