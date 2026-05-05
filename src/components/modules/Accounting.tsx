@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
+import {
+  Plus,
   Download,
   Search,
   Printer,
@@ -20,39 +20,39 @@ import {
   Check,
   ChevronsUpDown
 } from 'lucide-react';
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardHeader,
   CardTitle,
   CardDescription
 } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '../ui/table';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from '../ui/dialog';
 import { Label } from '../ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -80,8 +80,8 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
 
   const selectedAccount = accounts.find((a: any) => String(a.id) === value);
 
-  const filtered = accounts.filter((a: any) => 
-    a.name.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = accounts.filter((a: any) =>
+    a.name.toLowerCase().includes(search.toLowerCase()) ||
     a.code.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -170,17 +170,17 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [payables, setPayables] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
-  
+
   const [coa, setCOA] = useState<any[]>([]);
   const [trialBalance, setTrialBalance] = useState<any[]>([]);
   const [incomeStatement, setIncomeStatement] = useState<any[]>([]);
   const [balanceSheet, setBalanceSheet] = useState<any>({ accounts: [], retainedEarnings: 0 });
   const [managementAccounts, setManagementAccounts] = useState<any>(null);
-  
+
   const [reportTab, setReportTab] = useState('dashboard');
   const [reportStartDate, setReportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
@@ -192,10 +192,10 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [coaFilter, setCoaFilter] = useState('All');
-  
+
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
-  const [invoiceItems, setInvoiceItems] = useState<{description: string, quantity: number, unitPrice: number}[]>([{description: '', quantity: 1, unitPrice: 0}]);
+  const [invoiceItems, setInvoiceItems] = useState<{ description: string, quantity: number, unitPrice: number }[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
   const [invoiceTaxOverride, setInvoiceTaxOverride] = useState<string>('');
@@ -264,8 +264,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         setBalanceSheet(bs.data);
         setManagementAccounts(mgmt.data);
       }
-    } catch (error) {
-      toast.error('Failed to load accounting data');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to load accounting data');
     } finally {
       setIsLoading(false);
     }
@@ -290,8 +290,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       toast.success('Account verified and added');
       setIsAddBankOpen(false);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to add bank account');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to add bank account');
     }
   };
 
@@ -308,8 +308,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       await accountingApi.importBankTransaction(data);
       toast.success('Simulated transaction imported');
       fetchData();
-    } catch (error) {
-      toast.error('Feed import failed');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Feed import failed');
     }
   };
 
@@ -319,12 +319,12 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     const formData = new FormData(e.target as HTMLFormElement);
     const projId = formData.get('project_id') as string;
     const project = projects.find(p => p.id === projId);
-    
+
     const subtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const currentTaxRate = invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate);
     const taxAmount = subtotal * (currentTaxRate / 100);
     const totalAmount = subtotal + taxAmount;
-    
+
     const data = {
       id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       client: project?.client || formData.get('client_name'),
@@ -342,10 +342,10 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       await accountingApi.createInvoice(data);
       toast.success('Sales invoice generated');
       setIsCreateInvoiceOpen(false);
-      setInvoiceItems([{description: '', quantity: 1, unitPrice: 0}]);
+      setInvoiceItems([{ description: '', quantity: 1, unitPrice: 0 }]);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to generate invoice');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to generate invoice');
     }
   };
 
@@ -368,8 +368,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       setIsPayInvoiceOpen(false);
       setIsPayBillOpen(false);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to record payment');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to record payment');
     }
   };
 
@@ -392,8 +392,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       toast.success('Vendor bill recorded');
       setIsRecordBillOpen(false);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to record bill');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to record bill');
     }
   };
 
@@ -412,8 +412,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       toast.success('Account updated successfully');
       setIsEditAccountOpen(false);
       fetchData();
-    } catch (error) {
-      toast.error('Failed to update account');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update account');
     }
   };
 
@@ -538,31 +538,31 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         return (
           <div className="space-y-6">
             <div className="flex justify-end gap-2">
-               <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date','Description','Bank','Amount','Type','Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-               <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
-               <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
-                 <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
-                 <DialogContent className="rounded-2xl">
-                   <form onSubmit={handleAddBankAccount}>
-                     <DialogHeader><DialogTitle>Register Treasury Account</DialogTitle></DialogHeader>
-                     <div className="grid gap-4 py-4">
-                       <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
-                       <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                       <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                          <div className="space-y-2">
-                            <Label>Account Type</Label>
-                            <Select name="type" required>
-                              <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
-                              <SelectContent><SelectItem value="Current">Current / Checking</SelectItem><SelectItem value="Savings">Savings</SelectItem><SelectItem value="Mobile Money">Mobile Money</SelectItem><SelectItem value="Petty Cash">Petty Cash</SelectItem></SelectContent>
-                            </Select>
-                          </div>
-                       </div>
-                     </div>
-                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">VERIFY & LINK</Button></DialogFooter>
-                   </form>
-                 </DialogContent>
-               </Dialog>
+              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date', 'Description', 'Bank', 'Amount', 'Type', 'Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+              <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
+              <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
+                <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
+                <DialogContent className="rounded-2xl">
+                  <form onSubmit={handleAddBankAccount}>
+                    <DialogHeader><DialogTitle>Register Treasury Account</DialogTitle></DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered" /></div>
+                      <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
+                        <div className="space-y-2">
+                          <Label>Account Type</Label>
+                          <Select name="type" required>
+                            <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
+                            <SelectContent><SelectItem value="Current">Current / Checking</SelectItem><SelectItem value="Savings">Savings</SelectItem><SelectItem value="Mobile Money">Mobile Money</SelectItem><SelectItem value="Petty Cash">Petty Cash</SelectItem></SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">VERIFY & LINK</Button></DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -586,23 +586,23 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {bankTx.map((tx, idx) => (
-                      <TableRow key={idx} className="hover:bg-blue-50/20">
-                        <TableCell className="text-xs font-bold text-[#8E9299]">{new Date(tx.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-bold">{tx.description}</TableCell>
-                        <TableCell className="text-xs">{tx.bank_name}</TableCell>
-                        <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
-                        <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                    {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {bankTx.map((tx, idx) => (
+                    <TableRow key={idx} className="hover:bg-blue-50/20">
+                      <TableCell className="text-xs font-bold text-[#8E9299]">{new Date(tx.date).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-bold">{tx.description}</TableCell>
+                      <TableCell className="text-xs">{tx.bank_name}</TableCell>
+                      <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
+                      <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                  {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
             </div>
-          );
+          </div>
+        );
 
       case 'accounting-ap':
         return (
@@ -613,57 +613,57 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <p className="text-sm text-[#8E9299]">Vendor bills and cash outflows.</p>
               </div>
               <div className="flex gap-2">
-              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_payable', ['Supplier','Category','Due Date','Amount','Status'], bills.map((b: any) => [b.supplier_name, b.category, new Date(b.due_date).toLocaleDateString(), String(b.amount), b.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-              <Dialog open={isRecordBillOpen} onOpenChange={setIsRecordBillOpen}>
-                <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11"><Plus className="w-4 h-4" /> Enter Bill</Button></DialogTrigger>
-                <DialogContent className="rounded-2xl">
-                  <form onSubmit={handleRecordBill}>
-                    <DialogHeader><DialogTitle>Log Vendor Vendor</DialogTitle></DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label>Supplier</Label>
-                        <Select name="supplier_id" required>
-                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                          <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
-                        <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
-                        <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_payable', ['Supplier', 'Category', 'Due Date', 'Amount', 'Status'], bills.map((b: any) => [b.supplier_name, b.category, new Date(b.due_date).toLocaleDateString(), String(b.amount), b.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Dialog open={isRecordBillOpen} onOpenChange={setIsRecordBillOpen}>
+                  <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11"><Plus className="w-4 h-4" /> Enter Bill</Button></DialogTrigger>
+                  <DialogContent className="rounded-2xl">
+                    <form onSubmit={handleRecordBill}>
+                      <DialogHeader><DialogTitle>Log Vendor Vendor</DialogTitle></DialogHeader>
+                      <div className="grid gap-4 py-4">
                         <div className="space-y-2">
-                          <Label>Project Assignment</Label>
-                          <Select name="project_id">
-                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                          <Label>Supplier</Label>
+                          <Select name="supplier_id" required>
+                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                            <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
+                          <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
+                          <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
+                          <div className="space-y-2">
+                            <Label>Project Assignment</Label>
+                            <Select name="project_id">
+                              <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">General Office / No Project</SelectItem>
+                                {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.id} - {p.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Expense Account (Job Cost Category)</Label>
+                          <Select name="account_id" required>
+                            <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">General Office / No Project</SelectItem>
-                              {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.id} - {p.name}</SelectItem>)}
+                              {coa.filter(a => a.type === 'Expense').map(a => (
+                                <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Expense Account (Job Cost Category)</Label>
-                        <Select name="account_id" required>
-                          <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
-                          <SelectContent>
-                            {coa.filter(a => a.type === 'Expense').map(a => (
-                              <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">AUTHORIZE PAYABLE</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                      <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">AUTHORIZE PAYABLE</Button></DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
-            
+
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
@@ -677,7 +677,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       <TableCell><Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-600 border-none'}>{bill.status.toUpperCase()}</Badge></TableCell>
                       <TableCell className="text-right">
                         {bill.status !== 'Paid' && (
-                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Bill', id: bill.id, amount: bill.amount}); setIsPayBillOpen(true); }}>
+                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount }); setIsPayBillOpen(true); }}>
                             PAY
                           </Button>
                         )}
@@ -730,145 +730,145 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <p className="text-sm text-[#8E9299]">Client invoicing, statements, and revenue tracking.</p>
               </div>
               <div className="flex gap-2">
-              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID','Customer','Due Date','Amount','Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-              <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
-                <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
-                <DialogContent className="max-w-2xl rounded-2xl">
-                  <form onSubmit={handleCreateInvoice}>
-                    <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
-                    <div className="grid gap-6 py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Project / Client</Label>
-                          <Select name="project_id" required>
-                            <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select project..." /></SelectTrigger>
-                            <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.client})</SelectItem>)}</SelectContent>
-                          </Select>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID', 'Customer', 'Due Date', 'Amount', 'Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
+                  <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
+                  <DialogContent className="max-w-2xl rounded-2xl">
+                    <form onSubmit={handleCreateInvoice}>
+                      <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
+                      <div className="grid gap-6 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Project / Client</Label>
+                            <Select name="project_id" required>
+                              <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select project..." /></SelectTrigger>
+                              <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.client})</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         </div>
-                        <div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
-                      </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="font-bold text-blue-600">Invoice Line Items</Label>
-                          <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => setInvoiceItems([...invoiceItems, {description: '', quantity: 1, unitPrice: 0}])}>
-                            <Plus className="w-3 h-3 mr-1" /> Add New Row
-                          </Button>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="font-bold text-blue-600">Invoice Line Items</Label>
+                            <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => setInvoiceItems([...invoiceItems, { description: '', quantity: 1, unitPrice: 0 }])}>
+                              <Plus className="w-3 h-3 mr-1" /> Add New Row
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase text-[#8E9299]">
+                            <div className="col-span-6">Description</div>
+                            <div className="col-span-2 text-center">Qty</div>
+                            <div className="col-span-2 text-right">Price</div>
+                            <div className="col-span-2 text-right">Total</div>
+                          </div>
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                            {invoiceItems.map((item, idx) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#F5F5F5]/50 p-2 rounded-xl border border-[#F5F5F5]">
+                                <div className="col-span-6">
+                                  <Input
+                                    placeholder="Item/Service name"
+                                    value={item.description}
+                                    onChange={(e) => {
+                                      const newItems = [...invoiceItems];
+                                      newItems[idx].description = e.target.value;
+                                      setInvoiceItems(newItems);
+                                    }}
+                                    required
+                                    className="bg-white border-none h-9 rounded-lg text-xs"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <Input
+                                    type="number"
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const newItems = [...invoiceItems];
+                                      newItems[idx].quantity = Number(e.target.value);
+                                      setInvoiceItems(newItems);
+                                    }}
+                                    required
+                                    className="bg-white border-none h-9 rounded-lg text-xs text-center"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <Input
+                                    type="number"
+                                    value={item.unitPrice}
+                                    onChange={(e) => {
+                                      const newItems = [...invoiceItems];
+                                      newItems[idx].unitPrice = Number(e.target.value);
+                                      setInvoiceItems(newItems);
+                                    }}
+                                    required
+                                    className="bg-white border-none h-9 rounded-lg text-xs text-right"
+                                  />
+                                </div>
+                                <div className="col-span-1 text-right font-bold text-xs text-[#141414]">
+                                  {(item.quantity * item.unitPrice).toLocaleString()}
+                                </div>
+                                <div className="col-span-1 flex justify-end">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
+                                    onClick={() => {
+                                      if (invoiceItems.length > 1) {
+                                        setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
+                                      }
+                                    }}
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase text-[#8E9299]">
-                          <div className="col-span-6">Description</div>
-                          <div className="col-span-2 text-center">Qty</div>
-                          <div className="col-span-2 text-right">Price</div>
-                          <div className="col-span-2 text-right">Total</div>
-                        </div>
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                          {invoiceItems.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#F5F5F5]/50 p-2 rounded-xl border border-[#F5F5F5]">
-                              <div className="col-span-6">
-                                <Input 
-                                  placeholder="Item/Service name" 
-                                  value={item.description} 
-                                  onChange={(e) => {
-                                    const newItems = [...invoiceItems];
-                                    newItems[idx].description = e.target.value;
-                                    setInvoiceItems(newItems);
-                                  }}
-                                  required
-                                  className="bg-white border-none h-9 rounded-lg text-xs"
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <Input 
-                                  type="number" 
-                                  value={item.quantity} 
-                                  onChange={(e) => {
-                                    const newItems = [...invoiceItems];
-                                    newItems[idx].quantity = Number(e.target.value);
-                                    setInvoiceItems(newItems);
-                                  }}
-                                  required
-                                  className="bg-white border-none h-9 rounded-lg text-xs text-center"
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <Input 
-                                  type="number" 
-                                  value={item.unitPrice} 
-                                  onChange={(e) => {
-                                    const newItems = [...invoiceItems];
-                                    newItems[idx].unitPrice = Number(e.target.value);
-                                    setInvoiceItems(newItems);
-                                  }}
-                                  required
-                                  className="bg-white border-none h-9 rounded-lg text-xs text-right"
-                                />
-                              </div>
-                              <div className="col-span-1 text-right font-bold text-xs text-[#141414]">
-                                {(item.quantity * item.unitPrice).toLocaleString()}
-                              </div>
-                              <div className="col-span-1 flex justify-end">
-                                <Button 
-                                  type="button" 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
-                                  onClick={() => {
-                                    if (invoiceItems.length > 1) {
-                                      setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
-                                    }
-                                  }}
-                                >
-                                  ×
-                                </Button>
-                              </div>
+
+                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-blue-600 font-medium">Subtotal</span>
+                            <span className="font-bold">{currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name}
+                                onChange={(e) => setInvoiceTaxNameOverride(e.target.value)}
+                                placeholder="Tax Name"
+                                className="w-20 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold uppercase"
+                              />
+                              <Input
+                                type="number"
+                                value={invoiceTaxOverride !== '' ? invoiceTaxOverride : accountingConfig.sales_tax_rate}
+                                onChange={(e) => setInvoiceTaxOverride(e.target.value)}
+                                className="w-16 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold"
+                              />
+                              <span className="text-blue-600 font-medium">%</span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-blue-600 font-medium">Subtotal</span>
-                          <span className="font-bold">{currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                          <div className="flex items-center gap-2">
-                            <Input 
-                              value={invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name}
-                              onChange={(e) => setInvoiceTaxNameOverride(e.target.value)}
-                              placeholder="Tax Name"
-                              className="w-20 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold uppercase"
-                            />
-                            <Input 
-                              type="number" 
-                              value={invoiceTaxOverride !== '' ? invoiceTaxOverride : accountingConfig.sales_tax_rate}
-                              onChange={(e) => setInvoiceTaxOverride(e.target.value)}
-                              className="w-16 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold"
-                            />
-                            <span className="text-blue-600 font-medium">%</span>
+                            <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * ((invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}</span>
                           </div>
-                          <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * ((invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-blue-100">
-                          <div>
-                            <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
-                            <p className="text-xs text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-black text-blue-700">
-                              {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + (invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}
-                            </p>
+                          <div className="flex justify-between items-center pt-2 border-t border-blue-100">
+                            <div>
+                              <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
+                              <p className="text-xs text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-blue-700">
+                                {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + (invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-12 shadow-lg shadow-blue-500/20 uppercase tracking-wider">GENERATE & POST INVOICE</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                      <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-12 shadow-lg shadow-blue-500/20 uppercase tracking-wider">GENERATE & POST INVOICE</Button></DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
-            
+
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Invoice ID</TableHead><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
@@ -882,7 +882,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       <TableCell><Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge></TableCell>
                       <TableCell className="text-right space-x-2">
                         {inv.status !== 'paid' && (
-                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({type: 'Invoice', id: inv.id, amount: inv.amount}); setIsPayInvoiceOpen(true); }}>
+                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount }); setIsPayInvoiceOpen(true); }}>
                             RECEIVE
                           </Button>
                         )}
@@ -893,7 +893,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           } catch (e) {
                             itemsArr = [];
                           }
-                          
+
                           const itemsHtml = itemsArr.length > 0 ? itemsArr.map((it: any) => `
                             <tr>
                               <td style="padding: 10px; border-bottom: 1px solid #E4E3E0;">${it.description || 'Service'}</td>
@@ -993,53 +993,53 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
             <div className="flex justify-between items-center">
               <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">Live auditing of all fiscal transactions.</p></div>
               <div className="flex gap-2">
-              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('general_ledger', ['Date','Reference','Category','Amount','Type'], transactions.map(tx => [tx.date, tx.description, tx.category, String(tx.amount), tx.type]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-              <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
-                 <DialogTrigger asChild><Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm"><BookOpen className="w-4 h-4" /> Manual Journal Post</Button></DialogTrigger>
-                 <DialogContent className="max-w-3xl rounded-2xl">
-                   <form onSubmit={handlePostJournal}>
-                     <DialogHeader><DialogTitle>Double-Entry Journal</DialogTitle></DialogHeader>
-                     <div className="grid gap-6 py-6">
-                       <div className="grid grid-cols-2 gap-4">
-                         <div className="grid gap-2"><Label>Date</Label><Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" /></div>
-                         <div className="grid gap-2"><Label>Reference</Label><Input name="description" placeholder="e.g. Asset Depreciation" required className="bg-[#F5F5F5] border-none" /></div>
-                       </div>
-                       <div className="space-y-4">
-                         <div className="grid grid-cols-12 gap-2 text-xs font-bold uppercase text-[#8E9299]"><div className="col-span-6">Account</div><div className="col-span-3">Debit</div><div className="col-span-3">Credit</div></div>
-                         {journalItems.map((item, idx) => (
-                           <div key={idx} className="grid grid-cols-12 gap-2">
-                             <div className="col-span-6">
-                                <AccountSelect 
-                                  value={String(item.account_id)} 
-                                  onValueChange={(val: string) => { 
-                                    const n = [...journalItems]; 
-                                    n[idx].account_id = val; 
-                                    setJournalItems(n); 
-                                  }} 
-                                  accounts={coa} 
-                                  placeholder="Select Account" 
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('general_ledger', ['Date', 'Reference', 'Category', 'Amount', 'Type'], transactions.map(tx => [tx.date, tx.description, tx.category, String(tx.amount), tx.type]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
+                  <DialogTrigger asChild><Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm"><BookOpen className="w-4 h-4" /> Manual Journal Post</Button></DialogTrigger>
+                  <DialogContent className="max-w-3xl rounded-2xl">
+                    <form onSubmit={handlePostJournal}>
+                      <DialogHeader><DialogTitle>Double-Entry Journal</DialogTitle></DialogHeader>
+                      <div className="grid gap-6 py-6">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Date</Label><Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" /></div>
+                          <div className="grid gap-2"><Label>Reference</Label><Input name="description" placeholder="e.g. Asset Depreciation" required className="bg-[#F5F5F5] border-none" /></div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-12 gap-2 text-xs font-bold uppercase text-[#8E9299]"><div className="col-span-6">Account</div><div className="col-span-3">Debit</div><div className="col-span-3">Credit</div></div>
+                          {journalItems.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-12 gap-2">
+                              <div className="col-span-6">
+                                <AccountSelect
+                                  value={String(item.account_id)}
+                                  onValueChange={(val: string) => {
+                                    const n = [...journalItems];
+                                    n[idx].account_id = val;
+                                    setJournalItems(n);
+                                  }}
+                                  accounts={coa}
+                                  placeholder="Select Account"
                                 />
-                             </div>
-                             <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.debit} onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-green-600" /></div>
-                             <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.credit} onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-red-600" /></div>
-                           </div>
-                         ))}
-                         <Button type="button" variant="ghost" onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])} className="w-full text-blue-600 font-bold hover:bg-blue-50 rounded-xl">+ APPEND LINE</Button>
-                       </div>
-                     </div>
-                     <DialogFooter className="bg-[#F5F5F5] p-6 -mx-6 -mb-6">
-                       <div className="flex-1 flex gap-4 font-mono font-bold">
-                         <div className="text-green-600">DR: {currSym}{journalItems.reduce((s, i) => s + i.debit, 0).toLocaleString()}</div>
-                         <div className="text-red-600">CR: {currSym}{journalItems.reduce((s, i) => s + i.credit, 0).toLocaleString()}</div>
-                       </div>
-                       <Button type="submit" className="bg-[#141414] text-white h-11 px-8 rounded-xl font-bold">POST TO LEDGER</Button>
-                     </DialogFooter>
-                   </form>
-                 </DialogContent>
-               </Dialog>
+                              </div>
+                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.debit} onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-green-600" /></div>
+                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.credit} onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-red-600" /></div>
+                            </div>
+                          ))}
+                          <Button type="button" variant="ghost" onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])} className="w-full text-blue-600 font-bold hover:bg-blue-50 rounded-xl">+ APPEND LINE</Button>
+                        </div>
+                      </div>
+                      <DialogFooter className="bg-[#F5F5F5] p-6 -mx-6 -mb-6">
+                        <div className="flex-1 flex gap-4 font-mono font-bold">
+                          <div className="text-green-600">DR: {currSym}{journalItems.reduce((s, i) => s + i.debit, 0).toLocaleString()}</div>
+                          <div className="text-red-600">CR: {currSym}{journalItems.reduce((s, i) => s + i.credit, 0).toLocaleString()}</div>
+                        </div>
+                        <Button type="submit" className="bg-[#141414] text-white h-11 px-8 rounded-xl font-bold">POST TO LEDGER</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
-            
+
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
@@ -1127,20 +1127,20 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <TableBody>
                       <TableRow className="bg-green-50/30 hover:bg-green-50/30"><TableCell colSpan={2} className="font-bold text-green-700">Revenue</TableCell></TableRow>
                       {incomeStatement.filter(a => a.type === 'Income').map(a => (
-                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{currSym}{incomeStatement.filter(a => a.type === 'Income').reduce((s,a) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
-                      
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{currSym}{incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Operating Expenses</TableCell></TableRow>
                       {incomeStatement.filter(a => a.type === 'Expense').map(a => (
-                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{incomeStatement.filter(a => a.type === 'Expense').reduce((s,a) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
-                      
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+
                       <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
                         <TableCell className="font-black text-lg">Net Income</TableCell>
                         <TableCell className="text-right font-black text-xl">
-                          {currSym}{(incomeStatement.filter(a => a.type === 'Income').reduce((s,a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s,a) => s + (a.total_debit - a.total_credit), 0)).toLocaleString()}
+                          {currSym}{(incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0)).toLocaleString()}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -1161,22 +1161,22 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <TableBody>
                       <TableRow className="bg-blue-50/30 hover:bg-blue-50/30"><TableCell colSpan={2} className="font-bold text-blue-700">Assets</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Asset').map((a: any) => (
-                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number,a: any) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
-                      
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Liabilities</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Liability').map((a: any) => (
-                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number,a: any) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
 
                       <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Equity</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Equity').map((a: any) => (
-                         <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
                       ))}
                       <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{currSym}{balanceSheet.retainedEarnings.toLocaleString()}</TableCell></TableRow>
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number,a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -1192,7 +1192,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     const projectRevenue = projectInvoices.reduce((s, inv) => s + Number(inv.subtotal || inv.amount), 0);
                     const projectCost = projectBills.reduce((s, b) => s + Number(b.amount), 0);
                     const projectProfit = projectRevenue - projectCost;
-                    
+
                     return (
                       <Card key={p.id} className="border-none shadow-sm rounded-2xl overflow-hidden border-l-4 border-l-blue-600">
                         <CardHeader className="bg-[#F5F5F5]/30">
@@ -1215,8 +1215,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                             </span>
                           </div>
                           <div className="w-full bg-[#F5F5F5] h-2 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-blue-600 h-full" 
+                            <div
+                              className="bg-blue-600 h-full"
                               style={{ width: `${Math.min(100, (projectRevenue > 0 ? (projectProfit / projectRevenue) * 100 : 0))}%` }}
                             />
                           </div>
@@ -1239,7 +1239,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       <TableHead colSpan={4}>
                         <div className="flex justify-between items-center w-full">
                           <span>Trial Balance</span>
-                          <Button variant="outline" size="sm" onClick={() => handleExportCSV('trial_balance', ['Code','Account Name','Type','Debit','Credit'], trialBalance.map(a => [a.code, a.name, a.type, String(a.total_debit), String(a.total_credit)]))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
+                          <Button variant="outline" size="sm" onClick={() => handleExportCSV('trial_balance', ['Code', 'Account Name', 'Type', 'Debit', 'Credit'], trialBalance.map(a => [a.code, a.name, a.type, String(a.total_debit), String(a.total_credit)]))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
                         </div>
                       </TableHead>
                     </TableRow>
@@ -1298,9 +1298,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <button
                   key={t.type}
                   onClick={() => setCoaFilter(coaFilter === t.type ? 'All' : t.type)}
-                  className={`p-4 rounded-2xl border-2 transition-all text-left ${
-                    coaFilter === t.type ? 'border-[#141414] bg-[#141414] text-white shadow-xl' : 'border-[#F5F5F5] bg-white hover:border-[#8E9299]'
-                  }`}
+                  className={`p-4 rounded-2xl border-2 transition-all text-left ${coaFilter === t.type ? 'border-[#141414] bg-[#141414] text-white shadow-xl' : 'border-[#F5F5F5] bg-white hover:border-[#8E9299]'
+                    }`}
                 >
                   <p className={`text-[10px] font-bold uppercase tracking-widest ${coaFilter === t.type ? 'text-white/60' : 'text-[#8E9299]'}`}>{t.type}</p>
                   <p className={`text-2xl font-black ${coaFilter === t.type ? 'text-white' : 'text-[#141414]'}`}>{t.count}</p>
@@ -1316,7 +1315,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <p className="text-sm text-[#8E9299]">{filteredCOA.length} accounts {coaFilter !== 'All' ? `(${coaFilter})` : ''}</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('chart_of_accounts', ['Code','Name','Type','Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('chart_of_accounts', ['Code', 'Name', 'Type', 'Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg"><Plus className="w-4 h-4" /> New Account</Button></DialogTrigger>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
@@ -1372,7 +1371,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     </form>
                   </DialogContent>
                 </Dialog>
-                
+
                 {/* Edit Account Dialog */}
                 <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">

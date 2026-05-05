@@ -9,8 +9,9 @@ router.get('/transactions', authenticateToken, async (req, res) => {
   try {
     const transactions = await db('transactions').select('*');
     res.json(transactions);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching transactions' });
+  } catch (error: any) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ message: error.message || 'Error fetching transactions' });
   }
 });
 
@@ -19,8 +20,9 @@ router.post('/transactions', authenticateToken, authorizeRole(['accountant', 'ad
     const tx = req.body;
     await db('transactions').insert(tx);
     res.status(201).json(tx);
-  } catch (error) {
-    res.status(500).json({ message: 'Error adding transaction' });
+  } catch (error: any) {
+    console.error('Error adding transaction:', error);
+    res.status(500).json({ message: error.message || 'Error adding transaction' });
   }
 });
 
@@ -29,8 +31,9 @@ router.get('/invoices', authenticateToken, async (req, res) => {
   try {
     const invoices = await db('invoices').select('*');
     res.json(invoices);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching invoices' });
+  } catch (error: any) {
+    console.error('Error fetching invoices:', error);
+    res.status(500).json({ message: error.message || 'Error fetching invoices' });
   }
 });
 
@@ -39,8 +42,9 @@ router.post('/invoices', authenticateToken, authorizeRole(['accountant', 'admin'
     const invoice = req.body;
     await db('invoices').insert(invoice);
     res.status(201).json(invoice);
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating invoice' });
+  } catch (error: any) {
+    console.error('Error creating invoice:', error);
+    res.status(500).json({ message: error.message || 'Error creating invoice' });
   }
 });
 
@@ -49,8 +53,9 @@ router.get('/taxes', authenticateToken, authorizeRole(['accountant', 'admin']), 
   try {
     const taxes = await db('taxes').select('*');
     res.json(taxes);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching tax records' });
+  } catch (error: any) {
+    console.error('Error fetching tax records:', error);
+    res.status(500).json({ message: error.message || 'Error fetching tax records' });
   }
 });
 
@@ -64,8 +69,9 @@ router.get('/coa', authenticateToken, async (req, res) => {
   try {
     const coa = await db('chart_of_accounts').orderBy('code', 'asc');
     res.json(coa);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching COA' });
+  } catch (error: any) {
+    console.error('Error fetching COA:', error);
+    res.status(500).json({ message: error.message || 'Error fetching COA' });
   }
 });
 
@@ -74,8 +80,9 @@ router.post('/coa', authenticateToken, authorizeRole(['admin', 'accountant']), a
     const data = req.body;
     await db('chart_of_accounts').insert(data);
     res.status(201).json({ message: 'Account created' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating account' });
+  } catch (error: any) {
+    console.error('Error creating account:', error);
+    res.status(500).json({ message: error.message || 'Error creating account' });
   }
 });
 
@@ -85,8 +92,9 @@ router.patch('/coa/:id', authenticateToken, authorizeRole(['admin', 'accountant'
     const data = req.body;
     await db('chart_of_accounts').where({ id }).update(data);
     res.json({ message: 'Account updated' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating account' });
+  } catch (error: any) {
+    console.error('Error updating account:', error);
+    res.status(500).json({ message: error.message || 'Error updating account' });
   }
 });
 
@@ -100,8 +108,9 @@ router.delete('/coa/:id', authenticateToken, authorizeRole(['admin', 'accountant
     }
     await db('chart_of_accounts').where({ id }).del();
     res.json({ message: 'Account deleted' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error deleting account' });
+  } catch (error: any) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ message: error.message || 'Error deleting account' });
   }
 });
 
@@ -145,9 +154,10 @@ router.post('/journal', authenticateToken, authorizeRole(['accountant', 'admin']
 
     await trx.commit();
     res.status(201).json({ message: 'Journal entry posted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     await trx.rollback();
-    res.status(500).json({ message: 'Error posting journal entry' });
+    console.error('Error posting journal entry:', error);
+    res.status(500).json({ message: error.message || 'Error posting journal entry' });
   }
 });
 
@@ -175,8 +185,9 @@ router.get('/reports/trial-balance', authenticateToken, authorizeRole(['accounta
 
     const balances = await query;
     res.json(balances);
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating trial balance' });
+  } catch (error: any) {
+    console.error('Error generating trial balance:', error);
+    res.status(500).json({ message: error.message || 'Error generating trial balance' });
   }
 });
 
@@ -203,9 +214,9 @@ router.get('/reports/income-statement', authenticateToken, authorizeRole(['accou
 
     const accounts = await query;
     res.json(accounts);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error generating income statement' });
+  } catch (error: any) {
+    console.error('Error generating income statement:', error);
+    res.status(500).json({ message: error.message || 'Error generating income statement' });
   }
 });
 
@@ -253,8 +264,9 @@ router.get('/reports/balance-sheet', authenticateToken, authorizeRole(['accounta
     });
 
     res.json({ accounts, retainedEarnings });
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating balance sheet' });
+  } catch (error: any) {
+    console.error('Error generating balance sheet:', error);
+    res.status(500).json({ message: error.message || 'Error generating balance sheet' });
   }
 });
 
@@ -295,8 +307,9 @@ router.get('/reports/management', authenticateToken, authorizeRole(['accountant'
     stats['TotalPayroll'] = Number(payrollResult?.total_paid || 0);
 
     res.json(stats);
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating management reports' });
+  } catch (error: any) {
+    console.error('Error generating management reports:', error);
+    res.status(500).json({ message: error.message || 'Error generating management reports' });
   }
 });
 
@@ -307,8 +320,9 @@ router.get('/bank-accounts', authenticateToken, authorizeRole(['accountant', 'ad
   try {
     const accounts = await db('bank_accounts').orderBy('id', 'asc');
     res.json(accounts);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching bank accounts' });
+  } catch (error: any) {
+    console.error('Error fetching bank accounts:', error);
+    res.status(500).json({ message: error.message || 'Error fetching bank accounts' });
   }
 });
 
@@ -317,8 +331,9 @@ router.post('/bank-accounts', authenticateToken, authorizeRole(['admin', 'accoun
     const data = req.body;
     await db('bank_accounts').insert(data);
     res.status(201).json({ message: 'Bank account added' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error adding bank account' });
+  } catch (error: any) {
+    console.error('Error adding bank account:', error);
+    res.status(500).json({ message: error.message || 'Error adding bank account' });
   }
 });
 
@@ -330,8 +345,9 @@ router.get('/bank-transactions', authenticateToken, authorizeRole(['accountant',
       .join('bank_accounts', 'bank_transactions.bank_account_id', 'bank_accounts.id')
       .orderBy('date', 'desc');
     res.json(tx);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching bank transactions' });
+  } catch (error: any) {
+    console.error('Error fetching bank transactions:', error);
+    res.status(500).json({ message: error.message || 'Error fetching bank transactions' });
   }
 });
 
@@ -340,8 +356,9 @@ router.post('/bank-transactions', authenticateToken, authorizeRole(['accountant'
     const data = req.body;
     await db('bank_transactions').insert(data);
     res.status(201).json({ message: 'Bank transaction imported' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error importing bank transaction' });
+  } catch (error: any) {
+    console.error('Error importing bank transaction:', error);
+    res.status(500).json({ message: error.message || 'Error importing bank transaction' });
   }
 });
 
@@ -353,8 +370,9 @@ router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), 
       .join('suppliers', 'bills.supplier_id', 'suppliers.id')
       .orderBy('due_date', 'asc');
     res.json(bills);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching bills' });
+  } catch (error: any) {
+    console.error('Error fetching bills:', error);
+    res.status(500).json({ message: error.message || 'Error fetching bills' });
   }
 });
 
@@ -410,10 +428,10 @@ router.post('/bills', authenticateToken, authorizeRole(['accountant', 'admin']),
 
     await trx.commit();
     res.status(201).json({ message: 'Bill recorded and posted to ledger' });
-  } catch (error) {
+  } catch (error: any) {
     await trx.rollback();
-    console.error(error);
-    res.status(500).json({ message: 'Error recording bill' });
+    console.error('Error recording bill:', error);
+    res.status(500).json({ message: error.message || 'Error recording bill' });
   }
 });
 
@@ -441,10 +459,10 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
 
     await trx.commit();
     res.status(201).json({ message: 'Payment recorded successfully' });
-  } catch (error) {
+  } catch (error: any) {
     await trx.rollback();
-    console.error(error)
-    res.status(500).json({ message: 'Error recording payment' });
+    console.error('Error recording payment:', error);
+    res.status(500).json({ message: error.message || 'Error recording payment' });
   }
 });
 
