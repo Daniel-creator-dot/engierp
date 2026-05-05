@@ -283,7 +283,8 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       account_name: formData.get('account_name'),
       account_number: formData.get('account_number'),
       bank_name: formData.get('bank_name'),
-      type: formData.get('type')
+      type: formData.get('type'),
+      balance: Number(formData.get('balance') || 0)
     };
     try {
       await accountingApi.addBankAccount(data);
@@ -538,31 +539,32 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         return (
           <div className="space-y-6">
             <div className="flex justify-end gap-2">
-              <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date', 'Description', 'Bank', 'Amount', 'Type', 'Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-              <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
-              <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
-                <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
-                <DialogContent className="rounded-2xl">
-                  <form onSubmit={handleAddBankAccount}>
-                    <DialogHeader><DialogTitle>Register Treasury Account</DialogTitle></DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered" /></div>
-                      <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                        <div className="space-y-2">
-                          <Label>Account Type</Label>
-                          <Select name="type" required>
-                            <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="Current">Current / Checking</SelectItem><SelectItem value="Savings">Savings</SelectItem><SelectItem value="Mobile Money">Mobile Money</SelectItem><SelectItem value="Petty Cash">Petty Cash</SelectItem></SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">VERIFY & LINK</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+               <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date','Description','Bank','Amount','Type','Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+               <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
+               <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
+                 <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
+                 <DialogContent className="rounded-2xl">
+                   <form onSubmit={handleAddBankAccount}>
+                     <DialogHeader><DialogTitle>Register Treasury Account</DialogTitle></DialogHeader>
+                     <div className="grid gap-4 py-4">
+                       <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
+                       <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
+                          <div className="space-y-2">
+                            <Label>Account Type</Label>
+                            <Select name="type" required>
+                              <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value="Current">Current / Checking</SelectItem><SelectItem value="Savings">Savings</SelectItem><SelectItem value="Mobile Money">Mobile Money</SelectItem><SelectItem value="Petty Cash">Petty Cash</SelectItem></SelectContent>
+                            </Select>
+                          </div>
+                       </div>
+                       <div className="space-y-2"><Label>Opening Balance</Label><Input type="number" step="0.01" name="balance" defaultValue={0} required className="bg-[#F5F5F5] border-none h-11" /></div>
+                     </div>
+                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">VERIFY & LINK</Button></DialogFooter>
+                   </form>
+                 </DialogContent>
+               </Dialog>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -408,7 +408,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Value ({currSym})</Label><Input name="value" type="number" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-black text-blue-600" /></div>
                           <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Retention %</Label><Input name="retention_pct" type="number" defaultValue="10" className="h-12 bg-[#F5F5F5] border-none rounded-xl" /></div>
                         </div>
@@ -521,7 +521,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                   <DialogDescription className="text-blue-700 mt-2">Establish baseline constraints and fiscal budget.</DialogDescription>
                 </DialogHeader>
                 <div className="p-8 space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Project Code (e.g. PRJ001)</Label>
                       <Input name="project_id" placeholder="PRJ001" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-black uppercase" />
@@ -531,7 +531,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                       <Input name="name" placeholder="e.g. Volta Dam Expansion" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Stakeholder / Client</Label>
                       <Input name="client" placeholder="City Water Dept" required className="h-12 bg-[#F5F5F5] border-none rounded-xl" />
@@ -548,7 +548,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase tracking-widest text-[#8E9299]">Total Fiscal Budget ({currSym})</Label>
                       <Input name="budget" type="number" placeholder="1000000" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-black text-blue-600" />
@@ -573,11 +573,11 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                 <form onSubmit={handleEditProject}>
                   <DialogHeader><DialogTitle>Refine Project Charter</DialogTitle></DialogHeader>
                   <div className="p-8 space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Project Code</Label><Input name="project_id" defaultValue={selectedProject.id} readOnly className="bg-[#F5F5F5] border-none font-black" /></div>
                       <div className="space-y-2"><Label>Title</Label><Input name="name" defaultValue={selectedProject.name} required /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Client</Label><Input name="client" defaultValue={selectedProject.client} required /></div>
                       <div className="space-y-2">
                         <Label>Status</Label>
@@ -592,11 +592,11 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                         </Select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Budget</Label><Input name="budget" type="number" defaultValue={selectedProject.budget} required /></div>
                       <div className="space-y-2"><Label>Completion %</Label><Input name="completion_rate" type="number" step="0.1" min="0" max="100" defaultValue={selectedProject.completion_rate || 0} required className="bg-green-50 border-green-100 font-bold text-green-700" /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2"><Label>Start Date</Label><Input name="startDate" type="date" defaultValue={selectedProject.startDate} required /></div>
                       <div className="space-y-2"><Label>End Date</Label><Input name="endDate" type="date" defaultValue={selectedProject.endDate} required /></div>
                     </div>

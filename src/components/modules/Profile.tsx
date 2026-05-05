@@ -99,7 +99,7 @@ export default function Profile() {
         </Card>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Employment Matrix */}
         <Card className="border-none shadow-xl shadow-black/[0.02] rounded-3xl bg-white overflow-hidden">
           <CardHeader className="p-8 border-b border-[#F5F5F5]">

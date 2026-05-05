@@ -195,7 +195,7 @@ export default function FieldOps() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="p-8 space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase text-[#8E9299]">Target Project</Label>
                       <Select name="project_id" required>
@@ -230,7 +230,7 @@ export default function FieldOps() {
                     <Label className="font-bold text-xs uppercase text-[#8E9299]">Blockers & Safety Issues</Label>
                     <Textarea name="issues" placeholder="Any delays or hazards encountered?" className="min-h-[80px] bg-[#F5F5F5] border-none rounded-xl resize-none" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-2 p-4 bg-[#F5F5F5] rounded-xl border-2 border-dashed border-[#E4E3E0] cursor-pointer hover:bg-white hover:border-blue-300 transition-all duration-300">
                       <Camera className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-bold text-[#8E9299]">Attach Photos</span>

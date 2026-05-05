@@ -497,11 +497,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                     <DialogHeader><DialogTitle>Personnel Onboarding</DialogTitle></DialogHeader>
                     <div className="p-4 space-y-4">
                       <div className="grid gap-2"><Label>Full Name</Label><Input name="name" required /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" required /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Wage Type</Label>
                           <Select name="wage_type" value={newEmployeeWageType} onValueChange={setNewEmployeeWageType}>
@@ -514,12 +514,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="grid gap-2"><Label>{newEmployeeWageType === 'Hourly' ? 'Hourly Rate (GH₵)' : 'Monthly Gross Salary (GH₵)'}</Label><Input name="salary" type="number" required /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Phone Number</Label><Input name="phone" placeholder="+233..." /></div>
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" placeholder="E123..." /></div>
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" placeholder="GHA-7..." /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Bank Name</Label>
                           <Select name="bank_name" key={isAddEmployeeOpen ? 'new' : 'none'}>
@@ -533,7 +533,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" placeholder="John Doe..." /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Account Number</Label><Input name="account_number" placeholder="144..." /></div>
                         <div className="grid gap-2"><Label>Branch</Label><Input name="branch" placeholder="Accra Central..." /></div>
                       </div>
@@ -601,7 +601,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <DialogDescription>Comprehensive employee record and compliance data.</DialogDescription>
                     </DialogHeader>
                     <div className="py-6 space-y-6">
-                      <div className="grid grid-cols-2 gap-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold uppercase text-[#8E9299]">Full Name</p>
                           <p className="font-bold text-lg">{selectedEmployee.name}</p>
@@ -690,11 +690,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                     <DialogHeader><DialogTitle>Edit Personnel Record</DialogTitle></DialogHeader>
                     <div className="p-4 space-y-4">
                       <div className="grid gap-2"><Label>Full Name</Label><Input name="name" defaultValue={selectedEmployee.name} required /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" defaultValue={selectedEmployee.role} required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" defaultValue={selectedEmployee.department} required /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Wage Type</Label>
                           <Select name="wage_type" defaultValue={selectedEmployee.wage_type || 'Salaried'} onValueChange={setEditEmployeeWageType}>
@@ -707,12 +707,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="grid gap-2"><Label>{(editEmployeeWageType || selectedEmployee.wage_type) === 'Hourly' ? 'Hourly Rate (GH₵)' : 'Monthly Gross Salary (GH₵)'}</Label><Input name="salary" type="number" defaultValue={selectedEmployee.salary} required /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Phone Number</Label><Input name="phone" defaultValue={selectedEmployee.phone} /></div>
                         <div className="grid gap-2"><Label>SSNIT Number</Label><Input name="ssnit" defaultValue={selectedEmployee.ssnit} /></div>
                       </div>
                       <div className="grid gap-2"><Label>Ghana Card ID</Label><Input name="ghana_card" defaultValue={selectedEmployee.ghana_card} /></div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <Label>Bank Name</Label>
                           <Select name="bank_name" defaultValue={selectedEmployee.bank_name} key={selectedEmployee.id}>
@@ -726,7 +726,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="grid gap-2"><Label>Account Name</Label><Input name="account_name" defaultValue={selectedEmployee.account_name} /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Account Number</Label><Input name="account_number" defaultValue={selectedEmployee.account_number} /></div>
                         <div className="grid gap-2"><Label>Branch</Label><Input name="branch" defaultValue={selectedEmployee.branch} /></div>
                       </div>
@@ -785,14 +785,14 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           <div className="grid gap-2"><Label>Gross Pay (Rate: {selectedEmployee.salary})</Label><Input type="number" value={payrollData.base_salary} readOnly className="bg-blue-100/50 border-none rounded-xl h-11 font-bold text-blue-800" /></div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="grid gap-2"><Label>Base Salary (GH₵)</Label><Input type="number" value={payrollData.base_salary} onChange={(e) => setPayrollData({...payrollData, base_salary: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                           <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         </div>
                       )}
                       
                       {selectedEmployee.wage_type === 'Hourly' && (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            <div className="grid gap-2"><Label>Allowances (GH₵)</Label><Input type="number" value={payrollData.allowances} onChange={(e) => setPayrollData({...payrollData, allowances: Number(e.target.value)})} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         </div>
                       )}
@@ -916,7 +916,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Start Date</Label><Input name="startDate" type="date" required /></div>
                         <div className="grid gap-2"><Label>End Date</Label><Input name="endDate" type="date" required /></div>
                       </div>
