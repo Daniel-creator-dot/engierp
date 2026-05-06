@@ -210,6 +210,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [isPeriodBankDetailsOpen, setIsPeriodBankDetailsOpen] = useState(false);
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState('');
   const [periodFilterDates, setPeriodFilterDates] = useState<{ start: string, end: string } | null>(null);
+  const [periodFilterAccountId, setPeriodFilterAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -256,8 +257,12 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         setCOA(coaRes.data);
         setBankTx(btx.data);
       } else if (activeSub === 'accounting-coa') {
-        const coaRes = await accountingApi.getCOA();
+        const [coaRes, accRes] = await Promise.all([
+          accountingApi.getCOA(),
+          accountingApi.getBankAccounts()
+        ]);
         setCOA(coaRes.data);
+        setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-reports') {
         const [tb, inc, bs, mgmt, btx] = await Promise.all([
           accountingApi.getTrialBalance(reportStartDate, reportEndDate),
@@ -577,7 +582,16 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {bankAccounts.map(b => (
-                <Card key={b.id} className="border-none shadow-sm rounded-2xl bg-gradient-to-br from-[#141414] to-slate-900 text-white overflow-hidden">
+                <Card 
+                  key={b.id} 
+                  className="border-none shadow-sm rounded-2xl bg-gradient-to-br from-[#141414] to-slate-900 text-white overflow-hidden cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
+                  onClick={() => {
+                    setSelectedPeriodLabel(`Statement for ${b.account_name} (${b.bank_name})`);
+                    setPeriodFilterDates(null);
+                    setPeriodFilterAccountId(String(b.id));
+                    setIsPeriodBankDetailsOpen(true);
+                  }}
+                >
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <div className="p-2 bg-white/10 rounded-xl"><PiggyBank className="w-5 h-5 text-white" /></div>
@@ -1530,17 +1544,30 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     </TableHeader>
                     <TableBody>
                       {filteredCOA.map(a => (
-                        <TableRow key={a.id} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
+                        <TableRow 
+                          key={a.id} 
+                          className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30 cursor-pointer"
+                          onClick={() => {
+                            const matchingBank = bankAccounts.find(ba => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
+                            setSelectedPeriodLabel(`Drill-down: ${a.name}`);
+                            setPeriodFilterDates(null);
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
                           <TableCell className="font-mono font-bold text-blue-600">{a.code}</TableCell>
                           <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
                           <TableCell><Badge className={`${typeColors[a.type] || 'bg-gray-100 text-gray-700'} border-none font-bold text-[10px]`}>{a.type.toUpperCase()}</Badge></TableCell>
                           <TableCell className={`text-right font-black ${Number(a.balance) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{currSym}{Number(a.balance).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => { setSelectedTarget(a); setIsEditAccountOpen(true); }}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); setSelectedTarget(a); setIsEditAccountOpen(true); }}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => { setSelectedTarget(a); setIsDeleteAccountOpen(true); }}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); setSelectedTarget(a); setIsDeleteAccountOpen(true); }}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -1601,9 +1628,18 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <TableBody>
                   {bankTx
                     .filter(tx => {
-                      if (!periodFilterDates) return true;
-                      const txDate = tx.date.split('T')[0];
-                      return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                      let dateMatch = true;
+                      if (periodFilterDates) {
+                        const txDate = tx.date.split('T')[0];
+                        dateMatch = txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                      }
+                      
+                      let accountMatch = true;
+                      if (periodFilterAccountId) {
+                        accountMatch = String(tx.bank_account_id) === String(periodFilterAccountId);
+                      }
+                      
+                      return dateMatch && accountMatch;
                     })
                     .map((tx, idx) => (
                       <TableRow key={idx} className="hover:bg-blue-50/20">
