@@ -87,6 +87,7 @@ export const accountingApi = {
   reconcileBankTransaction: (id: number, matched_ledger_id?: number) => api.patch(`/accounting/bank-transactions/${id}/reconcile`, { matched_ledger_id }),
   getLedgerEntries: (accountId: number | string, startDate?: string, endDate?: string) => api.get(`/accounting/ledger-entries/${accountId}`, { params: { startDate, endDate } }),
   deleteJournal: (id: number | string) => api.delete(`/accounting/journal/${id}`),
+  getJournalDetails: (id: number | string) => api.get(`/accounting/journal/${id}`),
 };
 
 export const projectsApi = {

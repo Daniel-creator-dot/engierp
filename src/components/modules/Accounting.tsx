@@ -214,6 +214,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
   const [drillDownMode, setDrillDownMode] = useState<'bank' | 'ledger'>('bank');
   const [selectedCOAId, setSelectedCOAId] = useState<string | null>(null);
+  const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -457,9 +458,13 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       items: journalItems.filter(item => item.account_id !== '')
     };
     try {
+      if (editingJournalId) {
+        await accountingApi.deleteJournal(editingJournalId);
+      }
       await accountingApi.postJournal(data);
-      toast.success('Journal entry posted');
+      toast.success(editingJournalId ? 'Journal entry updated' : 'Journal entry posted');
       setIsJournalOpen(false);
+      setEditingJournalId(null);
       setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
       fetchData();
     } catch (error: any) {
@@ -1071,22 +1076,29 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
               <Table className="bg-white">
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {transactions.map((tx) => (
+                  {transactions.map((tx: any) => (
                     <TableRow 
                       key={tx.id} 
                       className="hover:bg-blue-50/20 cursor-pointer"
                       onClick={async () => {
-                        setSelectedPeriodLabel(`Drill-down: ${tx.description}`);
+                        setSelectedPeriodLabel(`Journal: ${tx.description}`);
                         setPeriodFilterDates({ start: tx.date, end: tx.date });
                         setPeriodFilterAccountId(null);
-                        setDrillDownMode('bank');
+                        setDrillDownMode('ledger');
                         setIsPeriodBankDetailsOpen(true);
+                        
+                        try {
+                           const res = await accountingApi.getJournalDetails(tx.id);
+                           setLedgerEntries(res.data.items);
+                        } catch (err) {
+                           toast.error("Failed to load journal details");
+                        }
                       }}
                     >
-                      <TableCell className="text-[#8E9299] font-mono text-xs">{tx.date}</TableCell>
+                      <TableCell className="text-[#8E9299] font-mono text-xs">{new Date(tx.date).toLocaleDateString()}</TableCell>
                       <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
-                      <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414]">{tx.category}</Badge></TableCell>
-                      <TableCell className={`text-right font-black ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
+                      <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{tx.reference_type}</Badge></TableCell>
+                      <TableCell className="text-right font-black text-[#141414]">{currSym}{Number(tx.total_amount).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1730,29 +1742,53 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           <TableCell className="text-right font-mono text-green-600 font-bold">{le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '-'}</TableCell>
                           <TableCell className="text-right font-mono text-red-600 font-bold">{le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '-'}</TableCell>
                           <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={async () => {
-                                if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
+                            <div className="flex justify-end gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={async () => {
                                   try {
-                                    await accountingApi.deleteJournal(le.journal_id);
-                                    toast.success("Journal entry deleted and balances reversed");
-                                    // Refresh the list
-                                    if (selectedCOAId) {
-                                      const res = await accountingApi.getLedgerEntries(selectedCOAId);
-                                      setLedgerEntries(res.data);
-                                    }
-                                    fetchData(); // Update COA balances in the main view
-                                  } catch (error) {
-                                    toast.error("Failed to delete journal");
+                                    const res = await accountingApi.getJournalDetails(le.journal_id);
+                                    setJournalItems(res.data.items.map((i: any) => ({
+                                      account_id: String(i.account_id),
+                                      debit: Number(i.debit),
+                                      credit: Number(i.credit)
+                                    })));
+                                    setEditingJournalId(le.journal_id);
+                                    setIsJournalOpen(true);
+                                    setIsPeriodBankDetailsOpen(false);
+                                  } catch (err) {
+                                    toast.error("Failed to load journal for editing");
                                   }
-                                }
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={async () => {
+                                  if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
+                                    try {
+                                      await accountingApi.deleteJournal(le.journal_id);
+                                      toast.success("Journal entry deleted and balances reversed");
+                                      // Refresh the list
+                                      if (selectedCOAId) {
+                                        const res = await accountingApi.getLedgerEntries(selectedCOAId);
+                                        setLedgerEntries(res.data);
+                                      }
+                                      fetchData(); // Update COA balances in the main view
+                                    } catch (error) {
+                                      toast.error("Failed to delete journal");
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

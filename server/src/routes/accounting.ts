@@ -5,9 +5,20 @@ import { authenticateToken, authorizeRole } from '../middleware/auth';
 const router = Router();
 
 // Transactions
+// Transactions (General Ledger View)
 router.get('/transactions', authenticateToken, async (req, res) => {
   try {
-    const transactions = await db('transactions').select('*');
+    const transactions = await db('journal_entries')
+      .leftJoin('ledger_entries', 'journal_entries.id', 'ledger_entries.journal_id')
+      .select(
+        'journal_entries.id',
+        'journal_entries.date',
+        'journal_entries.description',
+        'journal_entries.reference_type',
+        db.raw('SUM(ledger_entries.debit) as total_amount')
+      )
+      .groupBy('journal_entries.id')
+      .orderBy('journal_entries.date', 'desc');
     res.json(transactions);
   } catch (error: any) {
     console.error('Error fetching transactions:', error);
@@ -218,6 +229,19 @@ router.delete('/journal/:id', authenticateToken, authorizeRole(['accountant', 'a
     await trx.rollback();
     console.error('Error deleting journal:', error);
     res.status(500).json({ message: error.message || 'Error deleting journal' });
+  }
+});
+
+// Fetch full journal details for editing
+router.get('/journal/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const header = await db('journal_entries').where({ id }).first();
+    const items = await db('ledger_entries').where({ journal_id: id });
+    res.json({ ...header, items });
+  } catch (error: any) {
+    console.error('Error fetching journal details:', error);
+    res.status(500).json({ message: error.message || 'Error fetching journal details' });
   }
 });
 
