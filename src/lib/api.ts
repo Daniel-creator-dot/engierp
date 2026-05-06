@@ -85,6 +85,7 @@ export const accountingApi = {
   recordPayment: (data: any) => api.post('/accounting/payments', data),
   getCashFlow: (startDate?: string, endDate?: string) => api.get('/accounting/reports/cash-flow', { params: { startDate, endDate } }),
   reconcileBankTransaction: (id: number, matched_ledger_id?: number) => api.patch(`/accounting/bank-transactions/${id}/reconcile`, { matched_ledger_id }),
+  getLedgerEntries: (accountId: number | string, startDate?: string, endDate?: string) => api.get(`/accounting/ledger-entries/${accountId}`, { params: { startDate, endDate } }),
 };
 
 export const projectsApi = {

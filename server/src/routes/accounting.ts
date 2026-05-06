@@ -162,6 +162,36 @@ router.post('/journal', authenticateToken, authorizeRole(['accountant', 'admin']
   }
 });
 
+// Fetch ledger entries for a specific account (Drill-down)
+router.get('/ledger-entries/:accountId', authenticateToken, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let query = db('ledger_entries')
+      .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+      .where('ledger_entries.account_id', accountId)
+      .select(
+        'journal_entries.date',
+        'journal_entries.description',
+        'journal_entries.reference_type',
+        'journal_entries.reference_id',
+        'ledger_entries.debit',
+        'ledger_entries.credit'
+      )
+      .orderBy('journal_entries.date', 'desc');
+
+    if (startDate) query = query.where('journal_entries.date', '>=', startDate as string);
+    if (endDate) query = query.where('journal_entries.date', '<=', endDate as string);
+
+    const entries = await query;
+    res.json(entries);
+  } catch (error: any) {
+    console.error('Error fetching ledger entries:', error);
+    res.status(500).json({ message: error.message || 'Error fetching ledger entries' });
+  }
+});
+
 // --- ADVANCED LEDGER REPORTS ---
 
 router.get('/reports/trial-balance', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {

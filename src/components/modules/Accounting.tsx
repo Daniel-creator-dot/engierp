@@ -211,6 +211,9 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState('');
   const [periodFilterDates, setPeriodFilterDates] = useState<{ start: string, end: string } | null>(null);
   const [periodFilterAccountId, setPeriodFilterAccountId] = useState<string | null>(null);
+  const [ledgerEntries, setLedgerEntries] = useState<any[]>([]);
+  const [drillDownMode, setDrillDownMode] = useState<'bank' | 'ledger'>('bank');
+  const [selectedCOAId, setSelectedCOAId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -1072,9 +1075,11 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <TableRow 
                       key={tx.id} 
                       className="hover:bg-blue-50/20 cursor-pointer"
-                      onClick={() => {
-                        setSelectedPeriodLabel(`Bank & Cash Entries for ${tx.date}`);
+                      onClick={async () => {
+                        setSelectedPeriodLabel(`Drill-down: ${tx.description}`);
                         setPeriodFilterDates({ start: tx.date, end: tx.date });
+                        setPeriodFilterAccountId(null);
+                        setDrillDownMode('bank');
                         setIsPeriodBankDetailsOpen(true);
                       }}
                     >
@@ -1547,7 +1552,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         <TableRow 
                           key={a.id} 
                           className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
                             const matchingBank = bankAccounts.find(ba => 
                               ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
                               a.name.toLowerCase().includes(ba.account_name.toLowerCase())
@@ -1555,7 +1560,17 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                             setSelectedPeriodLabel(`Drill-down: ${a.name}`);
                             setPeriodFilterDates(null);
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode('ledger'); // Default to ledger for COA
                             setIsPeriodBankDetailsOpen(true);
+                            
+                            // Fetch ledger entries
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="font-mono font-bold text-blue-600">{a.code}</TableCell>
@@ -1600,15 +1615,37 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
       <Dialog open={isPeriodBankDetailsOpen} onOpenChange={setIsPeriodBankDetailsOpen}>
         <DialogContent className="max-w-4xl rounded-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
           <DialogHeader className="p-8 bg-blue-600 text-white rounded-t-2xl">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/10 rounded-2xl">
-                <Calculator className="w-6 h-6 text-white" />
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white/10 rounded-2xl">
+                  <Calculator className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-black">Account Drill-Down</DialogTitle>
+                  <DialogDescription className="text-blue-100 font-bold uppercase tracking-widest text-[10px] mt-1 opacity-80">
+                    {selectedPeriodLabel}
+                  </DialogDescription>
+                </div>
               </div>
-              <div>
-                <DialogTitle className="text-2xl font-black">Bank & Cash Drill-Down</DialogTitle>
-                <DialogDescription className="text-blue-100 font-bold uppercase tracking-widest text-[10px] mt-1 opacity-80">
-                  {selectedPeriodLabel}
-                </DialogDescription>
+              <div className="flex gap-1 bg-black/20 p-1 rounded-xl">
+                <button 
+                  onClick={() => setDrillDownMode('bank')}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${drillDownMode === 'bank' ? 'bg-white text-blue-600 shadow-sm' : 'text-white/60 hover:text-white'}`}
+                >
+                  Bank Feed
+                </button>
+                <button 
+                  onClick={async () => {
+                    setDrillDownMode('ledger');
+                    if (selectedCOAId) {
+                      const res = await accountingApi.getLedgerEntries(selectedCOAId);
+                      setLedgerEntries(res.data);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${drillDownMode === 'ledger' ? 'bg-white text-blue-600 shadow-sm' : 'text-white/60 hover:text-white'}`}
+                >
+                  Ledger Entries
+                </button>
               </div>
             </div>
           </DialogHeader>
@@ -1616,63 +1653,89 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
           <div className="flex-1 overflow-y-auto p-8">
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader>
-                  <TableRow className="bg-[#F5F5F5]/50 border-none">
-                    <TableHead className="font-bold text-[#141414]">Date</TableHead>
-                    <TableHead className="font-bold text-[#141414]">Description</TableHead>
-                    <TableHead className="font-bold text-[#141414]">Account</TableHead>
-                    <TableHead className="text-right font-bold text-[#141414]">Amount</TableHead>
-                    <TableHead className="font-bold text-[#141414]">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bankTx
-                    .filter(tx => {
-                      let dateMatch = true;
-                      if (periodFilterDates) {
-                        const txDate = tx.date.split('T')[0];
-                        dateMatch = txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
-                      }
-                      
-                      let accountMatch = true;
-                      if (periodFilterAccountId) {
-                        accountMatch = String(tx.bank_account_id) === String(periodFilterAccountId);
-                      }
-                      
-                      return dateMatch && accountMatch;
-                    })
-                    .map((tx, idx) => (
-                      <TableRow key={idx} className="hover:bg-blue-50/20">
-                        <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{new Date(tx.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
-                        <TableCell className="text-xs text-[#8E9299]">{tx.bank_name}</TableCell>
-                        <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>
-                          {tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>
-                            {tx.status}
-                          </Badge>
-                        </TableCell>
+                {drillDownMode === 'bank' ? (
+                  <>
+                    <TableHeader>
+                      <TableRow className="bg-[#F5F5F5]/50 border-none">
+                        <TableHead className="font-bold text-[#141414]">Date</TableHead>
+                        <TableHead className="font-bold text-[#141414]">Description</TableHead>
+                        <TableHead className="font-bold text-[#141414]">Account</TableHead>
+                        <TableHead className="text-right font-bold text-[#141414]">Amount</TableHead>
+                        <TableHead className="font-bold text-[#141414]">Status</TableHead>
                       </TableRow>
-                    ))}
-                  {bankTx.filter(tx => {
-                    if (!periodFilterDates) return true;
-                    const txDate = tx.date.split('T')[0];
-                    return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
-                  }).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-24">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="p-4 bg-[#F5F5F5] rounded-full">
-                            <AlertCircle className="w-8 h-8 text-[#8E9299] opacity-20" />
-                          </div>
-                          <p className="text-sm font-bold text-[#8E9299] uppercase tracking-widest">No bank/cash entries found for this period</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
+                    </TableHeader>
+                    <TableBody>
+                      {bankTx
+                        .filter(tx => {
+                          let dateMatch = true;
+                          if (periodFilterDates) {
+                            const txDate = tx.date.split('T')[0];
+                            dateMatch = txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                          }
+                          
+                          let accountMatch = true;
+                          if (periodFilterAccountId) {
+                            accountMatch = String(tx.bank_account_id) === String(periodFilterAccountId);
+                          }
+                          
+                          return dateMatch && accountMatch;
+                        })
+                        .map((tx, idx) => (
+                          <TableRow key={idx} className="hover:bg-blue-50/20">
+                            <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{new Date(tx.date).toLocaleDateString()}</TableCell>
+                            <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
+                            <TableCell className="text-xs text-[#8E9299]">{tx.bank_name}</TableCell>
+                            <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>
+                              {tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>
+                                {tx.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      {bankTx.filter(tx => {
+                        let dm = true;
+                        if (periodFilterDates) {
+                          const txDate = tx.date.split('T')[0];
+                          dm = txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                        }
+                        let am = true;
+                        if (periodFilterAccountId) am = String(tx.bank_account_id) === String(periodFilterAccountId);
+                        return dm && am;
+                      }).length === 0 && (
+                        <TableRow><TableCell colSpan={5} className="text-center py-24 text-[#8E9299]">No bank feed records found.</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </>
+                ) : (
+                  <>
+                    <TableHeader>
+                      <TableRow className="bg-[#F5F5F5]/50 border-none">
+                        <TableHead className="font-bold text-[#141414]">Date</TableHead>
+                        <TableHead className="font-bold text-[#141414]">Description</TableHead>
+                        <TableHead className="font-bold text-[#141414]">Type</TableHead>
+                        <TableHead className="text-right font-bold text-[#141414]">Debit</TableHead>
+                        <TableHead className="text-right font-bold text-[#141414]">Credit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ledgerEntries.map((le, idx) => (
+                        <TableRow key={idx} className="hover:bg-blue-50/20">
+                          <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{new Date(le.date).toLocaleDateString()}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{le.description}</TableCell>
+                          <TableCell className="text-[10px] uppercase font-black text-blue-600 tracking-widest">{le.reference_type}</TableCell>
+                          <TableCell className="text-right font-mono text-green-600 font-bold">{le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '-'}</TableCell>
+                          <TableCell className="text-right font-mono text-red-600 font-bold">{le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {ledgerEntries.length === 0 && (
+                        <TableRow><TableCell colSpan={5} className="text-center py-24 text-[#8E9299]">No journal entries found in the ledger for this account.</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </>
+                )}
               </Table>
             </div>
           </div>
@@ -1680,18 +1743,20 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
           <DialogFooter className="p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] rounded-b-2xl">
             <div className="flex justify-between items-center w-full">
               <div className="flex items-center gap-4 text-xs font-bold text-[#8E9299] uppercase tracking-widest">
-                <span>Summary View</span>
+                <span>{drillDownMode === 'bank' ? 'Bank Statement View' : 'General Ledger View'}</span>
                 <div className="w-1 h-1 bg-[#8E9299] rounded-full"></div>
-                <span className="text-blue-600">{bankTx.filter(tx => {
-                  if (!periodFilterDates) return true;
-                  const txDate = tx.date.split('T')[0];
-                  return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
-                }).length} Entries Found</span>
+                <span className="text-blue-600">
+                  {drillDownMode === 'bank' ? bankTx.filter(tx => {
+                    let dm = true; if (periodFilterDates) { const txd = tx.date.split('T')[0]; dm = txd >= periodFilterDates.start && txd <= periodFilterDates.end; }
+                    let am = true; if (periodFilterAccountId) am = String(tx.bank_account_id) === String(periodFilterAccountId);
+                    return dm && am;
+                  }).length : ledgerEntries.length} Records
+                </span>
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" className="rounded-xl font-bold border-[#E4E3E0] h-11 px-6" onClick={() => setIsPeriodBankDetailsOpen(false)}>DISMISS</Button>
                 <Button className="bg-[#141414] text-white rounded-xl font-bold gap-2 h-11 px-6 shadow-lg shadow-[#141414]/20">
-                  <Printer className="w-4 h-4" /> EXPORT DRILL-DOWN
+                  <Printer className="w-4 h-4" /> EXPORT
                 </Button>
               </div>
             </div>
