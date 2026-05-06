@@ -630,7 +630,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {bankTx.map((tx, idx) => (
                     <TableRow key={idx} className="hover:bg-blue-50/20">
@@ -639,6 +639,26 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <TableCell className="text-xs">{tx.bank_name}</TableCell>
                       <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
                       <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-red-500 hover:text-red-700"
+                          onClick={async () => {
+                            if (window.confirm("Delete this bank transaction from the feed?")) {
+                              try {
+                                await accountingApi.deleteBankTransaction(tx.id);
+                                toast.success("Bank transaction removed");
+                                fetchData();
+                              } catch (err) {
+                                toast.error("Failed to delete transaction");
+                              }
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
@@ -1729,6 +1749,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableHead className="font-bold text-[#141414]">Account</TableHead>
                         <TableHead className="text-right font-bold text-[#141414]">Amount</TableHead>
                         <TableHead className="font-bold text-[#141414]">Status</TableHead>
+                        <TableHead className="text-right font-bold text-[#141414]">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1759,6 +1780,29 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               <Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>
                                 {tx.status}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                                  onClick={async () => {
+                                    if (window.confirm("Delete this bank transaction from the feed?")) {
+                                      try {
+                                        await accountingApi.deleteBankTransaction(tx.id);
+                                        toast.success("Bank transaction removed");
+                                        // Refresh the specific list if needed, or just fetchData
+                                        fetchData();
+                                      } catch (err) {
+                                        toast.error("Failed to delete transaction");
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}

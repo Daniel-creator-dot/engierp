@@ -88,6 +88,7 @@ export const accountingApi = {
   getLedgerEntries: (accountId: number | string, startDate?: string, endDate?: string) => api.get(`/accounting/ledger-entries/${accountId}`, { params: { startDate, endDate } }),
   deleteJournal: (id: number | string) => api.delete(`/accounting/journal/${id}`),
   getJournalDetails: (id: number | string) => api.get(`/accounting/journal/${id}`),
+  deleteBankTransaction: (id: number | string) => api.delete(`/accounting/bank-transactions/${id}`),
 };
 
 export const projectsApi = {

@@ -535,6 +535,17 @@ router.patch('/bank-transactions/:id/reconcile', authenticateToken, authorizeRol
   }
 });
 
+router.delete('/bank-transactions/:id', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db('bank_transactions').where({ id }).del();
+    res.json({ message: 'Bank transaction deleted' });
+  } catch (error: any) {
+    console.error('Error deleting bank transaction:', error);
+    res.status(500).json({ message: error.message || 'Error deleting bank transaction' });
+  }
+});
+
 // Vendor Bills (AP)
 router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   try {
