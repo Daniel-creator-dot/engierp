@@ -1718,6 +1718,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                         <TableHead className="font-bold text-[#141414]">Type</TableHead>
                         <TableHead className="text-right font-bold text-[#141414]">Debit</TableHead>
                         <TableHead className="text-right font-bold text-[#141414]">Credit</TableHead>
+                        <TableHead className="text-right font-bold text-[#141414]">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1728,6 +1729,31 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                           <TableCell className="text-[10px] uppercase font-black text-blue-600 tracking-widest">{le.reference_type}</TableCell>
                           <TableCell className="text-right font-mono text-green-600 font-bold">{le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '-'}</TableCell>
                           <TableCell className="text-right font-mono text-red-600 font-bold">{le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '-'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={async () => {
+                                if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
+                                  try {
+                                    await accountingApi.deleteJournal(le.journal_id);
+                                    toast.success("Journal entry deleted and balances reversed");
+                                    // Refresh the list
+                                    if (selectedCOAId) {
+                                      const res = await accountingApi.getLedgerEntries(selectedCOAId);
+                                      setLedgerEntries(res.data);
+                                    }
+                                    fetchData(); // Update COA balances in the main view
+                                  } catch (error) {
+                                    toast.error("Failed to delete journal");
+                                  }
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                       {ledgerEntries.length === 0 && (

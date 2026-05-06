@@ -172,6 +172,7 @@ router.get('/ledger-entries/:accountId', authenticateToken, async (req, res) => 
       .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
       .where('ledger_entries.account_id', accountId)
       .select(
+        'ledger_entries.journal_id',
         'journal_entries.date',
         'journal_entries.description',
         'journal_entries.reference_type',
@@ -189,6 +190,34 @@ router.get('/ledger-entries/:accountId', authenticateToken, async (req, res) => 
   } catch (error: any) {
     console.error('Error fetching ledger entries:', error);
     res.status(500).json({ message: error.message || 'Error fetching ledger entries' });
+  }
+});
+
+router.delete('/journal/:id', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  const { id } = req.params;
+  const trx = await db.transaction();
+  try {
+    // 1. Get ledger entries to reverse balances
+    const entries = await trx('ledger_entries').where({ journal_id: id });
+    
+    // 2. Reverse impact on COA
+    for (const entry of entries) {
+      const impact = Number(entry.debit || 0) - Number(entry.credit || 0);
+      await trx('chart_of_accounts')
+        .where({ id: entry.account_id })
+        .decrement('balance', impact);
+    }
+    
+    // 3. Delete records
+    await trx('ledger_entries').where({ journal_id: id }).del();
+    await trx('journal_entries').where({ id }).del();
+    
+    await trx.commit();
+    res.json({ message: 'Journal entry deleted and balances reversed' });
+  } catch (error: any) {
+    await trx.rollback();
+    console.error('Error deleting journal:', error);
+    res.status(500).json({ message: error.message || 'Error deleting journal' });
   }
 });
 
