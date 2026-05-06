@@ -89,6 +89,7 @@ export const accountingApi = {
   deleteJournal: (id: number | string) => api.delete(`/accounting/journal/${id}`),
   getJournalDetails: (id: number | string) => api.get(`/accounting/journal/${id}`),
   deleteBankTransaction: (id: number | string) => api.delete(`/accounting/bank-transactions/${id}`),
+  updateBankTransaction: (id: number | string, data: any) => api.patch(`/accounting/bank-transactions/${id}`, data),
 };
 
 export const projectsApi = {

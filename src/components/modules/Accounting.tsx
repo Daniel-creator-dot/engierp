@@ -215,6 +215,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [drillDownMode, setDrillDownMode] = useState<'bank' | 'ledger'>('bank');
   const [selectedCOAId, setSelectedCOAId] = useState<string | null>(null);
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+  const [isEditBankTxOpen, setIsEditBankTxOpen] = useState(false);
+  const [selectedBankTx, setSelectedBankTx] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -640,24 +642,53 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
                       <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-red-500 hover:text-red-700"
-                          onClick={async () => {
-                            if (window.confirm("Delete this bank transaction from the feed?")) {
-                              try {
-                                await accountingApi.deleteBankTransaction(tx.id);
-                                toast.success("Bank transaction removed");
-                                fetchData();
-                              } catch (err) {
-                                toast.error("Failed to delete transaction");
+                        <div className="flex justify-end gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                            onClick={async () => {
+                              if (tx.status === 'Reconciled' && tx.matched_ledger_id) {
+                                try {
+                                  // Find the journal_id from the ledger entry
+                                  const journalDetails = await accountingApi.getJournalDetails(tx.matched_ledger_id);
+                                  setJournalItems(journalDetails.data.items.map((i: any) => ({
+                                    account_id: String(i.account_id),
+                                    debit: Number(i.debit),
+                                    credit: Number(i.credit)
+                                  })));
+                                  setEditingJournalId(journalDetails.data.id);
+                                  setIsJournalOpen(true);
+                                } catch (err) {
+                                  toast.error("Failed to load linked journal");
+                                }
+                              } else {
+                                setSelectedBankTx(tx);
+                                setIsEditBankTxOpen(true);
                               }
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            onClick={async () => {
+                              if (window.confirm("Delete this bank transaction from the feed?")) {
+                                try {
+                                  await accountingApi.deleteBankTransaction(tx.id);
+                                  toast.success("Bank transaction removed");
+                                  fetchData();
+                                } catch (err) {
+                                  toast.error("Failed to delete transaction");
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1786,6 +1817,34 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                                  onClick={async () => {
+                                    if (tx.status === 'Reconciled' && tx.matched_ledger_id) {
+                                      try {
+                                        const journalDetails = await accountingApi.getJournalDetails(tx.matched_ledger_id);
+                                        setJournalItems(journalDetails.data.items.map((i: any) => ({
+                                          account_id: String(i.account_id),
+                                          debit: Number(i.debit),
+                                          credit: Number(i.credit)
+                                        })));
+                                        setEditingJournalId(journalDetails.data.id);
+                                        setIsJournalOpen(true);
+                                        setIsPeriodBankDetailsOpen(false);
+                                      } catch (err) {
+                                        toast.error("Failed to load linked journal");
+                                      }
+                                    } else {
+                                      setSelectedBankTx(tx);
+                                      setIsEditBankTxOpen(true);
+                                      setIsPeriodBankDetailsOpen(false);
+                                    }
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
                                   className="h-8 w-8 text-red-500 hover:text-red-700"
                                   onClick={async () => {
                                     if (window.confirm("Delete this bank transaction from the feed?")) {
@@ -1922,6 +1981,64 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               </div>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Bank Transaction Modal */}
+      <Dialog open={isEditBankTxOpen} onOpenChange={setIsEditBankTxOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!selectedBankTx) return;
+            const fd = new FormData(e.target as HTMLFormElement);
+            try {
+              await accountingApi.updateBankTransaction(selectedBankTx.id, {
+                date: fd.get('date'),
+                description: fd.get('description'),
+                amount: Number(fd.get('amount')),
+                type: fd.get('type')
+              });
+              toast.success('Bank transaction updated');
+              setIsEditBankTxOpen(false);
+              fetchData();
+            } catch (error) {
+              toast.error('Failed to update bank transaction');
+            }
+          }}>
+            <DialogHeader>
+              <DialogTitle>Edit Bank Transaction</DialogTitle>
+              <DialogDescription>Modify the imported bank feed details.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input name="date" type="date" defaultValue={selectedBankTx?.date?.split('T')[0]} required className="bg-[#F5F5F5] border-none" />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input name="description" defaultValue={selectedBankTx?.description} required className="bg-[#F5F5F5] border-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Amount</Label>
+                  <Input name="amount" type="number" step="0.01" defaultValue={selectedBankTx?.amount} required className="bg-[#F5F5F5] border-none" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Select name="type" defaultValue={selectedBankTx?.type}>
+                    <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Credit">Credit (Deposit)</SelectItem>
+                      <SelectItem value="Debit">Debit (Withdrawal)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full bg-[#141414] text-white font-bold h-11">UPDATE FEED ENTRY</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

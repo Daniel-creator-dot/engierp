@@ -546,6 +546,18 @@ router.delete('/bank-transactions/:id', authenticateToken, authorizeRole(['accou
   }
 });
 
+router.patch('/bank-transactions/:id', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    await db('bank_transactions').where({ id }).update(data);
+    res.json({ message: 'Bank transaction updated' });
+  } catch (error: any) {
+    console.error('Error updating bank transaction:', error);
+    res.status(500).json({ message: error.message || 'Error updating bank transaction' });
+  }
+});
+
 // Vendor Bills (AP)
 router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   try {
