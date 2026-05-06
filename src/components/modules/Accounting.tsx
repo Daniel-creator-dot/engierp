@@ -207,6 +207,10 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
     { account_id: '', debit: 0, credit: 0 }
   ]);
 
+  const [isPeriodBankDetailsOpen, setIsPeriodBankDetailsOpen] = useState(false);
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState('');
+  const [periodFilterDates, setPeriodFilterDates] = useState<{ start: string, end: string } | null>(null);
+
   useEffect(() => {
     fetchData();
   }, [activeSub, reportStartDate, reportEndDate]);
@@ -243,26 +247,30 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         setSuppliers(supRes.data);
         setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-transactions') {
-        const [txRes, coaRes] = await Promise.all([
+        const [txRes, coaRes, btx] = await Promise.all([
           accountingApi.getTransactions(),
-          accountingApi.getCOA()
+          accountingApi.getCOA(),
+          accountingApi.getBankTransactions()
         ]);
         setTransactions(txRes.data);
         setCOA(coaRes.data);
+        setBankTx(btx.data);
       } else if (activeSub === 'accounting-coa') {
         const coaRes = await accountingApi.getCOA();
         setCOA(coaRes.data);
       } else if (activeSub === 'accounting-reports') {
-        const [tb, inc, bs, mgmt] = await Promise.all([
+        const [tb, inc, bs, mgmt, btx] = await Promise.all([
           accountingApi.getTrialBalance(reportStartDate, reportEndDate),
           accountingApi.getIncomeStatement(reportStartDate, reportEndDate),
           accountingApi.getBalanceSheet(reportEndDate),
-          accountingApi.getManagementAccounts(reportStartDate, reportEndDate)
+          accountingApi.getManagementAccounts(reportStartDate, reportEndDate),
+          accountingApi.getBankTransactions()
         ]);
         setTrialBalance(tb.data);
         setIncomeStatement(inc.data);
         setBalanceSheet(bs.data);
         setManagementAccounts(mgmt.data);
+        setBankTx(btx.data);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load accounting data');
@@ -1047,7 +1055,15 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {transactions.map((tx) => (
-                    <TableRow key={tx.id} className="hover:bg-blue-50/20">
+                    <TableRow 
+                      key={tx.id} 
+                      className="hover:bg-blue-50/20 cursor-pointer"
+                      onClick={() => {
+                        setSelectedPeriodLabel(`Bank & Cash Entries for ${tx.date}`);
+                        setPeriodFilterDates({ start: tx.date, end: tx.date });
+                        setIsPeriodBankDetailsOpen(true);
+                      }}
+                    >
                       <TableCell className="text-[#8E9299] font-mono text-xs">{tx.date}</TableCell>
                       <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
                       <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414]">{tx.category}</Badge></TableCell>
@@ -1129,13 +1145,35 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <TableBody>
                       <TableRow className="bg-green-50/30 hover:bg-green-50/30"><TableCell colSpan={2} className="font-bold text-green-700">Revenue</TableCell></TableRow>
                       {incomeStatement.filter(a => a.type === 'Income').map(a => (
-                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow 
+                          key={a.id} 
+                          className="hover:bg-green-50/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
+                            setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                        </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{currSym}{incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Operating Expenses</TableCell></TableRow>
                       {incomeStatement.filter(a => a.type === 'Expense').map(a => (
-                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow 
+                          key={a.id} 
+                          className="hover:bg-red-50/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
+                            setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell>
+                        </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
 
@@ -1163,19 +1201,52 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                     <TableBody>
                       <TableRow className="bg-blue-50/30 hover:bg-blue-50/30"><TableCell colSpan={2} className="font-bold text-blue-700">Assets</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Asset').map((a: any) => (
-                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow 
+                          key={a.id} 
+                          className="hover:bg-blue-50/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
+                            setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell>
+                        </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Liabilities</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Liability').map((a: any) => (
-                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow 
+                          key={a.id} 
+                          className="hover:bg-red-50/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
+                            setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                        </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
 
                       <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Equity</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Equity').map((a: any) => (
-                        <TableRow key={a.id}><TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell><TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell></TableRow>
+                        <TableRow 
+                          key={a.id} 
+                          className="hover:bg-purple-50/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
+                            setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setIsPeriodBankDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                        </TableRow>
                       ))}
                       <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{currSym}{balanceSheet.retainedEarnings.toLocaleString()}</TableCell></TableRow>
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
@@ -1254,7 +1325,15 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   </TableHeader>
                   <TableBody>
                     {trialBalance.map(a => (
-                      <TableRow key={a.id} className="hover:bg-[#F5F5F5]/50">
+                      <TableRow 
+                        key={a.id} 
+                        className="hover:bg-[#F5F5F5]/50 cursor-pointer"
+                        onClick={() => {
+                          setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
+                          setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                          setIsPeriodBankDetailsOpen(true);
+                        }}
+                      >
                         <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
                         <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
                         <TableCell className="text-right font-mono text-[#8E9299]">{Number(a.total_debit) > 0 ? `${currSym}${Number(a.total_debit).toLocaleString()}` : '-'}</TableCell>
@@ -1489,6 +1568,100 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
         <p className="text-[#8E9299] text-lg mt-1 font-medium">Enterprise Treasury, AP/AR, and Ledger Configuration.</p>
       </div>
       {renderContent()}
+
+      {/* Drill-down Modal */}
+      <Dialog open={isPeriodBankDetailsOpen} onOpenChange={setIsPeriodBankDetailsOpen}>
+        <DialogContent className="max-w-4xl rounded-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
+          <DialogHeader className="p-8 bg-blue-600 text-white rounded-t-2xl">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/10 rounded-2xl">
+                <Calculator className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-2xl font-black">Bank & Cash Drill-Down</DialogTitle>
+                <DialogDescription className="text-blue-100 font-bold uppercase tracking-widest text-[10px] mt-1 opacity-80">
+                  {selectedPeriodLabel}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <Table className="bg-white">
+                <TableHeader>
+                  <TableRow className="bg-[#F5F5F5]/50 border-none">
+                    <TableHead className="font-bold text-[#141414]">Date</TableHead>
+                    <TableHead className="font-bold text-[#141414]">Description</TableHead>
+                    <TableHead className="font-bold text-[#141414]">Account</TableHead>
+                    <TableHead className="text-right font-bold text-[#141414]">Amount</TableHead>
+                    <TableHead className="font-bold text-[#141414]">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bankTx
+                    .filter(tx => {
+                      if (!periodFilterDates) return true;
+                      const txDate = tx.date.split('T')[0];
+                      return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                    })
+                    .map((tx, idx) => (
+                      <TableRow key={idx} className="hover:bg-blue-50/20">
+                        <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{new Date(tx.date).toLocaleDateString()}</TableCell>
+                        <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
+                        <TableCell className="text-xs text-[#8E9299]">{tx.bank_name}</TableCell>
+                        <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>
+                          {tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>
+                            {tx.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {bankTx.filter(tx => {
+                    if (!periodFilterDates) return true;
+                    const txDate = tx.date.split('T')[0];
+                    return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                  }).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-24">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="p-4 bg-[#F5F5F5] rounded-full">
+                            <AlertCircle className="w-8 h-8 text-[#8E9299] opacity-20" />
+                          </div>
+                          <p className="text-sm font-bold text-[#8E9299] uppercase tracking-widest">No bank/cash entries found for this period</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] rounded-b-2xl">
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center gap-4 text-xs font-bold text-[#8E9299] uppercase tracking-widest">
+                <span>Summary View</span>
+                <div className="w-1 h-1 bg-[#8E9299] rounded-full"></div>
+                <span className="text-blue-600">{bankTx.filter(tx => {
+                  if (!periodFilterDates) return true;
+                  const txDate = tx.date.split('T')[0];
+                  return txDate >= periodFilterDates.start && txDate <= periodFilterDates.end;
+                }).length} Entries Found</span>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" className="rounded-xl font-bold border-[#E4E3E0] h-11 px-6" onClick={() => setIsPeriodBankDetailsOpen(false)}>DISMISS</Button>
+                <Button className="bg-[#141414] text-white rounded-xl font-bold gap-2 h-11 px-6 shadow-lg shadow-[#141414]/20">
+                  <Printer className="w-4 h-4" /> EXPORT DRILL-DOWN
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
