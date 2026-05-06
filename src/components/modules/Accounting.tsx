@@ -160,7 +160,7 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
   );
 };
 
-export default function Accounting({ activeSub = 'accounting-transactions' }: AccountingProps) {
+export default function Accounting({ activeSub = 'accounting-transactions', user }: { activeSub?: string, user?: any }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -1086,7 +1086,7 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {transactions.map((tx: any) => (
                     <TableRow 
@@ -1111,6 +1111,49 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                       <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
                       <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{tx.reference_type}</Badge></TableCell>
                       <TableCell className="text-right font-black text-[#141414]">{currSym}{Number(tx.total_amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={async () => {
+                              try {
+                                const res = await accountingApi.getJournalDetails(tx.id);
+                                setJournalItems(res.data.items.map((i: any) => ({
+                                  account_id: String(i.account_id),
+                                  debit: Number(i.debit),
+                                  credit: Number(i.credit)
+                                })));
+                                setEditingJournalId(tx.id);
+                                setIsJournalOpen(true);
+                              } catch (err) {
+                                toast.error("Failed to load journal for editing");
+                              }
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={async () => {
+                              if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
+                                try {
+                                  await accountingApi.deleteJournal(tx.id);
+                                  toast.success("Journal entry deleted and balances reversed");
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error("Failed to delete journal");
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
