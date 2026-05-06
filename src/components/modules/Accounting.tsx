@@ -594,10 +594,22 @@ export default function Accounting({ activeSub = 'accounting-transactions' }: Ac
                   key={b.id} 
                   className="border-none shadow-sm rounded-2xl bg-gradient-to-br from-[#141414] to-slate-900 text-white overflow-hidden cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
                   onClick={() => {
+                    const matchingCOA = coa.find(a => 
+                      a.name.toLowerCase().includes(b.account_name.toLowerCase()) || 
+                      b.account_name.toLowerCase().includes(a.name.toLowerCase())
+                    );
                     setSelectedPeriodLabel(`Statement for ${b.account_name} (${b.bank_name})`);
                     setPeriodFilterDates(null);
                     setPeriodFilterAccountId(String(b.id));
+                    setSelectedCOAId(matchingCOA ? String(matchingCOA.id) : null);
+                    setDrillDownMode('ledger');
                     setIsPeriodBankDetailsOpen(true);
+
+                    if (matchingCOA) {
+                      accountingApi.getLedgerEntries(matchingCOA.id).then(res => setLedgerEntries(res.data));
+                    } else {
+                      setLedgerEntries([]);
+                    }
                   }}
                 >
                   <CardHeader className="pb-2">
