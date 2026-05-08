@@ -46,6 +46,7 @@ import {
   settingsApi
 } from '../../lib/api';
 import { formatCurrency, getCurrencySymbol } from '../../lib/currency';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>({
@@ -66,7 +67,7 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [projRes, txRes, empRes, reportRes, assetRes, mgmtRes, settingsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         projectsApi.getProjects(),
         accountingApi.getTransactions(),
         hrApi.getEmployees(),
@@ -76,19 +77,32 @@ export default function Dashboard() {
         settingsApi.getSettings()
       ]);
       
-      const currencySetting = settingsRes.data.find((s: any) => s.key === 'currency');
-      if (currencySetting) setCurrency(currencySetting.value);
+      const [projRes, txRes, empRes, reportRes, assetRes, mgmtRes, settingsRes] = results;
 
-      setData({
-        projects: projRes.data,
-        transactions: txRes.data,
-        employees: empRes.data,
-        reports: reportRes.data,
-        equipment: assetRes.data,
-        managementAccounts: mgmtRes.data
-      });
+      let newData: any = { ...data };
+
+      if (projRes.status === 'fulfilled') newData.projects = projRes.value.data;
+      if (txRes.status === 'fulfilled') newData.transactions = txRes.value.data;
+      if (empRes.status === 'fulfilled') newData.employees = empRes.value.data;
+      if (reportRes.status === 'fulfilled') newData.reports = reportRes.value.data;
+      if (assetRes.status === 'fulfilled') newData.equipment = assetRes.value.data;
+      if (mgmtRes.status === 'fulfilled') newData.managementAccounts = mgmtRes.value.data;
+      
+      if (settingsRes.status === 'fulfilled') {
+        const currencySetting = settingsRes.value.data.find((s: any) => s.key === 'currency');
+        if (currencySetting) setCurrency(currencySetting.value);
+      }
+
+      setData(newData);
+
+      // Notify user of partial failures
+      const failures = results.filter(r => r.status === 'rejected');
+      if (failures.length > 0) {
+        console.warn(`${failures.length} dashboard modules failed to load.`);
+      }
     } catch (error) {
-      console.error('Failed to fetch dashboard data');
+      console.error('Critical failure fetching dashboard data');
+      toast.error("Failed to sync dashboard with database");
     } finally {
       setIsLoading(false);
     }
@@ -186,7 +200,7 @@ export default function Dashboard() {
           <CardContent className="p-8 pt-10">
             <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.transactions.slice(0, 10).reverse().map((t:any) => ({ name: t.date, amount: t.amount }))}>
+                <AreaChart data={data.transactions.slice(0, 10).reverse().map((t:any) => ({ name: t.date, amount: Number(t.total_amount || 0) }))}>
                   <defs>
                     <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>

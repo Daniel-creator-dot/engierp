@@ -429,6 +429,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       code: formData.get('code'),
       name: formData.get('name'),
       type: formData.get('type'),
+      balance: Number(formData.get('balance') || 0)
     };
     try {
       await accountingApi.updateCOA(selectedTarget.id, data);
@@ -1649,6 +1650,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-xs uppercase text-[#8E9299]">Adjust Balance</Label>
+                          <Input name="balance" type="number" step="0.01" defaultValue={selectedTarget?.balance} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                          <p className="text-[10px] text-blue-600 font-medium">Note: Manual balance adjustments should be done with caution in a ledger-based system.</p>
+                        </div>
                       </div>
                       <DialogFooter className="p-8 bg-[#F5F5F5]/30 border-t border-[#F5F5F5]">
                         <Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold shadow-lg shadow-blue-500/20">SAVE CHANGES</Button>
@@ -1724,6 +1730,28 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <TableCell className={`text-right font-black ${Number(a.balance) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{currSym}{Number(a.balance).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" 
+                                onClick={async (e) => { 
+                                  e.stopPropagation(); 
+                                  setSelectedPeriodLabel(`Drill-down: ${a.name}`);
+                                  setPeriodFilterDates(null);
+                                  setSelectedCOAId(String(a.id));
+                                  setDrillDownMode('ledger');
+                                  setIsPeriodBankDetailsOpen(true);
+                                  try {
+                                    const res = await accountingApi.getLedgerEntries(a.id);
+                                    setLedgerEntries(res.data);
+                                  } catch (error) {
+                                    toast.error("Failed to load ledger details");
+                                  }
+                                }}
+                                title="View Ledger"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); setSelectedTarget(a); setIsEditAccountOpen(true); }}>
                                 <Edit className="h-4 w-4" />
                               </Button>
