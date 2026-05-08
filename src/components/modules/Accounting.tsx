@@ -1188,6 +1188,30 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
+                          {tx.reference_type && onNavigate && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => {
+                                const type = String(tx.reference_type).toLowerCase();
+                                let target: any = null;
+                                if (type === 'bill') target = 'accounting-ap';
+                                if (type === 'invoice') target = 'accounting-ar';
+                                if (type === 'payroll') target = 'hr-payroll';
+                                if (type === 'payment') target = 'accounting-bank';
+                                
+                                if (target) {
+                                  onNavigate(target);
+                                } else {
+                                  toast.info(`Source: ${tx.reference_type || 'Internal'}`);
+                                }
+                              }}
+                              title={`View Source: ${tx.reference_type}`}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -1926,7 +1950,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              {le.reference_type && le.reference_type !== 'manual' && onNavigate && (
+                              {le.reference_type && onNavigate && (
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
@@ -1937,17 +1961,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                     if (type === 'bill') target = 'accounting-ap';
                                     if (type === 'invoice') target = 'accounting-ar';
                                     if (type === 'payroll') target = 'hr-payroll';
-                                    if (type === 'payment') {
-                                       // Payments usually go to bank or the target, let's go to bank for now
-                                       target = 'accounting-bank';
-                                    }
+                                    if (type === 'payment') target = 'accounting-bank';
                                     
                                     if (target) {
                                       onNavigate(target);
                                       setIsPeriodBankDetailsOpen(false);
+                                    } else {
+                                      toast.info(`Source: ${le.reference_type || 'Internal'}`);
                                     }
                                   }}
-                                  title={`View Source ${le.reference_type}`}
+                                  title={`View Source: ${le.reference_type}`}
                                 >
                                   <ExternalLink className="w-4 h-4" />
                                 </Button>
