@@ -191,7 +191,7 @@ export default function App() {
 
   const renderModule = () => {
     if (activeModule === 'dashboard') return <Dashboard />;
-    if (activeModule.startsWith('accounting')) return <Accounting activeSub={activeModule} user={user} />;
+    if (activeModule.startsWith('accounting')) return <Accounting activeSub={activeModule} user={user} onNavigate={setActiveModule} />;
     if (activeModule.startsWith('hr')) return <HR activeSub={activeModule} />;
     if (activeModule.startsWith('projects')) return <Projects activeSub={activeModule} />;
     if (activeModule.startsWith('procurement')) return <Procurement activeSub={activeModule} />;

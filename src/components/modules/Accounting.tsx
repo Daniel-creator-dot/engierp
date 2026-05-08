@@ -18,7 +18,8 @@ import {
   Edit,
   Trash2,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  ExternalLink
 } from 'lucide-react';
 import {
   Card,
@@ -63,6 +64,8 @@ import { Transaction, Invoice } from '../../types';
 
 interface AccountingProps {
   activeSub?: string;
+  user?: any;
+  onNavigate?: (module: any) => void;
 }
 
 const typeColors: Record<string, string> = {
@@ -160,7 +163,7 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
   );
 };
 
-export default function Accounting({ activeSub = 'accounting-transactions', user }: { activeSub?: string, user?: any }) {
+export default function Accounting({ activeSub = 'accounting-transactions', user, onNavigate }: AccountingProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -1923,6 +1926,32 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
+                              {le.reference_type && le.reference_type !== 'manual' && onNavigate && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  onClick={() => {
+                                    const type = String(le.reference_type).toLowerCase();
+                                    let target: any = null;
+                                    if (type === 'bill') target = 'accounting-ap';
+                                    if (type === 'invoice') target = 'accounting-ar';
+                                    if (type === 'payroll') target = 'hr-payroll';
+                                    if (type === 'payment') {
+                                       // Payments usually go to bank or the target, let's go to bank for now
+                                       target = 'accounting-bank';
+                                    }
+                                    
+                                    if (target) {
+                                      onNavigate(target);
+                                      setIsPeriodBankDetailsOpen(false);
+                                    }
+                                  }}
+                                  title={`View Source ${le.reference_type}`}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </Button>
+                              )}
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
