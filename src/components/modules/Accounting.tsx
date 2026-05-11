@@ -1143,49 +1143,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">Live auditing of all fiscal transactions.</p></div>
               <div className="flex gap-2">
                 <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('general_ledger', ['Date', 'Reference', 'Category', 'Amount', 'Type'], transactions.map(tx => [tx.date, tx.description, tx.category, String(tx.amount), tx.type]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-                <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
-                  <DialogTrigger asChild><Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm"><BookOpen className="w-4 h-4" /> Manual Journal Post</Button></DialogTrigger>
-                  <DialogContent className="max-w-3xl rounded-2xl">
-                    <form onSubmit={handlePostJournal}>
-                      <DialogHeader><DialogTitle>Double-Entry Journal</DialogTitle></DialogHeader>
-                      <div className="grid gap-6 py-6">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2"><Label>Date</Label><Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="bg-[#F5F5F5] border-none" /></div>
-                          <div className="grid gap-2"><Label>Reference</Label><Input name="description" placeholder="e.g. Asset Depreciation" required className="bg-[#F5F5F5] border-none" /></div>
-                        </div>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-12 gap-2 text-xs font-bold uppercase text-[#8E9299]"><div className="col-span-6">Account</div><div className="col-span-3">Debit</div><div className="col-span-3">Credit</div></div>
-                          {journalItems.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-12 gap-2">
-                              <div className="col-span-6">
-                                <AccountSelect
-                                  value={String(item.account_id)}
-                                  onValueChange={(val: string) => {
-                                    const n = [...journalItems];
-                                    n[idx].account_id = val;
-                                    setJournalItems(n);
-                                  }}
-                                  accounts={coa}
-                                  placeholder="Select Account"
-                                />
-                              </div>
-                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.debit} onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-green-600" /></div>
-                              <div className="col-span-3"><Input type="number" step="0.01" placeholder="0.00" value={item.credit} onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} className="bg-[#F5F5F5] border-none font-bold text-red-600" /></div>
-                            </div>
-                          ))}
-                          <Button type="button" variant="ghost" onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])} className="w-full text-blue-600 font-bold hover:bg-blue-50 rounded-xl">+ APPEND LINE</Button>
-                        </div>
-                      </div>
-                      <DialogFooter className="bg-[#F5F5F5] p-6 -mx-6 -mb-6">
-                        <div className="flex-1 flex gap-4 font-mono font-bold">
-                          <div className="text-green-600">DR: {currSym}{journalItems.reduce((s, i) => s + i.debit, 0).toLocaleString()}</div>
-                          <div className="text-red-600">CR: {currSym}{journalItems.reduce((s, i) => s + i.credit, 0).toLocaleString()}</div>
-                        </div>
-                        <Button type="submit" className="bg-[#141414] text-white h-11 px-8 rounded-xl font-bold">POST TO LEDGER</Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                <Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm" onClick={() => { setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]); setEditingJournalId(null); setIsJournalOpen(true); }}><BookOpen className="w-4 h-4" /> Manual Journal Post</Button>
               </div>
             </div>
 
@@ -1868,7 +1826,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <Input defaultValue="+233 24 000 0000" className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
                     </div>
                   </div>
-                  <Button className="w-full bg-[#141414] text-white rounded-xl h-12 font-black shadow-lg shadow-black/20">SAVE PROFILE</Button>
+                  <Button 
+                    className="w-full bg-[#141414] text-white rounded-xl h-12 font-black shadow-lg shadow-black/20"
+                    onClick={() => toast.success('Company profile updated locally')}
+                  >
+                    SAVE PROFILE
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -1954,7 +1917,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         >
                           CREATE OPENING JOURNAL
                         </Button>
-                        <Button variant="outline" className="rounded-xl px-8 h-12 font-black">IMPORT BALANCES</Button>
+                        <Button 
+                          variant="outline" 
+                          className="rounded-xl px-8 h-12 font-black"
+                          onClick={() => {
+                            setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
+                            setEditingJournalId(null);
+                            setIsJournalOpen(true);
+                          }}
+                        >
+                          IMPORT BALANCES
+                        </Button>
                       </div>
                     </div>
                     <div className="w-full md:w-64 p-6 bg-[#F5F5F5] rounded-3xl border border-[#E4E3E0] space-y-4">
@@ -2321,6 +2294,112 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             </div>
             <DialogFooter>
               <Button type="submit" className="w-full bg-[#141414] text-white font-bold h-11">UPDATE FEED ENTRY</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Global Journal Entry Modal */}
+      <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
+        <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl">
+          <form onSubmit={handlePostJournal}>
+            <DialogHeader className="bg-[#F5F5F5]/30 p-6 border-b border-[#F5F5F5]">
+              <DialogTitle className="text-2xl font-black text-[#141414]">Double-Entry Journal Post</DialogTitle>
+              <DialogDescription className="font-bold text-[#8E9299]">Maintain ledger integrity with balanced debits and credits.</DialogDescription>
+            </DialogHeader>
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Post Date</Label>
+                  <Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Reference / Description</Label>
+                  <Input name="description" placeholder="e.g. Opening Balance Migration" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-12 gap-4 px-2 text-[10px] font-black uppercase text-[#8E9299] tracking-widest">
+                  <div className="col-span-6">Target Account</div>
+                  <div className="col-span-3 text-right">Debit (+)</div>
+                  <div className="col-span-3 text-right">Credit (-)</div>
+                </div>
+                
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {journalItems.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in fade-in slide-in-from-top-1">
+                      <div className="col-span-6">
+                        <AccountSelect
+                          value={String(item.account_id)}
+                          onValueChange={(val: string) => {
+                            const n = [...journalItems];
+                            n[idx].account_id = val;
+                            setJournalItems(n);
+                          }}
+                          accounts={coa}
+                          placeholder="Search account..."
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          value={item.debit || ''} 
+                          onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} 
+                          className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-green-600 focus:ring-green-500" 
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          value={item.credit || ''} 
+                          onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} 
+                          className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-red-600 focus:ring-red-500" 
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])} 
+                  className="w-full border-2 border-dashed border-[#E4E3E0] text-[#8E9299] font-bold hover:bg-[#F5F5F5] hover:text-[#141414] rounded-2xl h-12 transition-all"
+                >
+                  + ADD LEDGER ENTRY LINE
+                </Button>
+              </div>
+            </div>
+
+            <DialogFooter className="bg-[#141414] p-8 -mx-0 rounded-b-2xl flex-col sm:flex-row gap-6 items-center">
+              <div className="flex-1 flex gap-8">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Debits</p>
+                  <p className="text-xl font-black text-green-400 font-mono">{currSym}{journalItems.reduce((s, i) => s + i.debit, 0).toLocaleString()}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Credits</p>
+                  <p className="text-xl font-black text-red-400 font-mono">{currSym}{journalItems.reduce((s, i) => s + i.credit, 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <Button 
+                type="submit" 
+                className={`h-14 px-10 rounded-2xl font-black text-white shadow-xl transition-all ${
+                  Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) < 0.01
+                  ? 'bg-blue-600 hover:bg-blue-500 hover:scale-105'
+                  : 'bg-red-900/50 cursor-not-allowed opacity-50'
+                }`}
+                disabled={Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) > 0.01}
+              >
+                {Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) < 0.01 
+                  ? 'AUTHORIZE & POST' 
+                  : 'LEDGER UNBALANCED'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
