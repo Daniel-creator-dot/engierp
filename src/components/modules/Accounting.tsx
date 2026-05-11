@@ -19,7 +19,9 @@ import {
   Trash2,
   Check,
   ChevronsUpDown,
-  ExternalLink
+  ExternalLink,
+  Globe,
+  Calendar
 } from 'lucide-react';
 import {
   Card,
@@ -163,6 +165,18 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
   );
 };
 
+const AccountingGuidance = ({ title, message }: { title: string, message: string }) => (
+  <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-2xl mb-6 flex gap-4 animate-in fade-in slide-in-from-left duration-500">
+    <div className="p-2 bg-blue-100 rounded-xl h-fit">
+      <AlertCircle className="w-5 h-5 text-blue-600" />
+    </div>
+    <div>
+      <h4 className="text-sm font-black text-blue-900 uppercase tracking-wider">{title}</h4>
+      <p className="text-xs text-blue-700 font-medium leading-relaxed mt-1">{message}</p>
+    </div>
+  </div>
+);
+
 export default function Accounting({ activeSub = 'accounting-transactions', user, onNavigate }: AccountingProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -220,6 +234,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
   const [isEditBankTxOpen, setIsEditBankTxOpen] = useState(false);
   const [selectedBankTx, setSelectedBankTx] = useState<any>(null);
+  const [fiscalYear, setFiscalYear] = useState({ startMonth: 1, startDay: 1 });
+  const [isFiscalYearLoading, setIsFiscalYearLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [selectedBankId, setSelectedBankId] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -285,6 +303,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setBalanceSheet(bs.data);
         setManagementAccounts(mgmt.data);
         setBankTx(btx.data);
+      } else if (activeSub === 'accounting-foundation') {
+        const fyRes = await accountingApi.getFiscalYear();
+        setFiscalYear(fyRes.data);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load accounting data');
@@ -565,6 +586,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-bank':
         return (
           <div className="space-y-6">
+            <AccountingGuidance 
+              title="Treasury & Bank Feed Governance" 
+              message="Manage company treasury and bank feeds. Reconciliation matches bank statements with ledger entries, ensuring your digital records reflect real-world cash positions." 
+            />
             <div className="flex justify-end gap-2">
                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date','Description','Bank','Amount','Type','Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
@@ -629,6 +654,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <CardContent>
                     <div className="text-sm font-mono text-white/50 mb-4">{b.account_number.replace(/\d(?=\d{4})/g, "*")}</div>
                     <div className="text-3xl font-black">{currSym}{Number(b.balance).toLocaleString()}</div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Next Cheque</div>
+                      <div className="text-xs font-mono font-bold text-blue-400 bg-blue-400/10 px-2 py-1 rounded-lg">#{b.next_cheque_number || 1}</div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -706,6 +735,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-ap':
         return (
           <div className="space-y-6">
+            <AccountingGuidance 
+              title="Accounts Payable (AP) Control" 
+              message="Track obligations to suppliers. Recording a bill increases liabilities and expenses. Payments clear these liabilities and reduce cash assets." 
+            />
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold">Accounts Payable</h2>
@@ -796,8 +829,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Amount to Pay</Label><Input name="amount" type="number" defaultValue={selectedTarget?.amount} max={selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2">
-                        <Label>Payment Method</Label>
-                        <Select name="method" required>
+                        <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="Bank Transfer">Bank Transfer</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem></SelectContent>
                         </Select>
@@ -805,12 +837,22 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     </div>
                     <div className="space-y-2">
                       <Label>Source Bank Account</Label>
-                      <Select name="bank_account_id" required>
+                      <Select name="bank_account_id" required onValueChange={setSelectedBankId}>
                         <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                         <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2"><Label>Reference Note</Label><Input name="reference" required className="bg-[#F5F5F5] border-none" placeholder="Cheque No. / TX Hash" /></div>
+                    <div className="space-y-2">
+                      <Label>Reference Note</Label>
+                      <Input 
+                        name="reference" 
+                        required 
+                        className="bg-[#F5F5F5] border-none" 
+                        placeholder={paymentMethod === 'Cheque' ? "Cheque No." : "Reference / TX Hash"} 
+                        defaultValue={paymentMethod === 'Cheque' && selectedBankId ? (bankAccounts.find(b => String(b.id) === selectedBankId)?.next_cheque_number || '') : ''}
+                        key={`${paymentMethod}-${selectedBankId}`}
+                      />
+                    </div>
                   </div>
                   <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">CONFIRM DISBURSEMENT</Button></DialogFooter>
                 </form>
@@ -823,6 +865,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-invoices':
         return (
           <div className="space-y-6">
+            <AccountingGuidance 
+              title="Accounts Receivable (AR) Optimization" 
+              message="Track client revenue. Raising an invoice records income and creates a receivable asset. Receiving payment converts receivables into cash." 
+            />
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold">Accounts Receivable</h2>
@@ -1088,6 +1134,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-transactions':
         return (
           <div className="space-y-6">
+            <AccountingGuidance 
+              title="Double-Entry General Ledger" 
+              message="The General Ledger is the master record of all financial transactions. Ensure every manual journal entry is balanced (Total Debits = Total Credits) to maintain the integrity of the Trial Balance." 
+            />
             {/* GL Implementation kept relatively same, hidden for brevity but completely functional */}
             <div className="flex justify-between items-center">
               <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">Live auditing of all fiscal transactions.</p></div>
@@ -1244,6 +1294,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-reports':
         return (
           <div className="space-y-8">
+            <AccountingGuidance 
+              title="Financial Statement Governance" 
+              message="Financial statements provide a snapshot of the company's health. Income Statement tracks performance over time, while the Balance Sheet shows a specific point-in-time position." 
+            />
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-[#141414]">Financial Position</h2>
@@ -1538,6 +1592,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
         return (
           <div className="space-y-6">
+            <AccountingGuidance 
+              title="Chart of Accounts Hierarchy" 
+              message="The Chart of Accounts is the skeleton of your financial system. Categorize accounts correctly (Asset, Liability, Equity, Income, Expense) for accurate financial reporting." 
+            />
             {/* Summary Cards */}
             <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
               {totalsByType.map(t => (
@@ -1768,6 +1826,152 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </div>
               </CardContent>
             </Card>
+          </div>
+        );
+      }
+      
+      case 'accounting-foundation': {
+        return (
+          <div className="space-y-8">
+            <AccountingGuidance 
+              title="Financial System Foundation" 
+              message="Configure the fundamental settings of your accounting environment. Set your fiscal year, verify company identity, and establish starting ledger balances for a clean audit trail." 
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Company Identity */}
+              <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
+                  <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-blue-600" /> Company Identity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-xs uppercase text-[#8E9299]">Corporate Entity Name</Label>
+                    <Input defaultValue="Daniel Engineering Ltd." className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-xs uppercase text-[#8E9299]">Registered Address</Label>
+                    <textarea 
+                      className="w-full min-h-[100px] p-4 bg-[#F5F5F5] border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                      defaultValue="123 Industrial Area, Accra, Ghana"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-xs uppercase text-[#8E9299]">Tax ID / TIN</Label>
+                      <Input defaultValue="C0012345678" className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-xs uppercase text-[#8E9299]">Contact Phone</Label>
+                      <Input defaultValue="+233 24 000 0000" className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                    </div>
+                  </div>
+                  <Button className="w-full bg-[#141414] text-white rounded-xl h-12 font-black shadow-lg shadow-black/20">SAVE PROFILE</Button>
+                </CardContent>
+              </Card>
+
+              {/* Fiscal Year Configuration */}
+              <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
+                  <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-600" /> Fiscal Period
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                    <p className="text-xs font-bold text-blue-800 uppercase tracking-widest">Active Reporting Cycle</p>
+                    <p className="text-2xl font-black text-blue-900 mt-2">Jan 01 — Dec 31</p>
+                    <Badge className="bg-green-100 text-green-700 border-none font-bold mt-3">FISCAL YEAR OPEN</Badge>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="font-bold text-xs uppercase text-[#8E9299]">Start Month</Label>
+                      <Select 
+                        value={String(fiscalYear.startMonth)} 
+                        onValueChange={(v) => setFiscalYear({...fiscalYear, startMonth: Number(v)})}
+                      >
+                        <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-2xl">
+                          <SelectItem value="1">January</SelectItem>
+                          <SelectItem value="2">February</SelectItem>
+                          <SelectItem value="3">March</SelectItem>
+                          <SelectItem value="4">April</SelectItem>
+                          <SelectItem value="5">May</SelectItem>
+                          <SelectItem value="6">June</SelectItem>
+                          <SelectItem value="7">July</SelectItem>
+                          <SelectItem value="8">August</SelectItem>
+                          <SelectItem value="9">September</SelectItem>
+                          <SelectItem value="10">October</SelectItem>
+                          <SelectItem value="11">November</SelectItem>
+                          <SelectItem value="12">December</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      className="w-full bg-blue-600 text-white rounded-xl h-12 font-black shadow-lg shadow-blue-500/20"
+                      onClick={async () => {
+                        try {
+                          await accountingApi.updateFiscalYear(fiscalYear);
+                          toast.success('Fiscal year settings updated');
+                        } catch (err) {
+                          toast.error('Failed to update fiscal year');
+                        }
+                      }}
+                    >
+                      UPDATE FISCAL YEAR
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Startup Balances */}
+              <Card className="col-span-1 md:col-span-2 border-none shadow-sm rounded-2xl overflow-hidden">
+                <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
+                  <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-blue-600" /> Establishing Opening Balances
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8">
+                  <div className="flex flex-col md:flex-row gap-8 items-center">
+                    <div className="flex-1 space-y-4">
+                      <h3 className="text-lg font-bold text-[#141414]">Migrate your existing balances</h3>
+                      <p className="text-[#8E9299] text-sm leading-relaxed">
+                        To start using this ledger, you must post an opening journal entry. 
+                        This entry should represent your account balances as of the start of your 
+                        current fiscal period.
+                      </p>
+                      <div className="flex gap-4">
+                        <Button 
+                          className="bg-[#141414] text-white rounded-xl px-8 h-12 font-black shadow-lg"
+                          onClick={() => {
+                            setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
+                            setEditingJournalId(null);
+                            setIsJournalOpen(true);
+                          }}
+                        >
+                          CREATE OPENING JOURNAL
+                        </Button>
+                        <Button variant="outline" className="rounded-xl px-8 h-12 font-black">IMPORT BALANCES</Button>
+                      </div>
+                    </div>
+                    <div className="w-full md:w-64 p-6 bg-[#F5F5F5] rounded-3xl border border-[#E4E3E0] space-y-4">
+                      <div className="text-center">
+                        <p className="text-[10px] font-black uppercase text-[#8E9299]">Total Ledger Assets</p>
+                        <p className="text-2xl font-black text-green-600">{currSym}{coa.filter(a => a.type === 'Asset').reduce((acc, a) => acc + Number(a.balance), 0).toLocaleString()}</p>
+                      </div>
+                      <div className="w-full h-[1px] bg-[#E4E3E0]"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-black uppercase text-[#8E9299]">Total Liabilities</p>
+                        <p className="text-2xl font-black text-red-600">{currSym}{coa.filter(a => a.type === 'Liability').reduce((acc, a) => acc + Number(a.balance), 0).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         );
       }

@@ -651,10 +651,15 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
       await trx('bills').where('id', data.target_id).update({ status: 'Paid' });
     }
 
-    // 3. Update bank account balance
+    // 3. Update bank account balance and cheque sequence if applicable
     const impact = data.target_type === 'Invoice' ? Number(data.amount) : -Number(data.amount);
     if (data.bank_account_id) {
        await trx('bank_accounts').where('id', data.bank_account_id).increment('balance', impact);
+       
+       // If payment method is Cheque, increment the next cheque number
+       if (data.method === 'Cheque') {
+         await trx('bank_accounts').where('id', data.bank_account_id).increment('next_cheque_number', 1);
+       }
     }
 
     await trx.commit();
@@ -663,6 +668,31 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
     await trx.rollback();
     console.error('Error recording payment:', error);
     res.status(500).json({ message: error.message || 'Error recording payment' });
+  }
+});
+
+// Fiscal Year Settings
+router.get('/settings/fiscal-year', authenticateToken, async (req, res) => {
+  try {
+    const setting = await db('settings').where({ key: 'fiscal_year' }).first();
+    res.json(setting ? JSON.parse(setting.value) : { startMonth: 1, startDay: 1 });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error fetching fiscal year settings' });
+  }
+});
+
+router.post('/settings/fiscal-year', authenticateToken, authorizeRole(['admin', 'accountant']), async (req, res) => {
+  try {
+    const value = JSON.stringify(req.body);
+    const existing = await db('settings').where({ key: 'fiscal_year' }).first();
+    if (existing) {
+      await db('settings').where({ key: 'fiscal_year' }).update({ value });
+    } else {
+      await db('settings').insert({ key: 'fiscal_year', value });
+    }
+    res.json({ message: 'Fiscal year settings updated' });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Error updating fiscal year settings' });
   }
 });
 

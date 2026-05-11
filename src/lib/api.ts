@@ -90,6 +90,8 @@ export const accountingApi = {
   getJournalDetails: (id: number | string) => api.get(`/accounting/journal/${id}`),
   deleteBankTransaction: (id: number | string) => api.delete(`/accounting/bank-transactions/${id}`),
   updateBankTransaction: (id: number | string, data: any) => api.patch(`/accounting/bank-transactions/${id}`, data),
+  getFiscalYear: () => api.get('/accounting/settings/fiscal-year'),
+  updateFiscalYear: (data: any) => api.post('/accounting/settings/fiscal-year', data),
 };
 
 export const projectsApi = {
