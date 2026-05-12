@@ -96,7 +96,9 @@ export async function seed(knex: Knex): Promise<void> {
   // Seed Settings
   await knex("settings").insert([
     { key: 'currency', value: 'GHS' },
-    { key: 'companyName', value: 'EngiCorp Solutions' },
+    { key: 'company_name', value: 'SRAJ NOVA ENGINEERING SOLUTIONS LTD' },
+    { key: 'company_tin', value: 'C0066528941' },
+    { key: 'company_address', value: '123 Industrial Area, Accra, Ghana' },
     { key: 'payroll_config', value: JSON.stringify({ ssnit_employee: 5.5, max_leave_days_per_month: 30, tax_tiers: [{threshold: 402, rate: 0}, {threshold: 110, rate: 5}] }) }
   ]);
 };

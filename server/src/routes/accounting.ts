@@ -671,6 +671,119 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
   }
 });
 
+// Opening Balances (Smart Journal Posting)
+router.post('/opening-balances', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  const trx = await db.transaction();
+  try {
+    const { balances, date } = req.body; // balances: [{ account_id, balance }]
+    
+    if (!balances || balances.length === 0) {
+      return res.status(400).json({ message: 'No balances provided' });
+    }
+
+    // 1. Delete any previous opening balance journal entries
+    const existingOB = await trx('journal_entries')
+      .where('reference_type', 'opening_balance')
+      .select('id');
+    
+    for (const ob of existingOB) {
+      const entries = await trx('ledger_entries').where({ journal_id: ob.id });
+      for (const entry of entries) {
+        const impact = Number(entry.debit || 0) - Number(entry.credit || 0);
+        await trx('chart_of_accounts').where({ id: entry.account_id }).decrement('balance', impact);
+      }
+      await trx('ledger_entries').where({ journal_id: ob.id }).del();
+      await trx('journal_entries').where({ id: ob.id }).del();
+    }
+
+    // 2. Ensure Opening Balance Equity account exists
+    let obeAccount = await trx('chart_of_accounts').where('code', '3900').first();
+    if (!obeAccount) {
+      const [inserted] = await trx('chart_of_accounts').insert({
+        code: '3900',
+        name: 'Opening Balance Equity',
+        type: 'Equity',
+        balance: 0
+      }).returning('*');
+      obeAccount = typeof inserted === 'object' ? inserted : { id: inserted };
+    }
+
+    // 3. Build journal items
+    const items: { account_id: number, debit: number, credit: number }[] = [];
+    let totalOffset = 0;
+
+    for (const entry of balances) {
+      const account = await trx('chart_of_accounts').where({ id: entry.account_id }).first();
+      if (!account) continue;
+
+      const newBalance = Number(entry.balance);
+      if (newBalance === 0) continue;
+
+      // For Asset/Expense: positive balance = debit
+      // For Liability/Equity/Income: positive balance = credit
+      if (['Asset', 'Expense'].includes(account.type)) {
+        if (newBalance > 0) {
+          items.push({ account_id: entry.account_id, debit: newBalance, credit: 0 });
+          totalOffset += newBalance;
+        } else {
+          items.push({ account_id: entry.account_id, debit: 0, credit: Math.abs(newBalance) });
+          totalOffset -= Math.abs(newBalance);
+        }
+      } else {
+        // Liability, Equity, Income
+        if (newBalance > 0) {
+          items.push({ account_id: entry.account_id, debit: 0, credit: newBalance });
+          totalOffset -= newBalance;
+        } else {
+          items.push({ account_id: entry.account_id, debit: Math.abs(newBalance), credit: 0 });
+          totalOffset += Math.abs(newBalance);
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      await trx.rollback();
+      return res.json({ message: 'No balances to post (all zero)' });
+    }
+
+    // 4. Add the offset to Opening Balance Equity
+    if (totalOffset > 0) {
+      items.push({ account_id: obeAccount.id, debit: 0, credit: totalOffset });
+    } else if (totalOffset < 0) {
+      items.push({ account_id: obeAccount.id, debit: Math.abs(totalOffset), credit: 0 });
+    }
+
+    // 5. Create Journal Entry
+    const postDate = date || new Date().toISOString().split('T')[0];
+    const [insertedJournal] = await trx('journal_entries').insert({
+      date: postDate,
+      description: 'Opening Balance Migration',
+      reference_type: 'opening_balance'
+    }).returning('id');
+    const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
+
+    // 6. Insert ledger entries and update COA balances
+    for (const item of items) {
+      await trx('ledger_entries').insert({
+        journal_id,
+        account_id: item.account_id,
+        debit: item.debit,
+        credit: item.credit
+      });
+
+      const impact = Number(item.debit) - Number(item.credit);
+      await trx('chart_of_accounts').where({ id: item.account_id }).increment('balance', impact);
+    }
+
+    await trx.commit();
+    res.status(201).json({ message: 'Opening balances posted successfully', journal_id });
+  } catch (error: any) {
+    await trx.rollback();
+    console.error('Error posting opening balances:', error);
+    res.status(500).json({ message: error.message || 'Error posting opening balances' });
+  }
+});
+
 // Fiscal Year Settings
 router.get('/settings/fiscal-year', authenticateToken, async (req, res) => {
   try {

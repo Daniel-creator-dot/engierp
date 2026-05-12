@@ -199,6 +199,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [openingBalances, setOpeningBalances] = useState<Record<string, number>>({});
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isPayInvoiceOpen, setIsPayInvoiceOpen] = useState(false);
@@ -238,6 +240,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [isFiscalYearLoading, setIsFiscalYearLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [selectedBankId, setSelectedBankId] = useState('');
+  const [profileData, setProfileData] = useState({
+    name: '',
+    address: '',
+    tin: '',
+    phone: ''
+  });
 
   useEffect(() => {
     fetchData();
@@ -304,8 +312,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setManagementAccounts(mgmt.data);
         setBankTx(btx.data);
       } else if (activeSub === 'accounting-foundation') {
-        const fyRes = await accountingApi.getFiscalYear();
+        const [fyRes, coaRes] = await Promise.all([
+          accountingApi.getFiscalYear(),
+          accountingApi.getCOA()
+        ]);
         setFiscalYear(fyRes.data);
+        setCOA(coaRes.data);
+        
+        // Initialize opening balances from current COA
+        const balMap: Record<string, number> = {};
+        coaRes.data.forEach((a: any) => { balMap[String(a.id)] = Number(a.balance || 0); });
+        setOpeningBalances(balMap);
+        
+        // Initialize profile data from settings
+        setProfileData({
+          name: settingsRes.data.find((s: any) => s.key === 'company_name')?.value || '',
+          address: settingsRes.data.find((s: any) => s.key === 'company_address')?.value || '',
+          tin: settingsRes.data.find((s: any) => s.key === 'company_tin')?.value || '',
+          phone: settingsRes.data.find((s: any) => s.key === 'company_phone')?.value || ''
+        });
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load accounting data');
@@ -496,6 +521,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to post journal entry');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      await Promise.all([
+        settingsApi.updateSetting('company_name', profileData.name),
+        settingsApi.updateSetting('company_address', profileData.address),
+        settingsApi.updateSetting('company_tin', profileData.tin),
+        settingsApi.updateSetting('company_phone', profileData.phone)
+      ]);
+      toast.success('Corporate identity updated in global ledger');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update company profile');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1807,30 +1850,44 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <CardContent className="p-8 space-y-6">
                   <div className="space-y-2">
                     <Label className="font-bold text-xs uppercase text-[#8E9299]">Corporate Entity Name</Label>
-                    <Input defaultValue="Daniel Engineering Ltd." className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                    <Input 
+                      value={profileData.name} 
+                      onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                      className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label className="font-bold text-xs uppercase text-[#8E9299]">Registered Address</Label>
                     <textarea 
                       className="w-full min-h-[100px] p-4 bg-[#F5F5F5] border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      defaultValue="123 Industrial Area, Accra, Ghana"
+                      value={profileData.address}
+                      onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase text-[#8E9299]">Tax ID / TIN</Label>
-                      <Input defaultValue="C0012345678" className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                      <Input 
+                        value={profileData.tin} 
+                        onChange={(e) => setProfileData({...profileData, tin: e.target.value})}
+                        className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase text-[#8E9299]">Contact Phone</Label>
-                      <Input defaultValue="+233 24 000 0000" className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                      <Input 
+                        value={profileData.phone} 
+                        onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                        className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" 
+                      />
                     </div>
                   </div>
                   <Button 
                     className="w-full bg-[#141414] text-white rounded-xl h-12 font-black shadow-lg shadow-black/20"
-                    onClick={() => toast.success('Company profile updated locally')}
+                    onClick={handleSaveProfile}
+                    disabled={isSaving}
                   >
-                    SAVE PROFILE
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SAVE PROFILE'}
                   </Button>
                 </CardContent>
               </Card>
@@ -1845,7 +1902,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <CardContent className="p-8 space-y-6">
                   <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100">
                     <p className="text-xs font-bold text-blue-800 uppercase tracking-widest">Active Reporting Cycle</p>
-                    <p className="text-2xl font-black text-blue-900 mt-2">Jan 01 — Dec 31</p>
+                    <p className="text-2xl font-black text-blue-900 mt-2">
+                      {new Date(2000, fiscalYear.startMonth - 1, fiscalYear.startDay).toLocaleString('en-US', { month: 'short', day: '2-digit' })} — 
+                      {new Date(2000, fiscalYear.startMonth - 2, fiscalYear.startDay - 1).toLocaleString('en-US', { month: 'short', day: '2-digit' })}
+                    </p>
                     <Badge className="bg-green-100 text-green-700 border-none font-bold mt-3">FISCAL YEAR OPEN</Badge>
                   </div>
                   
@@ -1890,59 +1950,118 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </CardContent>
               </Card>
 
-              {/* Startup Balances */}
+              {/* Opening Balances Tool */}
               <Card className="col-span-1 md:col-span-2 border-none shadow-sm rounded-2xl overflow-hidden">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
-                  <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
-                    <Calculator className="w-5 h-5 text-blue-600" /> Establishing Opening Balances
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-8">
-                  <div className="flex flex-col md:flex-row gap-8 items-center">
-                    <div className="flex-1 space-y-4">
-                      <h3 className="text-lg font-bold text-[#141414]">Migrate your existing balances</h3>
-                      <p className="text-[#8E9299] text-sm leading-relaxed">
-                        To start using this ledger, you must post an opening journal entry. 
-                        This entry should represent your account balances as of the start of your 
-                        current fiscal period.
-                      </p>
-                      <div className="flex gap-4">
-                        <Button 
-                          className="bg-[#141414] text-white rounded-xl px-8 h-12 font-black shadow-lg"
-                          onClick={() => {
-                            setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
-                            setEditingJournalId(null);
-                            setIsJournalOpen(true);
-                          }}
-                        >
-                          CREATE OPENING JOURNAL
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="rounded-xl px-8 h-12 font-black"
-                          onClick={() => {
-                            setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
-                            setEditingJournalId(null);
-                            setIsJournalOpen(true);
-                          }}
-                        >
-                          IMPORT BALANCES
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="w-full md:w-64 p-6 bg-[#F5F5F5] rounded-3xl border border-[#E4E3E0] space-y-4">
-                      <div className="text-center">
-                        <p className="text-[10px] font-black uppercase text-[#8E9299]">Total Ledger Assets</p>
-                        <p className="text-2xl font-black text-green-600">{currSym}{coa.filter(a => a.type === 'Asset').reduce((acc, a) => acc + Number(a.balance), 0).toLocaleString()}</p>
-                      </div>
-                      <div className="w-full h-[1px] bg-[#E4E3E0]"></div>
-                      <div className="text-center">
-                        <p className="text-[10px] font-black uppercase text-[#8E9299]">Total Liabilities</p>
-                        <p className="text-2xl font-black text-red-600">{currSym}{coa.filter(a => a.type === 'Liability').reduce((acc, a) => acc + Number(a.balance), 0).toLocaleString()}</p>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
+                      <Calculator className="w-5 h-5 text-blue-600" /> Opening Balances
+                    </CardTitle>
+                    <div className="flex items-center gap-4">
+                      <div className="flex gap-6 text-sm">
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase text-[#8E9299]">Assets</p>
+                          <p className="font-black text-green-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                            const acc = coa.find(a => String(a.id) === id);
+                            return sum + (acc?.type === 'Asset' ? Number(bal) : 0);
+                          }, 0).toLocaleString()}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase text-[#8E9299]">Liabilities</p>
+                          <p className="font-black text-red-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                            const acc = coa.find(a => String(a.id) === id);
+                            return sum + (acc?.type === 'Liability' ? Number(bal) : 0);
+                          }, 0).toLocaleString()}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase text-[#8E9299]">Equity</p>
+                          <p className="font-black text-purple-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                            const acc = coa.find(a => String(a.id) === id);
+                            return sum + (acc?.type === 'Equity' ? Number(bal) : 0);
+                          }, 0).toLocaleString()}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
+                  <CardDescription className="mt-2">
+                    Enter the current balance for each account. The system will auto-generate a balanced journal entry with Opening Balance Equity as the offset.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {['Asset', 'Liability', 'Equity', 'Income', 'Expense'].map(type => {
+                    const accounts = coa.filter(a => a.type === type);
+                    if (accounts.length === 0) return null;
+                    const typeColor: Record<string, string> = {
+                      'Asset': 'bg-blue-600', 'Liability': 'bg-red-500', 'Equity': 'bg-purple-500', 'Income': 'bg-green-500', 'Expense': 'bg-orange-500'
+                    };
+                    return (
+                      <div key={type}>
+                        <div className={`${typeColor[type]} text-white px-8 py-3 flex items-center justify-between`}>
+                          <span className="text-xs font-black uppercase tracking-widest">{type} Accounts</span>
+                          <span className="text-xs font-bold opacity-80">{accounts.length} accounts</span>
+                        </div>
+                        <div className="divide-y divide-[#F5F5F5]">
+                          {accounts.map(a => (
+                            <div key={a.id} className="flex items-center gap-4 px-8 py-3 hover:bg-[#F5F5F5]/30 transition-colors">
+                              <span className="font-mono text-xs font-bold text-blue-600 w-16">{a.code}</span>
+                              <span className="flex-1 font-bold text-[#141414] text-sm">{a.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-[#8E9299] font-bold">{currSym}</span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={openingBalances[String(a.id)] || ''}
+                                  onChange={(e) => setOpeningBalances({
+                                    ...openingBalances,
+                                    [String(a.id)]: Number(e.target.value)
+                                  })}
+                                  className="w-40 h-10 bg-[#F5F5F5] border-none rounded-xl font-bold text-right text-sm"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </CardContent>
+                <div className="p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] flex items-center justify-between">
+                  <p className="text-xs text-[#8E9299] font-medium">
+                    Previous opening balance entries will be replaced when you post.
+                  </p>
+                  <Button
+                    className="bg-blue-600 text-white rounded-xl px-10 h-12 font-black shadow-lg shadow-blue-500/20 gap-2"
+                    disabled={isSaving}
+                    onClick={async () => {
+                      setIsSaving(true);
+                      try {
+                        const balances = Object.entries(openingBalances)
+                          .filter(([_, bal]) => bal !== 0)
+                          .map(([account_id, balance]) => ({ account_id: Number(account_id), balance }));
+                        
+                        if (balances.length === 0) {
+                          toast.error('Enter at least one non-zero balance');
+                          return;
+                        }
+                        
+                        await accountingApi.postOpeningBalances({ 
+                          balances,
+                          date: new Date().toISOString().split('T')[0]
+                        });
+                        toast.success('Opening balances posted to ledger successfully');
+                        fetchData();
+                      } catch (error: any) {
+                        toast.error(error.response?.data?.message || 'Failed to post opening balances');
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                  >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    POST OPENING BALANCES
+                  </Button>
+                </div>
               </Card>
             </div>
           </div>
