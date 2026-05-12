@@ -211,6 +211,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [coaFilter, setCoaFilter] = useState('All');
+  const [coaSearch, setCoaSearch] = useState('');
+  const [obSearch, setObSearch] = useState('');
 
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
@@ -1582,6 +1584,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         };
         const filteredCOA = coa.filter(a => {
           if (coaFilter !== 'All' && a.type !== coaFilter) return false;
+          if (coaSearch && !(
+            a.name.toLowerCase().includes(coaSearch.toLowerCase()) || 
+            a.code.toLowerCase().includes(coaSearch.toLowerCase())
+          )) return false;
           return true;
         });
         const groupedByType = ['Asset', 'Liability', 'Equity', 'Income', 'Expense'];
@@ -1619,8 +1625,19 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <h2 className="text-xl font-bold">Chart of Accounts</h2>
                 <p className="text-sm text-[#8E9299]">{filteredCOA.length} accounts {coaFilter !== 'All' ? `(${coaFilter})` : ''}</p>
               </div>
+              <div className="flex gap-2 flex-1 max-w-md ml-8">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E9299]" />
+                  <Input 
+                    placeholder="Search by name or code..." 
+                    value={coaSearch}
+                    onChange={(e) => setCoaSearch(e.target.value)}
+                    className="pl-10 h-11 bg-white border-[#E4E3E0] rounded-xl font-medium focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  />
+                </div>
+              </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('chart_of_accounts', ['Code', 'Name', 'Type', 'Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold h-11" onClick={() => handleExportCSV('chart_of_accounts', ['Code', 'Name', 'Type', 'Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg"><Plus className="w-4 h-4" /> New Account</Button></DialogTrigger>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
@@ -1981,6 +1998,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }, 0).toLocaleString()}</p>
                         </div>
                       </div>
+                      <div className="relative ml-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8E9299]" />
+                        <Input 
+                          placeholder="Find account..." 
+                          value={obSearch}
+                          onChange={(e) => setObSearch(e.target.value)}
+                          className="pl-9 h-9 w-48 bg-white border-[#E4E3E0] rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500/20 transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
                   <CardDescription className="mt-2">
@@ -1989,7 +2015,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </CardHeader>
                 <CardContent className="p-0">
                   {['Asset', 'Liability', 'Equity', 'Income', 'Expense'].map(type => {
-                    const accounts = coa.filter(a => a.type === type);
+                    const accounts = coa.filter(a => {
+                      if (a.type !== type) return false;
+                      if (obSearch && !(
+                        a.name.toLowerCase().includes(obSearch.toLowerCase()) || 
+                        a.code.toLowerCase().includes(obSearch.toLowerCase())
+                      )) return false;
+                      return true;
+                    });
                     if (accounts.length === 0) return null;
                     const typeColor: Record<string, string> = {
                       'Asset': 'bg-blue-600', 'Liability': 'bg-red-500', 'Equity': 'bg-purple-500', 'Income': 'bg-green-500', 'Expense': 'bg-orange-500'

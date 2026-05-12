@@ -32,11 +32,90 @@ export async function seed(knex: Knex): Promise<void> {
     { id: 'PRJ-002', name: 'Green Valley Solar Farm', client: 'EcoEnergy Ltd', budget: 5000000, spent: 2100000, status: 'active', startDate: '2023-05-10', endDate: '2025-12-31', manager: 'Sarah Smith', profitability: 35 },
   ]);
 
+  await knex("payments").del();
+  await knex("bank_transactions").del();
+  await knex("bank_accounts").del();
+  await knex("chart_of_accounts").del();
+
+  // Seed Chart of Accounts
+  const coa = [
+    { code: '1101', name: 'Cash on Hand', type: 'Asset' },
+    { code: '1102', name: 'Bank – ADB Current', type: 'Asset' },
+    { code: '1103', name: 'Bank – Salary', type: 'Asset' },
+    { code: '1104', name: 'Accounts Receivable', type: 'Asset' },
+    { code: '1105', name: 'Contract Receivables', type: 'Asset' },
+    { code: '1106', name: 'Staff Advances', type: 'Asset' },
+    { code: '1107', name: 'Prepayments', type: 'Asset' },
+    { code: '1108', name: 'Withholding Tax Receivable', type: 'Asset' },
+    { code: '1109', name: 'VAT Input', type: 'Asset' },
+    { code: '1201', name: 'Land & Buildings', type: 'Asset' },
+    { code: '1202', name: 'Office Equipment', type: 'Asset' },
+    { code: '1203', name: 'Engineering Equipment', type: 'Asset' },
+    { code: '1204', name: 'Motor Vehicles', type: 'Asset' },
+    { code: '1205', name: 'Furniture & Fittings', type: 'Asset' },
+    { code: '1206', name: 'IT Equipment', type: 'Asset' },
+    { code: '1301', name: 'Acc Dep – Equipment', type: 'Asset' },
+    { code: '1302', name: 'Acc Dep – Vehicles', type: 'Asset' },
+    { code: '1303', name: 'Acc Dep – Furniture', type: 'Asset' },
+    { code: '2101', name: 'Accounts Payable', type: 'Liability' },
+    { code: '2102', name: 'Withholding Tax Payable', type: 'Liability' },
+    { code: '2103', name: 'PAYE Payable', type: 'Liability' },
+    { code: '2104', name: 'SSNIT Payable', type: 'Liability' },
+    { code: '2105', name: 'VAT Output', type: 'Liability' },
+    { code: '2106', name: 'Accrued Expenses', type: 'Liability' },
+    { code: '2107', name: 'Contract Liabilities', type: 'Liability' },
+    { code: '2201', name: 'Bank Loans', type: 'Liability' },
+    { code: '2202', name: 'Hire Purchase Obligations', type: 'Liability' },
+    { code: '3101', name: 'Share Capital', type: 'Equity' },
+    { code: '3102', name: 'Retained Earnings', type: 'Equity' },
+    { code: '3103', name: 'Current Year Profit', type: 'Equity' },
+    { code: '3900', name: 'Opening Balance Equity', type: 'Equity' },
+    { code: '4101', name: 'Civil Engineering Revenue', type: 'Income' },
+    { code: '4102', name: 'Electrical Engineering Revenue', type: 'Income' },
+    { code: '4103', name: 'Mechanical Engineering Revenue', type: 'Income' },
+    { code: '4104', name: 'Consultancy Fees', type: 'Income' },
+    { code: '4105', name: 'Project Management Fees', type: 'Income' },
+    { code: '5101', name: 'Materials – Construction', type: 'Expense' },
+    { code: '5102', name: 'Labour – Site Workers', type: 'Expense' },
+    { code: '5103', name: 'Subcontractor Costs', type: 'Expense' },
+    { code: '5104', name: 'Equipment Hire', type: 'Expense' },
+    { code: '5105', name: 'Fuel – Site', type: 'Expense' },
+    { code: '5106', name: 'Site Transport', type: 'Expense' },
+    { code: '5107', name: 'Site Utilities', type: 'Expense' },
+    { code: '5108', name: 'Project Insurance', type: 'Expense' },
+    { code: '6101', name: 'Salaries – Office Staff', type: 'Expense' },
+    { code: '6102', name: 'Office Rent', type: 'Expense' },
+    { code: '6103', name: 'Utilities – Office', type: 'Expense' },
+    { code: '6104', name: 'Internet & Communication', type: 'Expense' },
+    { code: '6105', name: 'Stationery & Printing', type: 'Expense' },
+    { code: '6201', name: 'Repairs & Maintenance', type: 'Expense' },
+    { code: '6202', name: 'Fuel – Office Vehicles', type: 'Expense' },
+    { code: '6203', name: 'Staff Welfare', type: 'Expense' },
+    { code: '6204', name: 'Training & Development', type: 'Expense' },
+    { code: '6301', name: 'Audit Fees', type: 'Expense' },
+    { code: '6302', name: 'Legal Fees', type: 'Expense' },
+    { code: '6303', name: 'Consultancy Fees', type: 'Expense' },
+    { code: '6401', name: 'Advertising', type: 'Expense' },
+    { code: '6402', name: 'Tendering Costs', type: 'Expense' },
+    { code: '6403', name: 'Business Development', type: 'Expense' },
+    { code: '7101', name: 'Bank Charges', type: 'Expense' },
+    { code: '7102', name: 'Loan Interest', type: 'Expense' },
+    { code: '7103', name: 'Forex Gain/Loss', type: 'Expense' }
+  ];
+
+  await knex('chart_of_accounts').insert(coa);
+
+  // Seed Bank Accounts
+  await knex('bank_accounts').insert([
+    { account_name: 'Main Operating (ADB)', account_number: '123-456-789', bank_name: 'ADB Bank', type: 'Current', balance: 231500 },
+    { account_name: 'Salary Account', account_number: '987-654-321', bank_name: 'ADB Bank', type: 'Savings', balance: 0 }
+  ]);
+
   // Seed Financial Data (Ledger v3)
-  const bankAcc = await knex('chart_of_accounts').where('code', '1002').first();
-  const revenueAcc = await knex('chart_of_accounts').where('code', '4001').first();
-  const materialsAcc = await knex('chart_of_accounts').where('code', '5002').first();
-  const rentAcc = await knex('chart_of_accounts').where('code', '5100').first();
+  const bankAcc = await knex('chart_of_accounts').where('code', '1102').first();
+  const revenueAcc = await knex('chart_of_accounts').where('code', '4101').first();
+  const materialsAcc = await knex('chart_of_accounts').where('code', '5101').first();
+  const rentAcc = await knex('chart_of_accounts').where('code', '6102').first();
 
   if (bankAcc && revenueAcc && materialsAcc && rentAcc) {
     // 1. Progress Payment Income
