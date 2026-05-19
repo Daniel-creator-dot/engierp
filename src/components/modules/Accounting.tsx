@@ -1355,10 +1355,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-green-50/50 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
+                            const matchingBank = bankAccounts.find((ba: any) => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
                             setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                             setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                             setIsPeriodBankDetailsOpen(true);
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
@@ -1372,10 +1385,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
+                            const matchingBank = bankAccounts.find((ba: any) => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
                             setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                             setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                             setIsPeriodBankDetailsOpen(true);
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
@@ -1411,10 +1437,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-blue-50/50 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
+                            const matchingBank = bankAccounts.find((ba: any) => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                             setIsPeriodBankDetailsOpen(true);
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
@@ -1428,10 +1467,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
+                            const matchingBank = bankAccounts.find((ba: any) => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                             setIsPeriodBankDetailsOpen(true);
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
@@ -1445,10 +1497,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-purple-50/50 cursor-pointer"
-                          onClick={() => {
+                          onClick={async () => {
+                            const matchingBank = bankAccounts.find((ba: any) => 
+                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                            );
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
+                            setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                            setSelectedCOAId(String(a.id));
+                            setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                             setIsPeriodBankDetailsOpen(true);
+                            try {
+                              const res = await accountingApi.getLedgerEntries(a.id);
+                              setLedgerEntries(res.data);
+                            } catch (error) {
+                              toast.error("Failed to load ledger details");
+                            }
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
@@ -1535,10 +1600,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <TableRow 
                         key={a.id} 
                         className="hover:bg-[#F5F5F5]/50 cursor-pointer"
-                        onClick={() => {
+                        onClick={async () => {
+                          const matchingBank = bankAccounts.find((ba: any) => 
+                            ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
+                            a.name.toLowerCase().includes(ba.account_name.toLowerCase())
+                          );
                           setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                           setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
+                          setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+                          setSelectedCOAId(String(a.id));
+                          setDrillDownMode(matchingBank ? 'bank' : 'ledger');
                           setIsPeriodBankDetailsOpen(true);
+                          try {
+                            const res = await accountingApi.getLedgerEntries(a.id);
+                            setLedgerEntries(res.data);
+                          } catch (error) {
+                            toast.error("Failed to load ledger details");
+                          }
                         }}
                       >
                         <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
