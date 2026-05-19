@@ -2515,7 +2515,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       </Dialog>
 
       {/* Global Journal Entry Modal */}
-      <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen}>
+      <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen} modal={false}>
         <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl">
           <form onSubmit={handlePostJournal}>
             <DialogHeader className="bg-[#F5F5F5]/30 p-6 border-b border-[#F5F5F5]">
