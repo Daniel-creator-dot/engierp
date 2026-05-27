@@ -780,7 +780,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11"><Plus className="w-4 h-4" /> Enter Bill</Button></DialogTrigger>
                   <DialogContent className="rounded-2xl">
                     <form onSubmit={handleRecordBill}>
-                      <DialogHeader><DialogTitle>Log Vendor Vendor</DialogTitle></DialogHeader>
+                      <DialogHeader><DialogTitle>Log Vendor</DialogTitle></DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="space-y-2">
                           <Label>Supplier</Label>
@@ -808,13 +808,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Expense Account (Job Cost Category)</Label>
+<Label>Expense Account (Job Cost Category)</Label>
                           <Select name="account_id" required>
                             <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
                             <SelectContent>
                               {coa.filter(a => a.type === 'Expense').map(a => (
                                 <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
                               ))}
+                              <SelectItem value={String(coa.find(a => a.name === 'Equipment Hire')?.id || '')} disabled>
+                                ---
+                                Vehicles: Map under “Equipment Hire” if required
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
