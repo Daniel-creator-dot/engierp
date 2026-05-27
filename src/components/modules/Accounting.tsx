@@ -815,10 +815,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               {coa.filter(a => a.type === 'Expense').map(a => (
                                 <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
                               ))}
-                              <SelectItem value={String(coa.find(a => a.name === 'Equipment Hire')?.id || '')} disabled>
-                                ---
-                                Vehicles: Map under “Equipment Hire” if required
-                              </SelectItem>
+                              {(() => {
+                                const equipmentHire = coa.find(a => a.name === 'Equipment Hire');
+                                if (!equipmentHire) return null;
+                                return (
+                                  <SelectItem value={String(equipmentHire.id)} disabled>
+                                    Vehicles: Map under “Equipment Hire”
+                                  </SelectItem>
+                                );
+                              })()}
                             </SelectContent>
                           </Select>
                         </div>
