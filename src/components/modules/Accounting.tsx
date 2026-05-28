@@ -808,22 +808,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           </div>
                         </div>
                         <div className="space-y-2">
-<Label>Expense Account (Job Cost Category)</Label>
+<Label>Expense / Asset Account (Job Cost Category)</Label>
                           <Select name="account_id" required>
                             <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
                             <SelectContent>
-                              {coa.filter(a => a.type === 'Expense').map(a => (
-                                <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
+                              {coa.filter(a => a.type === 'Expense' || (a.type === 'Asset' && a.code.startsWith('12'))).map(a => (
+                                <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name} ({a.type === 'Asset' ? 'Fixed Asset' : 'Expense'})</SelectItem>
                               ))}
-                              {(() => {
-                                const equipmentHire = coa.find(a => a.name === 'Equipment Hire');
-                                if (!equipmentHire) return null;
-                                return (
-                                  <SelectItem value={String(equipmentHire.id)} disabled>
-                                    Vehicles: Map under “Equipment Hire”
-                                  </SelectItem>
-                                );
-                              })()}
                             </SelectContent>
                           </Select>
                         </div>

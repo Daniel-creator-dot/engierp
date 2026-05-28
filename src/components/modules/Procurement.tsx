@@ -548,6 +548,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                              <SelectItem value="Finishing">Finishing & Fixtures</SelectItem>
                              <SelectItem value="Plant Hire">Plant & Equipment Hire</SelectItem>
                              <SelectItem value="Safety">Safety & PPE</SelectItem>
+                             <SelectItem value="Vehicles">Vehicles (Motor/Transport)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
