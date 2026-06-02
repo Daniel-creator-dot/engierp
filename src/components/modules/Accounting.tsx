@@ -261,14 +261,18 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setProjects(projRes.data);
         setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-ap') {
-        const [billsRes, supRes, accRes] = await Promise.all([
+        const [billsRes, supRes, accRes, coaRes, projRes] = await Promise.all([
           accountingApi.getBills(),
           procurementApi.getSuppliers(),
-          accountingApi.getBankAccounts()
+          accountingApi.getBankAccounts(),
+          accountingApi.getCOA(),
+          projectsApi.getProjects()
         ]);
         setBills(billsRes.data);
         setSuppliers(supRes.data);
         setBankAccounts(accRes.data);
+        setCOA(coaRes.data);
+        setProjects(projRes.data);
       } else if (activeSub === 'accounting-transactions') {
         const [txRes, coaRes, btx] = await Promise.all([
           accountingApi.getTransactions(),
