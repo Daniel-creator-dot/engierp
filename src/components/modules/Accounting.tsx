@@ -385,8 +385,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const taxAmount = subtotal * (currentTaxRate / 100);
     const totalAmount = subtotal + taxAmount;
 
+    const initialPaymentAmount = Number(formData.get('initial_payment') || 0);
+    const paymentMethod = formData.get('payment_method') as string;
+    const paymentBankAccountId = formData.get('payment_bank_account_id') as string;
+    const paymentReference = formData.get('payment_reference') as string;
+
+    if (initialPaymentAmount > totalAmount) {
+      toast.error('Payment cannot exceed the invoice total');
+      return;
+    }
+
+    if (initialPaymentAmount > 0 && (!paymentMethod || !paymentBankAccountId || !paymentReference)) {
+      toast.error('Complete payment details to record the initial payment');
+      return;
+    }
+
+    const invoiceId = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
     const data = {
-      id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: invoiceId,
       client: project?.client || formData.get('client_name'),
       amount: totalAmount,
       tax_amount: taxAmount,
@@ -400,7 +416,21 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     };
     try {
       await accountingApi.createInvoice(data);
-      toast.success('Sales invoice generated');
+      if (initialPaymentAmount > 0) {
+        await accountingApi.recordPayment({
+          payment_id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
+          target_type: 'Invoice',
+          target_id: invoiceId,
+          amount: initialPaymentAmount,
+          date: new Date().toISOString().split('T')[0],
+          method: paymentMethod,
+          reference: paymentReference,
+          bank_account_id: paymentBankAccountId
+        });
+        toast.success('Sales invoice generated and initial payment recorded');
+      } else {
+        toast.success('Sales invoice generated');
+      }
       setIsCreateInvoiceOpen(false);
       setInvoiceItems([{ description: '', quantity: 1, unitPrice: 0 }]);
       fetchData();
@@ -1040,6 +1070,47 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </div>
                           </div>
                         </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">Record initial payment</p>
+                              <p className="text-xs text-slate-500">Optional: capture the first payment when raising the invoice.</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Amount Received</Label>
+                              <Input name="initial_payment" type="number" min="0" step="0.01" defaultValue={0} className="bg-white border-slate-200" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Payment Method</Label>
+                              <Select name="payment_method">
+                                <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Optional" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Bank Direct">Bank Direct</SelectItem>
+                                  <SelectItem value="Cheque">Cheque</SelectItem>
+                                  <SelectItem value="Mobile Money">Mobile Money</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Destination Bank Account</Label>
+                              <Select name="payment_bank_account_id">
+                                <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Select bank account" /></SelectTrigger>
+                                <SelectContent>
+                                  {bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Reference / Cheque No.</Label>
+                              <Input name="payment_reference" className="bg-white border-slate-200" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-12 shadow-lg shadow-blue-500/20 uppercase tracking-wider">GENERATE & POST INVOICE</Button></DialogFooter>
                     </form>
@@ -1057,11 +1128,18 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <TableCell className="font-bold text-blue-600">{inv.id}</TableCell>
                       <TableCell className="font-bold text-[#141414]">{inv.client}</TableCell>
                       <TableCell className="text-[#8E9299] text-xs font-mono">{inv.dueDate}</TableCell>
-                      <TableCell className="text-right font-black">{currSym}{Number(inv.amount).toLocaleString()}</TableCell>
-                      <TableCell><Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge></TableCell>
+                      <TableCell className="text-right font-black">
+                        {currSym}{Number(inv.amount).toLocaleString()}
+                        {inv.status === 'partially_paid' && inv.balance_due !== undefined && (
+                          <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{Number(inv.balance_due).toLocaleString()}</p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : inv.status === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge>
+                      </TableCell>
                       <TableCell className="text-right space-x-2">
                         {inv.status !== 'paid' && (
-                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount }); setIsPayInvoiceOpen(true); }}>
+                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount, balance_due: inv.balance_due ?? inv.amount }); setIsPayInvoiceOpen(true); }}>
                             RECEIVE
                           </Button>
                         )}
@@ -1140,7 +1218,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2"><Label>Amount Received</Label><Input name="amount" type="number" defaultValue={selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
+                      <div className="space-y-2"><Label>Amount Received</Label><Input name="amount" type="number" defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2">
                         <Label>Depost Method</Label>
                         <Select name="method" required>
@@ -1158,7 +1236,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     </div>
                     <div className="space-y-2"><Label>Reference / Cheque No.</Label><Input name="reference" required className="bg-[#F5F5F5] border-none" /></div>
                   </div>
-                  <DialogFooter><Button type="submit" className="w-full bg-blue-600 text-white h-11 font-bold">CLEAR INVOICE BALANCE</Button></DialogFooter>
+                  <DialogFooter><Button type="submit" className="w-full bg-blue-600 text-white h-11 font-bold">RECORD PAYMENT</Button></DialogFooter>
                 </form>
               </DialogContent>
             </Dialog>

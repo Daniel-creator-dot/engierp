@@ -59,7 +59,14 @@ export interface Invoice {
   client: string;
   amount: number;
   dueDate: string;
-  status: 'paid' | 'unpaid' | 'overdue';
+  status: 'paid' | 'unpaid' | 'overdue' | 'partially_paid';
+  subtotal?: number;
+  tax_amount?: number;
+  tax_rate?: number;
+  tax_name?: string;
+  items?: string | Array<{ description: string; quantity: number; unitPrice: number }>;
+  paid_amount?: number;
+  balance_due?: number;
   project?: string;
 }
 

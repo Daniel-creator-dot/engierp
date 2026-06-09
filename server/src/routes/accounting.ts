@@ -40,8 +40,30 @@ router.post('/transactions', authenticateToken, authorizeRole(['accountant', 'ad
 // Invoices
 router.get('/invoices', authenticateToken, async (req, res) => {
   try {
-    const invoices = await db('invoices').select('*');
-    res.json(invoices);
+    const invoices = await db('invoices as i')
+      .leftJoin('payments as p', function() {
+        this.on('p.target_id', 'i.id').andOn('p.target_type', db.raw('?', ['Invoice']));
+      })
+      .select('i.*', db.raw('COALESCE(SUM(p.amount), 0) as paid_amount'))
+      .groupBy('i.id')
+      .orderBy('i.created_at', 'desc');
+
+    const enhancedInvoices = invoices.map((invoice: any) => {
+      const amount = Number(invoice.amount || 0);
+      const paidAmount = Number(invoice.paid_amount || 0);
+      const balanceDue = Math.max(0, amount - paidAmount);
+      let status = invoice.status;
+      if (paidAmount >= amount && amount > 0) {
+        status = 'paid';
+      } else if (paidAmount > 0) {
+        status = 'partially_paid';
+      } else if (!status) {
+        status = 'unpaid';
+      }
+      return { ...invoice, paid_amount: paidAmount, balance_due: balanceDue, status };
+    });
+
+    res.json(enhancedInvoices);
   } catch (error: any) {
     console.error('Error fetching invoices:', error);
     res.status(500).json({ message: error.message || 'Error fetching invoices' });
@@ -646,7 +668,21 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
 
     // 2. Update target status
     if (data.target_type === 'Invoice') {
-      await trx('invoices').where('id', data.target_id).update({ status: 'paid' });
+      const paymentSummary: any = await trx('payments')
+        .where({ target_type: 'Invoice', target_id: data.target_id })
+        .sum('amount as total_paid')
+        .first();
+      const totalPaid = Number(paymentSummary?.total_paid || 0);
+      const invoice = await trx('invoices').where('id', data.target_id).first();
+      if (invoice) {
+        let invoiceStatus = 'unpaid';
+        if (totalPaid >= Number(invoice.amount)) {
+          invoiceStatus = 'paid';
+        } else if (totalPaid > 0) {
+          invoiceStatus = 'partially_paid';
+        }
+        await trx('invoices').where('id', data.target_id).update({ status: invoiceStatus });
+      }
     } else if (data.target_type === 'Bill') {
       await trx('bills').where('id', data.target_id).update({ status: 'Paid' });
     }
