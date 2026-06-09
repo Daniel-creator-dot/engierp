@@ -1162,7 +1162,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
                           const content = `
                             <div style="margin-top: 40px;">
-                              <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
+                              <div style="display: flex; justify-content: space-between; margin-bottom: 40px; gap: 20px; flex-wrap: wrap;">
                                 <div>
                                   <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Bill To:</h4>
                                   <h3 style="margin: 0;">${inv.client}</h3>
@@ -1171,6 +1171,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                   <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Invoice Details:</h4>
                                   <p style="margin: 0;"><strong>Invoice ID:</strong> ${inv.id}</p>
                                   <p style="margin: 0;"><strong>Due Date:</strong> ${inv.dueDate}</p>
+                                </div>
+                              </div>
+                              <div style="margin-bottom: 24px; display: flex; justify-content: flex-start; gap: 24px; flex-wrap: wrap;">
+                                <div style="min-width: 180px;">
+                                  <p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Amount Paid</p>
+                                  <p style="margin: 0; font-size: 1rem; font-weight: 700;">${currSym}${Number(inv.paid_amount || 0).toLocaleString()}</p>
+                                </div>
+                                <div style="min-width: 180px;">
+                                  <p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Balance Due</p>
+                                  <p style="margin: 0; font-size: 1rem; font-weight: 700;">${currSym}${Number(inv.balance_due ?? (Number(inv.amount) - Number(inv.paid_amount || 0))).toLocaleString()}</p>
                                 </div>
                               </div>
                               <table style="width: 100%; border-collapse: collapse;">
