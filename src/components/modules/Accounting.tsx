@@ -864,22 +864,38 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <Table className="bg-white">
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {bills.map((bill, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-bold text-[#141414]">{bill.supplier_name}</TableCell>
-                      <TableCell className="text-[#8E9299] text-xs font-medium">{bill.category}</TableCell>
-                      <TableCell className="font-mono text-xs">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right font-black text-red-600">{currSym}{Number(bill.amount).toLocaleString()}</TableCell>
-                      <TableCell><Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-600 border-none'}>{bill.status.toUpperCase()}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        {bill.status !== 'Paid' && (
-                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount }); setIsPayBillOpen(true); }}>
-                            PAY
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {bills.map((bill, idx) => {
+                    const statusLower = bill.status?.toLowerCase();
+                    return (
+                      <TableRow key={idx}>
+                        <TableCell className="font-bold text-[#141414]">{bill.supplier_name}</TableCell>
+                        <TableCell className="text-[#8E9299] text-xs font-medium">{bill.category}</TableCell>
+                        <TableCell className="font-mono text-xs">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right font-black text-red-600">
+                          {currSym}{Number(bill.amount).toLocaleString()}
+                          {statusLower === 'partially_paid' && bill.balance_due !== undefined && (
+                            <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{Number(bill.balance_due).toLocaleString()}</p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={
+                            statusLower === 'paid' ? 'bg-green-100 text-green-700 border-none' : 
+                            statusLower === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 
+                            'bg-red-50 text-red-600 border-none'
+                          }>
+                            {bill.status.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statusLower !== 'paid' && (
+                            <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setIsPayBillOpen(true); }}>
+                              PAY
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -891,7 +907,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <DialogHeader><DialogTitle>Process Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2"><Label>Amount to Pay</Label><Input name="amount" type="number" defaultValue={selectedTarget?.amount} max={selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
+                      <div className="space-y-2">
+                        <Label>Amount to Pay</Label>
+                        <Input 
+                          name="amount" 
+                          type="number" 
+                          defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} 
+                          max={selectedTarget?.balance_due ?? selectedTarget?.amount} 
+                          required 
+                          className="bg-[#F5F5F5] border-none font-bold" 
+                        />
+                      </div>
                       <div className="space-y-2">
                         <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>

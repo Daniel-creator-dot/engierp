@@ -583,11 +583,35 @@ router.patch('/bank-transactions/:id', authenticateToken, authorizeRole(['accoun
 // Vendor Bills (AP)
 router.get('/bills', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
   try {
-    const bills = await db('bills')
-      .select('bills.*', 'suppliers.name as supplier_name')
-      .join('suppliers', 'bills.supplier_id', 'suppliers.id')
-      .orderBy('due_date', 'asc');
-    res.json(bills);
+    const bills = await db('bills as b')
+      .join('suppliers', 'b.supplier_id', 'suppliers.id')
+      .leftJoin('payments as p', function() {
+        this.on('p.target_id', db.raw('CAST(b.id AS VARCHAR)')).andOn('p.target_type', db.raw('?', ['Bill']));
+      })
+      .select(
+        'b.*',
+        'suppliers.name as supplier_name',
+        db.raw('COALESCE(SUM(p.amount), 0) as paid_amount')
+      )
+      .groupBy('b.id', 'suppliers.name')
+      .orderBy('b.due_date', 'asc');
+
+    const enhancedBills = bills.map((bill: any) => {
+      const amount = Number(bill.amount || 0);
+      const paidAmount = Number(bill.paid_amount || 0);
+      const balanceDue = Math.max(0, amount - paidAmount);
+      let status = bill.status || 'unpaid';
+      if (paidAmount >= amount && amount > 0) {
+        status = 'paid';
+      } else if (paidAmount > 0) {
+        status = 'partially_paid';
+      } else {
+        status = 'unpaid';
+      }
+      return { ...bill, paid_amount: paidAmount, balance_due: balanceDue, status };
+    });
+
+    res.json(enhancedBills);
   } catch (error: any) {
     console.error('Error fetching bills:', error);
     res.status(500).json({ message: error.message || 'Error fetching bills' });
@@ -684,7 +708,21 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
         await trx('invoices').where('id', data.target_id).update({ status: invoiceStatus });
       }
     } else if (data.target_type === 'Bill') {
-      await trx('bills').where('id', data.target_id).update({ status: 'Paid' });
+      const paymentSummary: any = await trx('payments')
+        .where({ target_type: 'Bill', target_id: data.target_id })
+        .sum('amount as total_paid')
+        .first();
+      const totalPaid = Number(paymentSummary?.total_paid || 0);
+      const bill = await trx('bills').where('id', data.target_id).first();
+      if (bill) {
+        let billStatus = 'unpaid';
+        if (totalPaid >= Number(bill.amount)) {
+          billStatus = 'paid';
+        } else if (totalPaid > 0) {
+          billStatus = 'partially_paid';
+        }
+        await trx('bills').where('id', data.target_id).update({ status: billStatus });
+      }
     }
 
     // 3. Update bank account balance and cheque sequence if applicable
