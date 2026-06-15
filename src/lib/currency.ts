@@ -5,8 +5,7 @@ export const formatCurrency = (amount: number, currency: string = 'GHS') => {
 
 
 export const getCurrencySymbol = (currency: string = 'GHS') => {
-  // Use a glyph that is most reliably supported.
-  // "₵" can appear as "â" in some fonts/encodings.
-  return currency === 'USD' ? '$' : 'GH¢';
+  // Use a simple ASCII abbreviation to avoid encoding issues in CSV/Excel exports.
+  return currency === 'USD' ? '$' : 'Gh';
 };
 
