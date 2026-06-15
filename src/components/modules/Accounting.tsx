@@ -63,6 +63,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { accountingApi, settingsApi, projectsApi, procurementApi } from '../../lib/api';
 import { Transaction, Invoice } from '../../types';
+import { getCurrencySymbol } from '@/lib/currency';
 
 interface AccountingProps {
   activeSub?: string;
@@ -331,8 +332,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   };
 
   const getSetting = (key: string) => companySettings.find(s => s.key === key)?.value || '';
-  const currSym = getSetting('currency') === 'USD' ? '$' : 'GH₵';
+  const currSym = getSetting('currency') === 'USD' ? '$' : getCurrencySymbol(getSetting('currency')); // consistent symbol
   const accountingConfig = JSON.parse(getSetting('accounting_config') || '{"sales_tax_rate": "15", "tax_name": "VAT"}');
+
 
   // Bank Actions
   const handleAddBankAccount = async (e: React.FormEvent) => {
