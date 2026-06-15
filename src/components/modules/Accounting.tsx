@@ -2564,11 +2564,46 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </span>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="rounded-xl font-bold border-[#E4E3E0] h-11 px-6" onClick={() => setIsPeriodBankDetailsOpen(false)}>DISMISS</Button>
-                <Button className="bg-[#141414] text-white rounded-xl font-bold gap-2 h-11 px-6 shadow-lg shadow-[#141414]/20">
-                  <Printer className="w-4 h-4" /> EXPORT
-                </Button>
-              </div>
+                  <Button variant="outline" className="rounded-xl font-bold border-[#E4E3E0] h-11 px-6" onClick={() => setIsPeriodBankDetailsOpen(false)}>DISMISS</Button>
+                  <Button
+                    className="bg-[#141414] text-white rounded-xl font-bold gap-2 h-11 px-6 shadow-lg shadow-[#141414]/20"
+                    onClick={() => {
+                      if (drillDownMode === 'bank') {
+                        const rows = bankTx
+                          .filter((tx) => {
+                            let dm = true;
+                            if (periodFilterDates) {
+                              const txd = tx.date.split('T')[0];
+                              dm = txd >= periodFilterDates.start && txd <= periodFilterDates.end;
+                            }
+                            let am = true;
+                            if (periodFilterAccountId) am = String(tx.bank_account_id) === String(periodFilterAccountId);
+                            return dm && am;
+                          })
+                          .map((tx: any) => [
+                            new Date(tx.date).toLocaleDateString(),
+                            tx.description,
+                            tx.bank_name,
+                            String(tx.amount),
+                            tx.type,
+                            tx.status,
+                          ]);
+                        handleExportCSV('bank_drilldown', ['Date', 'Description', 'Bank', 'Amount', 'Type', 'Status'], rows);
+                      } else {
+                        const rows = ledgerEntries.map((le: any) => [
+                          new Date(le.date).toLocaleDateString(),
+                          le.description,
+                          le.type,
+                          le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '',
+                          le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '',
+                        ]);
+                        handleExportCSV('ledger_drilldown', ['Date', 'Description', 'Type', 'Debit', 'Credit'], rows);
+                      }
+                    }}
+                  >
+                    <Printer className="w-4 h-4" /> EXPORT
+                  </Button>
+                </div>
             </div>
           </DialogFooter>
         </DialogContent>
