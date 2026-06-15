@@ -63,7 +63,8 @@ import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { accountingApi, settingsApi, projectsApi, procurementApi } from '../../lib/api';
 import { Transaction, Invoice } from '../../types';
-import { getCurrencySymbol } from '@/lib/currency';
+import { getCurrencySymbol } from '../../lib/currency';
+
 
 interface AccountingProps {
   activeSub?: string;
