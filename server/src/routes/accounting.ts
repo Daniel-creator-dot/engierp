@@ -71,11 +71,55 @@ router.get('/invoices', authenticateToken, async (req, res) => {
 });
 
 router.post('/invoices', authenticateToken, authorizeRole(['accountant', 'admin']), async (req, res) => {
+  const trx = await db.transaction();
   try {
     const invoice = req.body;
-    await db('invoices').insert(invoice);
-    res.status(201).json(invoice);
+    const [inserted] = await trx('invoices').insert(invoice).returning('id');
+    const invoiceId = typeof inserted === 'object' ? inserted.id : inserted;
+
+    // Create a journal entry and ledger postings for the invoice (Debit: AR, Credit: Revenue)
+    const [insertedJournal] = await trx('journal_entries').insert({
+      date: new Date().toISOString().split('T')[0],
+      description: `Sales Invoice: ${invoiceId}`,
+      project_id: invoice.project_id || null,
+      reference_type: 'invoice',
+      reference_id: String(invoiceId)
+    }).returning('id');
+    const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
+
+    const amount = Number(invoice.amount || invoice.subtotal || 0);
+
+    // Try to locate Accounts Receivable account (handle both code variants used in seeds/migrations)
+    let arAccount = await trx('chart_of_accounts').where(function() {
+      this.where('code', '1003').orWhere('code', '1104').orWhere('name', 'ilike', '%accounts receivable%');
+    }).first();
+    if (!arAccount) {
+      arAccount = await trx('chart_of_accounts').where('type', 'Asset').first();
+    }
+
+    // Locate a revenue/income account
+    let revenueAcc = await trx('chart_of_accounts').where(function() {
+      this.where('code', '4001').orWhere('code', '4101').orWhere('type', 'Income');
+    }).first();
+    if (!revenueAcc) {
+      revenueAcc = await trx('chart_of_accounts').where('type', 'Income').first();
+    }
+
+    if (arAccount && revenueAcc && amount > 0) {
+      await trx('ledger_entries').insert([
+        { journal_id, account_id: arAccount.id, debit: amount, credit: 0 },
+        { journal_id, account_id: revenueAcc.id, debit: 0, credit: amount }
+      ]);
+
+      // Update COA balances: Assets (AR) increase with debit; Income accounts keep a positive running total
+      await trx('chart_of_accounts').where({ id: arAccount.id }).increment('balance', amount);
+      await trx('chart_of_accounts').where({ id: revenueAcc.id }).increment('balance', amount);
+    }
+
+    await trx.commit();
+    res.status(201).json({ ...invoice, id: invoiceId });
   } catch (error: any) {
+    await trx.rollback();
     console.error('Error creating invoice:', error);
     res.status(500).json({ message: error.message || 'Error creating invoice' });
   }
@@ -688,9 +732,12 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
     const data = req.body; // { payment_id, date, amount, method, reference, target_type, target_id, bank_account_id }
     
     // 1. Record payment
-    await trx('payments').insert(data);
+    const [inserted] = await trx('payments').insert(data).returning('id');
+    const paymentId = typeof inserted === 'object' ? inserted.id : inserted;
 
-    // 2. Update target status
+    // 2. Update target status and build context for ledger posting
+    let projectId: any = null;
+
     if (data.target_type === 'Invoice') {
       const paymentSummary: any = await trx('payments')
         .where({ target_type: 'Invoice', target_id: data.target_id })
@@ -699,6 +746,7 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
       const totalPaid = Number(paymentSummary?.total_paid || 0);
       const invoice = await trx('invoices').where('id', data.target_id).first();
       if (invoice) {
+        projectId = invoice.project_id || null;
         let invoiceStatus = 'unpaid';
         if (totalPaid >= Number(invoice.amount)) {
           invoiceStatus = 'paid';
@@ -707,6 +755,51 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
         }
         await trx('invoices').where('id', data.target_id).update({ status: invoiceStatus });
       }
+
+      // Create journal entry: Debit Bank/Cash, Credit Accounts Receivable
+      const [insertedJournal] = await trx('journal_entries').insert({
+        date: data.date || new Date().toISOString().split('T')[0],
+        description: `Payment ${data.payment_id} for Invoice ${data.target_id}`,
+        project_id: projectId,
+        reference_type: 'payment',
+        reference_id: String(paymentId)
+      }).returning('id');
+      const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
+
+      const amount = Number(data.amount || 0);
+
+      // Determine AR account
+      let arAccount = await trx('chart_of_accounts').where(function() {
+        this.where('code', '1003').orWhere('code', '1104').orWhere('name', 'ilike', '%accounts receivable%');
+      }).first();
+      if (!arAccount) arAccount = await trx('chart_of_accounts').where('type', 'Asset').first();
+
+      // Determine bank/cash COA to post to (try to match bank account name, else pick first cash/bank account)
+      let bankCoa: any = null;
+      if (data.bank_account_id) {
+        const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
+        if (bankAccRow) {
+          bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
+        }
+      }
+      if (!bankCoa) {
+        bankCoa = await trx('chart_of_accounts').where(function() {
+          this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
+        }).first();
+      }
+
+      if (bankCoa && arAccount && amount > 0) {
+        // Debit bank (increase asset), Credit AR (decrease asset)
+        await trx('ledger_entries').insert([
+          { journal_id, account_id: bankCoa.id, debit: amount, credit: 0 },
+          { journal_id, account_id: arAccount.id, debit: 0, credit: amount }
+        ]);
+
+        // Update COA balances
+        await trx('chart_of_accounts').where({ id: bankCoa.id }).increment('balance', amount);
+        await trx('chart_of_accounts').where({ id: arAccount.id }).decrement('balance', amount);
+      }
+
     } else if (data.target_type === 'Bill') {
       const paymentSummary: any = await trx('payments')
         .where({ target_type: 'Bill', target_id: data.target_id })
@@ -715,6 +808,7 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
       const totalPaid = Number(paymentSummary?.total_paid || 0);
       const bill = await trx('bills').where('id', data.target_id).first();
       if (bill) {
+        projectId = bill.project_id || null;
         let billStatus = 'unpaid';
         if (totalPaid >= Number(bill.amount)) {
           billStatus = 'paid';
@@ -723,9 +817,52 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
         }
         await trx('bills').where('id', data.target_id).update({ status: billStatus });
       }
+
+      // Create journal entry for vendor payment: Debit Accounts Payable, Credit Bank
+      const [insertedJournal] = await trx('journal_entries').insert({
+        date: data.date || new Date().toISOString().split('T')[0],
+        description: `Payment ${data.payment_id} for Bill ${data.target_id}`,
+        project_id: projectId,
+        reference_type: 'payment',
+        reference_id: String(paymentId)
+      }).returning('id');
+      const journal_id = typeof insertedJournal === 'object' ? insertedJournal.id : insertedJournal;
+
+      const amount = Number(data.amount || 0);
+
+      let apAccount = await trx('chart_of_accounts').where(function() {
+        this.where('code', '2001').orWhere('name', 'ilike', '%accounts payable%');
+      }).first();
+      if (!apAccount) apAccount = await trx('chart_of_accounts').where('type', 'Liability').first();
+
+      // Determine bank/co a as above
+      let bankCoa: any = null;
+      if (data.bank_account_id) {
+        const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
+        if (bankAccRow) {
+          bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
+        }
+      }
+      if (!bankCoa) {
+        bankCoa = await trx('chart_of_accounts').where(function() {
+          this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
+        }).first();
+      }
+
+      if (bankCoa && apAccount && amount > 0) {
+        // Debit AP (reduce liability), Credit bank (reduce asset)
+        await trx('ledger_entries').insert([
+          { journal_id, account_id: apAccount.id, debit: amount, credit: 0 },
+          { journal_id, account_id: bankCoa.id, debit: 0, credit: amount }
+        ]);
+
+        // Update COA balances: AP (liability) was previously decremented to show increase; increment it to reduce the liability
+        await trx('chart_of_accounts').where({ id: apAccount.id }).increment('balance', amount);
+        await trx('chart_of_accounts').where({ id: bankCoa.id }).decrement('balance', amount);
+      }
     }
 
-    // 3. Update bank account balance and cheque sequence if applicable
+    // 3. Update bank account balance and cheque sequence if applicable (kept for backward compat)
     const impact = data.target_type === 'Invoice' ? Number(data.amount) : -Number(data.amount);
     if (data.bank_account_id) {
        await trx('bank_accounts').where('id', data.bank_account_id).increment('balance', impact);
