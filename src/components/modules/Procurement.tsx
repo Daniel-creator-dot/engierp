@@ -22,6 +22,7 @@ import {
   Receipt,
   XCircle,
   CheckCircle,
+  Eye,
 } from 'lucide-react';
 import { 
   Card, 
@@ -75,6 +76,8 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const [isAddInventoryModalOpen, setIsAddInventoryModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [supplierHistory, setSupplierHistory] = useState<any>(null);
+  const [isBillDetailsOpen, setIsBillDetailsOpen] = useState(false);
+  const [selectedBill, setSelectedBill] = useState<any | null>(null);
   
   const [inventory, setInventory] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -620,6 +623,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                                 <TableHead>Due Date</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -635,6 +639,11 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                                     <Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
                                       {bill.status.toUpperCase()}
                                     </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button variant="ghost" size="sm" className="font-bold h-8 text-xs" onClick={() => { setSelectedBill(bill); setIsBillDetailsOpen(true); }}>
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -678,6 +687,45 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     </div>
                   </div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Bill Details Dialog */}
+            <Dialog open={isBillDetailsOpen} onOpenChange={setIsBillDetailsOpen}>
+              <DialogContent className="rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Bill Details</DialogTitle>
+                  <DialogDescription>View bill information</DialogDescription>
+                </DialogHeader>
+                {selectedBill && (
+                  <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Bill ID</Label>
+                      <div className="font-bold">{selectedBill.id}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <div>{new Date(selectedBill.date).toLocaleDateString()}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Due Date</Label>
+                      <div>{new Date(selectedBill.due_date).toLocaleDateString()}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Amount</Label>
+                      <div className="font-black text-lg">{currency === 'USD' ? '$' : 'GH₵'}{Number(selectedBill.total_amount).toLocaleString()}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Badge className={selectedBill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                        {selectedBill.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button onClick={() => setIsBillDetailsOpen(false)}>Close</Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>

@@ -21,7 +21,8 @@ import {
   ChevronsUpDown,
   ExternalLink,
   Globe,
-  Calendar
+  Calendar,
+  Eye
 } from 'lucide-react';
 import {
   Card,
@@ -193,6 +194,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [isPayInvoiceOpen, setIsPayInvoiceOpen] = useState(false);
   const [isRecordBillOpen, setIsRecordBillOpen] = useState(false);
   const [isPayBillOpen, setIsPayBillOpen] = useState(false);
+  const [isBillDetailsOpen, setIsBillDetailsOpen] = useState(false);
   const [isAddBankOpen, setIsAddBankOpen] = useState(false);
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isEditAccountOpen, setIsEditAccountOpen] = useState(false);
@@ -202,6 +204,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [obSearch, setObSearch] = useState('');
 
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
+  const [selectedBill, setSelectedBill] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
   const [invoiceItems, setInvoiceItems] = useState<{ description: string, quantity: number, unitPrice: number }[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
@@ -890,11 +893,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {statusLower !== 'paid' && (
-                            <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setIsPayBillOpen(true); }}>
-                              PAY
+                          <div className="flex gap-2 justify-end">
+                            <Button variant="ghost" size="sm" className="font-bold h-8 text-xs" onClick={() => { setSelectedBill(bill); setIsBillDetailsOpen(true); }}>
+                              <Eye className="w-4 h-4" />
                             </Button>
-                          )}
+                            {statusLower !== 'paid' && (
+                              <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setIsPayBillOpen(true); }}>
+                                PAY
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -949,6 +957,61 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   </div>
                   <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">CONFIRM DISBURSEMENT</Button></DialogFooter>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Bill Details Modal */}
+            <Dialog open={isBillDetailsOpen} onOpenChange={setIsBillDetailsOpen}>
+              <DialogContent className="rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Bill Details</DialogTitle>
+                  <DialogDescription>View complete information about this bill</DialogDescription>
+                </DialogHeader>
+                {selectedBill && (
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-[#8E9299]">Supplier</Label>
+                        <div className="p-3 bg-[#F5F5F5] rounded-xl font-bold">{selectedBill.supplier_name}</div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-[#8E9299]">Category</Label>
+                        <div className="p-3 bg-[#F5F5F5] rounded-xl font-medium">{selectedBill.category}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-[#8E9299]">Amount</Label>
+                        <div className="p-3 bg-red-50 rounded-xl font-black text-red-600">{currSym}{Number(selectedBill.amount).toLocaleString()}</div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-[#8E9299]">Due Date</Label>
+                        <div className="p-3 bg-[#F5F5F5] rounded-xl font-mono">{new Date(selectedBill.due_date).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-[#8E9299]">Status</Label>
+                        <Badge className={
+                          selectedBill.status?.toLowerCase() === 'paid' ? 'bg-green-100 text-green-700 border-none' : 
+                          selectedBill.status?.toLowerCase() === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 
+                          'bg-red-50 text-red-600 border-none'
+                        }>
+                          {selectedBill.status?.toUpperCase()}
+                        </Badge>
+                      </div>
+                      {selectedBill.status?.toLowerCase() === 'partially_paid' && selectedBill.balance_due !== undefined && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-[#8E9299]">Balance Due</Label>
+                          <div className="p-3 bg-orange-50 rounded-xl font-bold text-orange-600">{currSym}{Number(selectedBill.balance_due).toLocaleString()}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsBillDetailsOpen(false)} className="font-bold">Close</Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
