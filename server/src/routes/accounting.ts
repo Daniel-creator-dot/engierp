@@ -731,11 +731,62 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
   try {
     const data = req.body; // { payment_id, date, amount, method, reference, target_type, target_id, bank_account_id }
     
-    // 1. Record payment
+    // Validate required fields
+    if (!data.amount || Number(data.amount) <= 0) {
+      return res.status(400).json({ message: 'Payment amount must be greater than 0' });
+    }
+    if (!data.target_type || !data.target_id) {
+      return res.status(400).json({ message: 'target_type and target_id are required' });
+    }
+
+    // 1. Validate and get required accounts BEFORE recording payment
+    let bankCoa: any = null;
+    let arAccount: any = null;
+    let apAccount: any = null;
+
+    // Get bank account
+    if (data.bank_account_id) {
+      const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
+      if (bankAccRow) {
+        bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
+      }
+    }
+    if (!bankCoa) {
+      bankCoa = await trx('chart_of_accounts').where(function() {
+        this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
+      }).first();
+    }
+    if (!bankCoa) {
+      return res.status(400).json({ message: 'Bank or cash account not found in Chart of Accounts' });
+    }
+
+    // Get AR account if needed
+    if (data.target_type === 'Invoice') {
+      arAccount = await trx('chart_of_accounts').where(function() {
+        this.where('code', '1003').orWhere('code', '1104').orWhere('name', 'ilike', '%accounts receivable%');
+      }).first();
+      if (!arAccount) arAccount = await trx('chart_of_accounts').where('type', 'Asset').first();
+      if (!arAccount) {
+        return res.status(400).json({ message: 'Accounts Receivable account not found' });
+      }
+    }
+
+    // Get AP account if needed
+    if (data.target_type === 'Bill') {
+      apAccount = await trx('chart_of_accounts').where(function() {
+        this.where('code', '2001').orWhere('name', 'ilike', '%accounts payable%');
+      }).first();
+      if (!apAccount) apAccount = await trx('chart_of_accounts').where('type', 'Liability').first();
+      if (!apAccount) {
+        return res.status(400).json({ message: 'Accounts Payable account not found' });
+      }
+    }
+
+    // 2. Record payment (only after validation succeeds)
     const [inserted] = await trx('payments').insert(data).returning('id');
     const paymentId = typeof inserted === 'object' ? inserted.id : inserted;
 
-    // 2. Update target status and build context for ledger posting
+    // 3. Update target status and build context for ledger posting
     let projectId: any = null;
 
     if (data.target_type === 'Invoice') {
@@ -768,37 +819,15 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
 
       const amount = Number(data.amount || 0);
 
-      // Determine AR account
-      let arAccount = await trx('chart_of_accounts').where(function() {
-        this.where('code', '1003').orWhere('code', '1104').orWhere('name', 'ilike', '%accounts receivable%');
-      }).first();
-      if (!arAccount) arAccount = await trx('chart_of_accounts').where('type', 'Asset').first();
+      // Debit bank (increase asset), Credit AR (decrease asset)
+      await trx('ledger_entries').insert([
+        { journal_id, account_id: bankCoa.id, debit: amount, credit: 0 },
+        { journal_id, account_id: arAccount.id, debit: 0, credit: amount }
+      ]);
 
-      // Determine bank/cash COA to post to (try to match bank account name, else pick first cash/bank account)
-      let bankCoa: any = null;
-      if (data.bank_account_id) {
-        const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
-        if (bankAccRow) {
-          bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
-        }
-      }
-      if (!bankCoa) {
-        bankCoa = await trx('chart_of_accounts').where(function() {
-          this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
-        }).first();
-      }
-
-      if (bankCoa && arAccount && amount > 0) {
-        // Debit bank (increase asset), Credit AR (decrease asset)
-        await trx('ledger_entries').insert([
-          { journal_id, account_id: bankCoa.id, debit: amount, credit: 0 },
-          { journal_id, account_id: arAccount.id, debit: 0, credit: amount }
-        ]);
-
-        // Update COA balances
-        await trx('chart_of_accounts').where({ id: bankCoa.id }).increment('balance', amount);
-        await trx('chart_of_accounts').where({ id: arAccount.id }).decrement('balance', amount);
-      }
+      // Update COA balances
+      await trx('chart_of_accounts').where({ id: bankCoa.id }).increment('balance', amount);
+      await trx('chart_of_accounts').where({ id: arAccount.id }).decrement('balance', amount);
 
     } else if (data.target_type === 'Bill') {
       const paymentSummary: any = await trx('payments')
@@ -830,36 +859,15 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
 
       const amount = Number(data.amount || 0);
 
-      let apAccount = await trx('chart_of_accounts').where(function() {
-        this.where('code', '2001').orWhere('name', 'ilike', '%accounts payable%');
-      }).first();
-      if (!apAccount) apAccount = await trx('chart_of_accounts').where('type', 'Liability').first();
+      // Debit AP (reduce liability), Credit bank (reduce asset)
+      await trx('ledger_entries').insert([
+        { journal_id, account_id: apAccount.id, debit: amount, credit: 0 },
+        { journal_id, account_id: bankCoa.id, debit: 0, credit: amount }
+      ]);
 
-      // Determine bank/co a as above
-      let bankCoa: any = null;
-      if (data.bank_account_id) {
-        const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
-        if (bankAccRow) {
-          bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
-        }
-      }
-      if (!bankCoa) {
-        bankCoa = await trx('chart_of_accounts').where(function() {
-          this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
-        }).first();
-      }
-
-      if (bankCoa && apAccount && amount > 0) {
-        // Debit AP (reduce liability), Credit bank (reduce asset)
-        await trx('ledger_entries').insert([
-          { journal_id, account_id: apAccount.id, debit: amount, credit: 0 },
-          { journal_id, account_id: bankCoa.id, debit: 0, credit: amount }
-        ]);
-
-        // Update COA balances: AP (liability) was previously decremented to show increase; increment it to reduce the liability
-        await trx('chart_of_accounts').where({ id: apAccount.id }).increment('balance', amount);
-        await trx('chart_of_accounts').where({ id: bankCoa.id }).decrement('balance', amount);
-      }
+      // Update COA balances: AP (liability) was previously decremented to show increase; increment it to reduce the liability
+      await trx('chart_of_accounts').where({ id: apAccount.id }).increment('balance', amount);
+      await trx('chart_of_accounts').where({ id: bankCoa.id }).decrement('balance', amount);
     }
 
     // 3. Update bank account balance and cheque sequence if applicable (kept for backward compat)
