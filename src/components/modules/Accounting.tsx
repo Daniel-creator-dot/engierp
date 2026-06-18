@@ -1034,10 +1034,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID', 'Customer', 'Due Date', 'Amount', 'Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
                   <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
-                  <DialogContent className="max-w-2xl rounded-2xl">
+                  <DialogContent className="max-w-2xl max-h-[90vh] rounded-2xl">
                     <form onSubmit={handleCreateInvoice}>
                       <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
-                      <div className="grid gap-6 py-4">
+                      <div className="grid gap-6 py-4 overflow-y-auto max-h-[calc(90vh-180px)] pr-2">
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>Project / Client</Label>
