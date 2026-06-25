@@ -748,13 +748,28 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
     if (data.bank_account_id) {
       const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
       if (bankAccRow) {
-        bankCoa = await trx('chart_of_accounts').where('name', 'ilike', `%${bankAccRow.account_name}%`).first();
+        // Try matching account_name under Asset type
+        bankCoa = await trx('chart_of_accounts')
+          .where('type', 'Asset')
+          .where('name', 'ilike', `%${bankAccRow.account_name}%`)
+          .first();
+        
+        // If not found, try matching bank_name (e.g. "ADB Bank" -> "ADB" or "omniBSIC Bank" -> "omniBSIC")
+        if (!bankCoa && bankAccRow.bank_name) {
+          const firstWord = bankAccRow.bank_name.split(' ')[0];
+          bankCoa = await trx('chart_of_accounts')
+            .where('type', 'Asset')
+            .where('name', 'ilike', `%${firstWord}%`)
+            .first();
+        }
       }
     }
     if (!bankCoa) {
-      bankCoa = await trx('chart_of_accounts').where(function() {
-        this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
-      }).first();
+      bankCoa = await trx('chart_of_accounts')
+        .where('type', 'Asset')
+        .where(function() {
+          this.where('name', 'ilike', '%bank%').orWhere('name', 'ilike', '%cash%');
+        }).first();
     }
     if (!bankCoa) {
       return res.status(400).json({ message: 'Bank or cash account not found in Chart of Accounts' });
