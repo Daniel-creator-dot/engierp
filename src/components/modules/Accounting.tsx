@@ -932,7 +932,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <div className="space-y-2">
                         <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="Bank Transfer">Bank Transfer</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem></SelectContent>
+                          <SelectContent><SelectItem value="Bank Transfer">Bank Transfer</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem><SelectItem value="Cash">Cash</SelectItem></SelectContent>
                         </Select>
                       </div>
                     </div>
