@@ -401,8 +401,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       return;
     }
 
-    if (initialPaymentAmount > 0 && (!paymentMethod || !paymentBankAccountId || !paymentReference)) {
-      toast.error('Complete payment details to record the initial payment');
+    if (initialPaymentAmount > 0 && !paymentMethod) {
+      toast.error('Payment method is required to record the initial payment');
+      return;
+    }
+
+    if (initialPaymentAmount > 0 && paymentMethod !== 'Cash' && !paymentBankAccountId) {
+      toast.error('Bank account is required for non-cash payments');
       return;
     }
 
@@ -423,16 +428,20 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     try {
       await accountingApi.createInvoice(data);
       if (initialPaymentAmount > 0) {
-        await accountingApi.recordPayment({
+        const paymentData: any = {
           payment_id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
           target_type: 'Invoice',
           target_id: invoiceId,
           amount: initialPaymentAmount,
           date: new Date().toISOString().split('T')[0],
           method: paymentMethod,
-          reference: paymentReference,
-          bank_account_id: paymentBankAccountId
-        });
+          reference: paymentReference || (paymentMethod === 'Cash' ? 'Cash Payment' : '')
+        };
+        // Only include bank_account_id if not Cash payment
+        if (paymentMethod !== 'Cash') {
+          paymentData.bank_account_id = paymentBankAccountId;
+        }
+        await accountingApi.recordPayment(paymentData);
         toast.success('Sales invoice generated and initial payment recorded');
       } else {
         toast.success('Sales invoice generated');
@@ -448,16 +457,20 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const data = {
+    const method = formData.get('method') as string;
+    const data: any = {
       payment_id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
       target_type: selectedTarget?.type,
       target_id: selectedTarget?.id,
       amount: Number(formData.get('amount')),
       date: new Date().toISOString().split('T')[0],
-      method: formData.get('method'),
-      reference: formData.get('reference'),
-      bank_account_id: formData.get('bank_account_id')
+      method: method,
+      reference: formData.get('reference') || (method === 'Cash' ? 'Cash Payment' : '')
     };
+    // Only include bank_account_id if not Cash payment
+    if (method !== 'Cash') {
+      data.bank_account_id = formData.get('bank_account_id');
+    }
     try {
       await accountingApi.recordPayment(data);
       toast.success('Payment recorded to ledger');
@@ -936,20 +949,22 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         </Select>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Source Bank Account</Label>
-                      <Select name="bank_account_id" required onValueChange={setSelectedBankId}>
-                        <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+                    {paymentMethod !== 'Cash' && (
+                      <div className="space-y-2">
+                        <Label>Source Bank Account</Label>
+                        <Select name="bank_account_id" required onValueChange={setSelectedBankId}>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                          <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Reference Note</Label>
                       <Input 
                         name="reference" 
-                        required 
+                        required={paymentMethod !== 'Cash'}
                         className="bg-[#F5F5F5] border-none" 
-                        placeholder={paymentMethod === 'Cheque' ? "Cheque No." : "Reference / TX Hash"} 
+                        placeholder={paymentMethod === 'Cash' ? "Optional (e.g., Receipt #)" : paymentMethod === 'Cheque' ? "Cheque No." : "Reference / TX Hash"} 
                         defaultValue={paymentMethod === 'Cheque' && selectedBankId ? (bankAccounts.find(b => String(b.id) === selectedBankId)?.next_cheque_number || '') : ''}
                         key={`${paymentMethod}-${selectedBankId}`}
                       />
@@ -1177,20 +1192,22 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </div>
                             <div className="space-y-2">
                               <Label>Payment Method</Label>
-                              <Select name="payment_method">
+                              <Select name="payment_method" onValueChange={(value) => setPaymentMethod(value)}>
                                 <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Optional" /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="Bank Direct">Bank Direct</SelectItem>
                                   <SelectItem value="Cheque">Cheque</SelectItem>
                                   <SelectItem value="Mobile Money">Mobile Money</SelectItem>
+                                  <SelectItem value="Cash">Cash</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Destination Bank Account</Label>
-                              <Select name="payment_bank_account_id">
+                          {paymentMethod !== 'Cash' && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label>Destination Bank Account</Label>
+                                <Select name="payment_bank_account_id" required={paymentMethod !== 'Cash'}>
                                 <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Select bank account" /></SelectTrigger>
                                 <SelectContent>
                                   {bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}
@@ -1199,9 +1216,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </div>
                             <div className="space-y-2">
                               <Label>Reference / Cheque No.</Label>
-                              <Input name="payment_reference" className="bg-white border-slate-200" />
+                              <Input name="payment_reference" className="bg-white border-slate-200" placeholder={paymentMethod === 'Cash' ? "Optional (e.g., Receipt #)" : "Reference / Cheque No."} />
                             </div>
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold h-12 shadow-lg shadow-blue-500/20 uppercase tracking-wider">GENERATE & POST INVOICE</Button></DialogFooter>
@@ -1322,21 +1340,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Amount Received</Label><Input name="amount" type="number" defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2">
-                        <Label>Depost Method</Label>
-                        <Select name="method" required>
+                        <Label>Deposit Method</Label>
+                        <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="Bank Direct">Bank Direct</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem></SelectContent>
+                          <SelectContent><SelectItem value="Bank Direct">Bank Direct</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem><SelectItem value="Cash">Cash</SelectItem></SelectContent>
                         </Select>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Destination Bank Account</Label>
-                      <Select name="bank_account_id" required>
-                        <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select bank account..." /></SelectTrigger>
-                        <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2"><Label>Reference / Cheque No.</Label><Input name="reference" required className="bg-[#F5F5F5] border-none" /></div>
+                    {paymentMethod !== 'Cash' && (
+                      <div className="space-y-2">
+                        <Label>Destination Bank Account</Label>
+                        <Select name="bank_account_id" required>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Select bank account..." /></SelectTrigger>
+                          <SelectContent>{bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-2"><Label>Reference / Cheque No.</Label><Input name="reference" required={paymentMethod !== 'Cash'} className="bg-[#F5F5F5] border-none" placeholder={paymentMethod === 'Cash' ? "Optional (e.g., Receipt #)" : "Reference / Cheque No."} /></div>
                   </div>
                   <DialogFooter><Button type="submit" className="w-full bg-blue-600 text-white h-11 font-bold">RECORD PAYMENT</Button></DialogFooter>
                 </form>

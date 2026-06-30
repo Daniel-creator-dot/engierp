@@ -738,14 +738,37 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
     if (!data.target_type || !data.target_id) {
       return res.status(400).json({ message: 'target_type and target_id are required' });
     }
+    // For non-cash payments, bank_account_id is required
+    if (data.method !== 'Cash' && !data.bank_account_id) {
+      return res.status(400).json({ message: 'bank_account_id is required for non-cash payments' });
+    }
+    // For non-cash payments, reference is required
+    if (data.method !== 'Cash' && !data.reference) {
+      return res.status(400).json({ message: 'reference is required for non-cash payments' });
+    }
 
     // 1. Validate and get required accounts BEFORE recording payment
     let bankCoa: any = null;
     let arAccount: any = null;
     let apAccount: any = null;
 
-    // Get bank account
-    if (data.bank_account_id) {
+    // Get bank account or cash account based on payment method
+    if (data.method === 'Cash') {
+      // For Cash payments, find the "Cash on Hand" account
+      bankCoa = await trx('chart_of_accounts')
+        .where('type', 'Asset')
+        .where(function() {
+          this.where('name', 'ilike', '%cash on hand%')
+            .orWhere('name', 'ilike', '%cash%')
+            .orWhere('code', '1001')
+            .orWhere('code', '1101');
+        })
+        .first();
+      if (!bankCoa) {
+        return res.status(400).json({ message: 'Cash on Hand account not found in Chart of Accounts' });
+      }
+    } else if (data.bank_account_id) {
+      // For non-cash payments, get the bank account
       const bankAccRow = await trx('bank_accounts').where('id', data.bank_account_id).first();
       if (bankAccRow) {
         // Try matching account_name under Asset type
@@ -764,7 +787,7 @@ router.post('/payments', authenticateToken, authorizeRole(['accountant', 'admin'
         }
       }
     }
-    if (!bankCoa) {
+    if (!bankCoa && data.method !== 'Cash') {
       bankCoa = await trx('chart_of_accounts')
         .where('type', 'Asset')
         .where(function() {
