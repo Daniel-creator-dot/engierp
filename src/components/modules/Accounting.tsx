@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Plus,
   Download,
@@ -658,6 +659,234 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     link.click();
     URL.revokeObjectURL(link.href);
     toast.success(`${filename}.csv exported successfully`);
+  };
+
+  const handlePrintIncomeStatement = () => {
+    const logo = getSetting('company_logo');
+    const companyName = getSetting('company_name') || 'ENGINEERING ERP';
+    const companyAddress = getSetting('company_address') || '';
+    const signature = getSetting('company_signature');
+    const currSym = getCurrencySymbol();
+
+    const totalRevenue = incomeStatement.filter(a => a.type === 'Income').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0);
+    const totalExpenses = incomeStatement.filter(a => a.type === 'Expense').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0);
+    const netIncome = totalRevenue - totalExpenses;
+
+    const revenueRows = incomeStatement.filter(a => a.type === 'Income').map((a: any) => 
+      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_credit - a.total_debit).toLocaleString()}</td></tr>`
+    ).join('');
+
+    const expenseRows = incomeStatement.filter(a => a.type === 'Expense').map((a: any) => 
+      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_debit - a.total_credit).toLocaleString()}</td></tr>`
+    ).join('');
+
+    const content = `
+      <div style="margin-bottom: 30px;">
+        <h3 style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">Period: ${reportStartDate} to ${reportEndDate}</h3>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+          <tr style="background: #F5F5F5;">
+            <th style="border: 1px solid #E4E3E0; padding: 12px; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Account</th>
+            <th style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: #E8F5E9;">
+            <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #2E7D32;">Revenue</td>
+          </tr>
+          ${revenueRows}
+          <tr style="background: #F5F5F5; font-weight: bold;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Revenue</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #2E7D32;">${currSym}${totalRevenue.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #FFEBEE;">
+            <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #C62828;">Operating Expenses</td>
+          </tr>
+          ${expenseRows}
+          <tr style="background: #F5F5F5; font-weight: bold;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Expenses</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalExpenses.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #141414; color: white;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Net Income</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${netIncome.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+    handlePrintDocument(`INCOME STATEMENT - ${companyName}`, content);
+  };
+
+  const handleExportIncomeStatementExcel = () => {
+    const currSym = getCurrencySymbol();
+    const totalRevenue = incomeStatement.filter(a => a.type === 'Income').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0);
+    const totalExpenses = incomeStatement.filter(a => a.type === 'Expense').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0);
+    const netIncome = totalRevenue - totalExpenses;
+
+    const data = [
+      ['Income Statement'],
+      [`Company: ${getSetting('company_name') || 'ENGINEERING ERP'}`],
+      [`Period: ${reportStartDate} to ${reportEndDate}`],
+      [`Generated: ${new Date().toLocaleDateString()}`],
+      [],
+      ['Revenue'],
+      ['Account', 'Amount'],
+      ...incomeStatement.filter(a => a.type === 'Income').map((a: any) => [a.name, a.total_credit - a.total_debit]),
+      [],
+      ['Total Revenue', totalRevenue],
+      [],
+      ['Operating Expenses'],
+      ['Account', 'Amount'],
+      ...incomeStatement.filter(a => a.type === 'Expense').map((a: any) => [a.name, a.total_debit - a.total_credit]),
+      [],
+      ['Total Expenses', totalExpenses],
+      [],
+      ['Net Income', netIncome],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Set column widths
+    ws['!cols'] = [{ wch: 30 }, { wch: 15 }];
+
+    // Style the headers
+    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "F5F5F5" } } };
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Income Statement');
+
+    // Generate and download
+    XLSX.writeFile(wb, `Income_Statement_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Income Statement exported to Excel successfully');
+  };
+
+  const handlePrintBalanceSheet = () => {
+    const logo = getSetting('company_logo');
+    const companyName = getSetting('company_name') || 'ENGINEERING ERP';
+    const companyAddress = getSetting('company_address') || '';
+    const signature = getSetting('company_signature');
+    const currSym = getCurrencySymbol();
+
+    const assets = balanceSheet.accounts.filter((a: any) => a.type === 'Asset');
+    const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
+    const equity = balanceSheet.accounts.filter((a: any) => a.type === 'Equity');
+    
+    const totalAssets = assets.reduce((s: number, a: any) => s + a.balance, 0);
+    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + a.balance, 0);
+    const totalEquity = equity.reduce((s: number, a: any) => s + a.balance, 0) + balanceSheet.retainedEarnings;
+
+    const assetRows = assets.map((a: any) => 
+      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
+    ).join('');
+
+    const liabilityRows = liabilities.map((a: any) => 
+      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
+    ).join('');
+
+    const equityRows = equity.map((a: any) => 
+      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
+    ).join('');
+
+    const content = `
+      <div style="margin-bottom: 30px;">
+        <h3 style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">As of: ${reportEndDate}</h3>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+          <tr style="background: #F5F5F5;">
+            <th style="border: 1px solid #E4E3E0; padding: 12px; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Account</th>
+            <th style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: #E3F2FD;">
+            <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #1565C0;">Assets</td>
+          </tr>
+          ${assetRows}
+          <tr style="background: #F5F5F5; font-weight: bold;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Assets</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #1565C0;">${currSym}${totalAssets.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #FFEBEE;">
+            <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #C62828;">Liabilities</td>
+          </tr>
+          ${liabilityRows}
+          <tr style="background: #F5F5F5; font-weight: bold;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Liabilities</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalLiabilities.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #F3E5F5;">
+            <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #6A1B9A;">Equity</td>
+          </tr>
+          ${equityRows}
+          <tr style="background: #F5F5F5;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Retained Earnings</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right;">${currSym}${balanceSheet.retainedEarnings.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #F5F5F5; font-weight: bold;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Equity</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #6A1B9A;">${currSym}${totalEquity.toLocaleString()}</td>
+          </tr>
+          <tr style="background: #141414; color: white;">
+            <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Total Liabilities & Equity</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${(totalLiabilities + totalEquity).toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+    handlePrintDocument(`BALANCE SHEET - ${companyName}`, content);
+  };
+
+  const handleExportBalanceSheetExcel = () => {
+    const currSym = getCurrencySymbol();
+    const assets = balanceSheet.accounts.filter((a: any) => a.type === 'Asset');
+    const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
+    const equity = balanceSheet.accounts.filter((a: any) => a.type === 'Equity');
+    
+    const totalAssets = assets.reduce((s: number, a: any) => s + a.balance, 0);
+    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + a.balance, 0);
+    const totalEquity = equity.reduce((s: number, a: any) => s + a.balance, 0) + balanceSheet.retainedEarnings;
+
+    const data = [
+      ['Balance Sheet'],
+      [`Company: ${getSetting('company_name') || 'ENGINEERING ERP'}`],
+      [`As of: ${reportEndDate}`],
+      [`Generated: ${new Date().toLocaleDateString()}`],
+      [],
+      ['Assets'],
+      ['Account', 'Balance'],
+      ...assets.map((a: any) => [a.name, a.balance]),
+      [],
+      ['Total Assets', totalAssets],
+      [],
+      ['Liabilities'],
+      ['Account', 'Balance'],
+      ...liabilities.map((a: any) => [a.name, a.balance]),
+      [],
+      ['Total Liabilities', totalLiabilities],
+      [],
+      ['Equity'],
+      ['Account', 'Balance'],
+      ...equity.map((a: any) => [a.name, a.balance]),
+      ['Retained Earnings', balanceSheet.retainedEarnings],
+      [],
+      ['Total Equity', totalEquity],
+      [],
+      ['Total Liabilities & Equity', totalLiabilities + totalEquity],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 30 }, { wch: 15 }];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
+
+    XLSX.writeFile(wb, `Balance_Sheet_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Balance Sheet exported to Excel successfully');
   };
 
   if (isLoading) {
@@ -1547,8 +1776,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             {reportTab === 'income-statement' && (
               <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
-                  <CardTitle>Income Statement</CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                  <CardTitle>Income Statement <span className="text-sm font-normal text-[#8E9299]">{reportStartDate} to {reportEndDate}</span></CardTitle>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handlePrintIncomeStatement}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                    <Button variant="outline" size="sm" onClick={handleExportIncomeStatementExcel}><FileSpreadsheet className="w-4 h-4 mr-2" /> Excel</Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
@@ -1630,7 +1862,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
                   <CardTitle>Balance Sheet <span className="text-sm font-normal text-[#8E9299]">As of {reportEndDate}</span></CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handlePrintBalanceSheet}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+                    <Button variant="outline" size="sm" onClick={handleExportBalanceSheetExcel}><FileSpreadsheet className="w-4 h-4 mr-2" /> Excel</Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
