@@ -70,14 +70,14 @@ export async function down(knex: Knex): Promise<void> {
     }
 
     const runId = last.run_id;
-    const entries = await trx('reconciliation_logs').where({ run_id }).select('account_id', 'old_balance');
+    const entries = await trx('reconciliation_logs').where({ run_id: runId }).select('account_id', 'old_balance');
 
     for (const e of entries) {
       await trx('chart_of_accounts').where({ id: e.account_id }).update({ balance: e.old_balance });
     }
 
     // Remove the log entries for that run
-    await trx('reconciliation_logs').where({ run_id }).del();
+    await trx('reconciliation_logs').where({ run_id: runId }).del();
 
     await trx.commit();
   } catch (err) {

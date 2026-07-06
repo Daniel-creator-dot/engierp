@@ -731,16 +731,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       [`Period: ${reportStartDate} to ${reportEndDate}`],
       [`Generated: ${new Date().toLocaleDateString()}`],
       [],
-      ['Revenue'],
       ['Account', 'Amount'],
-      ...incomeStatement.filter(a => a.type === 'Income').map((a: any) => [a.name, a.total_credit - a.total_debit]),
       [],
+      ['Revenue'],
+      ...incomeStatement.filter(a => a.type === 'Income').map((a: any) => [`  ${a.name}`, Number(a.total_credit || 0) - Number(a.total_debit || 0)]),
       ['Total Revenue', totalRevenue],
       [],
       ['Operating Expenses'],
-      ['Account', 'Amount'],
-      ...incomeStatement.filter(a => a.type === 'Expense').map((a: any) => [a.name, a.total_debit - a.total_credit]),
-      [],
+      ...incomeStatement.filter(a => a.type === 'Expense').map((a: any) => [`  ${a.name}`, Number(a.total_debit || 0) - Number(a.total_credit || 0)]),
       ['Total Expenses', totalExpenses],
       [],
       ['Net Income', netIncome],
@@ -749,10 +747,19 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const ws = XLSX.utils.aoa_to_sheet(data);
     
     // Set column widths
-    ws['!cols'] = [{ wch: 30 }, { wch: 15 }];
+    ws['!cols'] = [{ wch: 35 }, { wch: 20 }];
 
-    // Style the headers
-    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "F5F5F5" } } };
+    // Apply number formats
+    const currency = getSetting('currency') || 'GHS';
+    const numFormat = currency === 'USD' ? '"$"#,##0.00' : '"Gh"#,##0.00';
+    
+    for (const cellId in ws) {
+      if (cellId.startsWith('!')) continue;
+      const cell = ws[cellId];
+      if (cell && cell.t === 'n') {
+        cell.z = numFormat;
+      }
+    }
     
     // Create workbook
     const wb = XLSX.utils.book_new();
@@ -774,21 +781,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
     const equity = balanceSheet.accounts.filter((a: any) => a.type === 'Equity');
     
-    const totalAssets = assets.reduce((s: number, a: any) => s + a.balance, 0);
-    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + a.balance, 0);
-    const totalEquity = equity.reduce((s: number, a: any) => s + a.balance, 0) + balanceSheet.retainedEarnings;
+    const totalAssets = assets.reduce((s: number, a: any) => s + (Number(a.total_debit || 0) - Number(a.total_credit || 0)), 0);
+    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + (Number(a.total_credit || 0) - Number(a.total_debit || 0)), 0);
+    const totalEquity = equity.reduce((s: number, a: any) => s + (Number(a.total_credit || 0) - Number(a.total_debit || 0)), 0) + Number(balanceSheet.retainedEarnings || 0);
 
-    const assetRows = assets.map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
-    ).join('');
+    const assetRows = assets.map((a: any) => {
+      const bal = Number(a.total_debit || 0) - Number(a.total_credit || 0);
+      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+    }).join('');
 
-    const liabilityRows = liabilities.map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
-    ).join('');
+    const liabilityRows = liabilities.map((a: any) => {
+      const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
+      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+    }).join('');
 
-    const equityRows = equity.map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${a.balance.toLocaleString()}</td></tr>`
-    ).join('');
+    const equityRows = equity.map((a: any) => {
+      const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
+      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+    }).join('');
 
     const content = `
       <div style="margin-bottom: 30px;">
@@ -808,7 +818,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${assetRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Assets</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #1565C0;">${currSym}${totalAssets.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #1565C0;">${currSym}${totalAssets.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           <tr style="background: #FFEBEE;">
             <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #C62828;">Liabilities</td>
@@ -816,7 +826,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${liabilityRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Liabilities</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalLiabilities.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           <tr style="background: #F3E5F5;">
             <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #6A1B9A;">Equity</td>
@@ -824,15 +834,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${equityRows}
           <tr style="background: #F5F5F5;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Retained Earnings</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right;">${currSym}${balanceSheet.retainedEarnings.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right;">${currSym}${balanceSheet.retainedEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Equity</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #6A1B9A;">${currSym}${totalEquity.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #6A1B9A;">${currSym}${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           <tr style="background: #141414; color: white;">
             <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Total Liabilities & Equity</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${(totalLiabilities + totalEquity).toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${(totalLiabilities + totalEquity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         </tbody>
       </table>
@@ -847,9 +857,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
     const equity = balanceSheet.accounts.filter((a: any) => a.type === 'Equity');
     
-    const totalAssets = assets.reduce((s: number, a: any) => s + a.balance, 0);
-    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + a.balance, 0);
-    const totalEquity = equity.reduce((s: number, a: any) => s + a.balance, 0) + balanceSheet.retainedEarnings;
+    const totalAssets = assets.reduce((s: number, a: any) => s + (Number(a.total_debit || 0) - Number(a.total_credit || 0)), 0);
+    const totalLiabilities = liabilities.reduce((s: number, a: any) => s + (Number(a.total_credit || 0) - Number(a.total_debit || 0)), 0);
+    const totalEquity = equity.reduce((s: number, a: any) => s + (Number(a.total_credit || 0) - Number(a.total_debit || 0)), 0) + Number(balanceSheet.retainedEarnings || 0);
 
     const data = [
       ['Balance Sheet'],
@@ -857,31 +867,39 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       [`As of: ${reportEndDate}`],
       [`Generated: ${new Date().toLocaleDateString()}`],
       [],
-      ['Assets'],
       ['Account', 'Balance'],
-      ...assets.map((a: any) => [a.name, a.balance]),
       [],
+      ['Assets'],
+      ...assets.map((a: any) => [`  ${a.name}`, Number(a.total_debit || 0) - Number(a.total_credit || 0)]),
       ['Total Assets', totalAssets],
       [],
       ['Liabilities'],
-      ['Account', 'Balance'],
-      ...liabilities.map((a: any) => [a.name, a.balance]),
-      [],
+      ...liabilities.map((a: any) => [`  ${a.name}`, Number(a.total_credit || 0) - Number(a.total_debit || 0)]),
       ['Total Liabilities', totalLiabilities],
       [],
       ['Equity'],
-      ['Account', 'Balance'],
-      ...equity.map((a: any) => [a.name, a.balance]),
-      ['Retained Earnings', balanceSheet.retainedEarnings],
-      [],
+      ...equity.map((a: any) => [`  ${a.name}`, Number(a.total_credit || 0) - Number(a.total_debit || 0)]),
+      ['  Retained Earnings', Number(balanceSheet.retainedEarnings || 0)],
       ['Total Equity', totalEquity],
       [],
       ['Total Liabilities & Equity', totalLiabilities + totalEquity],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 30 }, { wch: 15 }];
+    ws['!cols'] = [{ wch: 35 }, { wch: 20 }];
     
+    // Apply number formats
+    const currency = getSetting('currency') || 'GHS';
+    const numFormat = currency === 'USD' ? '"$"#,##0.00' : '"Gh"#,##0.00';
+    
+    for (const cellId in ws) {
+      if (cellId.startsWith('!')) continue;
+      const cell = ws[cellId];
+      if (cell && cell.t === 'n') {
+        cell.z = numFormat;
+      }
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
 
