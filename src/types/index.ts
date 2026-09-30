@@ -58,6 +58,9 @@ export interface Employee {
   contract_end_date?: string | null;
   exit_date?: string | null;
   annual_leave_days?: number | null;
+  overtime_rate?: number | string | null;
+  pay_frequency?: 'Weekly' | 'Daily' | null;
+  tax_treatment?: 'casual_wht' | 'paye' | 'none' | null;
 }
 
 export interface Invoice {

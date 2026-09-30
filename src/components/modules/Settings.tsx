@@ -100,8 +100,7 @@ export default function Settings() {
       { name: 'Staff Advance', type: 'fixed', value: 0 },
       { name: 'Surcharge (Surge Charge)', type: 'fixed', value: 0 },
       { name: 'Health Insurance', type: 'fixed', value: 0 }
-    ],
-    max_leave_days_per_month: 5
+    ]
   });
 
   const [accountingConfig, setAccountingConfig] = useState<any>({
@@ -450,19 +449,6 @@ export default function Settings() {
                       </Button>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              <div className="pt-8 border-t border-[#F5F5F5] space-y-4">
-                <div className="space-y-2">
-                  <Label className="font-bold text-[#141414]">Monthly Leave Limit (Days per Employee)</Label>
-                  <Input 
-                    type="number" 
-                    value={payrollConfig.max_leave_days_per_month} 
-                    onChange={(e) => setPayrollConfig({...payrollConfig, max_leave_days_per_month: Number(e.target.value)})}
-                    className="bg-[#F5F5F5] border-none rounded-xl max-w-xs"
-                  />
-                  <p className="text-[10px] text-[#8E9299]">Restricts the total number of approved leave days an employee can have in a single calendar month.</p>
                 </div>
               </div>
 

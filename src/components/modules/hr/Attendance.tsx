@@ -101,10 +101,10 @@ const labelClass = 'text-[10px] font-bold uppercase text-[#8E9299]';
 const fieldClass = 'bg-[#F5F5F5] border-none rounded-xl h-11';
 
 function WageBadge({ type }: { type?: string | null }) {
-  const hourly = type === 'Hourly';
+  const cls = type === 'Hourly' ? 'bg-blue-100 text-blue-700' : type === 'Daily' ? 'bg-orange-100 text-orange-800' : 'bg-[#F5F5F5] text-[#141414]';
   return (
-    <Badge className={`border-none text-[10px] uppercase ${hourly ? 'bg-blue-100 text-blue-700' : 'bg-[#F5F5F5] text-[#141414]'}`}>
-      {type || 'Salaried'}
+    <Badge className={`border-none text-[10px] uppercase ${cls}`}>
+      {type === 'Daily' ? 'Casual' : type || 'Salaried'}
     </Badge>
   );
 }
@@ -732,9 +732,10 @@ export default function Attendance() {
         )}
 
         <p className="text-xs text-[#8E9299] leading-relaxed">
-          Hourly staff are costed at their hourly rate, with overtime at the multiplier set in payroll settings. Salaried staff
-          are costed at their monthly salary, split across projects in proportion to the hours they logged. Once a month's
-          payroll is approved, attendance for that month is locked and can no longer be changed.
+          Casual workers are costed at days worked (half day = 0.5) × their daily rate plus overtime hours at their overtime rate. Hourly
+          staff are costed at their hourly rate, with overtime at the multiplier set in payroll settings. Salaried staff are costed at
+          their monthly salary, split across projects in proportion to the hours they logged. Once pay based on attendance is approved,
+          that worker's attendance is locked: the whole month for monthly payroll, or the exact days for casual pay.
         </p>
       </TabsContent>
     </Tabs>

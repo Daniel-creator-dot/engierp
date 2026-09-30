@@ -1,7 +1,7 @@
 import { escapeHtml as esc } from '../../../lib/html';
 import { formatDate } from '../../../lib/dates';
 import type { PayrollEntry, Setting } from './types';
-import { getSetting, money, otherDeductionItems, parseItems } from './utils';
+import { getSetting, money, otherDeductionItems, parseBreakdown, parseItems, periodText } from './utils';
 
 interface PrintOptions {
   title: string;
@@ -88,7 +88,47 @@ const row = (label: string, value: string, cls = '') => `<tr class="${cls}"><td>
 export const payslipNumber = (p: PayrollEntry) => `PS-${p.year}-${String(p.id).padStart(5, '0')}`;
 export const voucherNumber = (p: PayrollEntry) => `PV-${p.year}-${String(p.id).padStart(5, '0')}`;
 
+const payPeriod = (p: PayrollEntry) => p.pay_type === 'casual' ? periodText(p.period_start, p.period_end) : `${p.month} ${p.year}`;
+
+/** Casual worker's pay slip: days × daily rate, overtime, withholding tax, net. */
+export function casualSlipHtml(p: PayrollEntry, symbol = 'GH₵') {
+  const allowances = parseItems(p.detailed_allowances).filter(a => !/^Overtime/i.test(a.type));
+  const deductions = otherDeductionItems(p.detailed_deductions);
+  const projects = parseBreakdown(p.project_breakdown);
+  const days = Number(p.days_worked) || 0;
+  const overtime = Number(p.overtime_hours) || 0;
+  const treatment = p.tax_treatment || 'casual_wht';
+  return `
+    <table class="grid">
+      <tr><th>Worker</th><td>${esc(p.name)}</td><th>Worker ID</th><td>${esc(p.employee_id)}</td></tr>
+      <tr><th>Trade / role</th><td>${esc(p.employee_role || '')}</td><th>Pay period</th><td>${esc(payPeriod(p))}</td></tr>
+      <tr><th>Phone</th><td>${esc(p.employee_phone || 'Not recorded')}</td><th>Pay date</th><td>${esc(formatDate(p.payment_date || undefined, 'Not set'))}</td></tr>
+      ${projects.length ? `<tr><th>Site(s)</th><td colspan="3">${esc(projects.map(s => `${s.project_name || s.project_id || 'General'} (${s.days} day${s.days === 1 ? '' : 's'}${s.overtime_hours ? `, ${s.overtime_hours} h OT` : ''})`).join('; '))}</td></tr>` : ''}
+    </table>
+    <h3>Earnings</h3>
+    <table class="grid">
+      ${row(`Days worked: ${days} × ${money(p.daily_rate, symbol)}`, money(p.base_salary, symbol))}
+      ${overtime ? row(`Overtime: ${overtime} h × ${money(p.overtime_rate, symbol)}`, money(p.overtime_pay, symbol)) : ''}
+      ${allowances.map(a => row(a.type, money(a.amount, symbol))).join('')}
+      ${row('Gross pay', money(p.gross, symbol), 'total')}
+    </table>
+    <h3>Deductions</h3>
+    <table class="grid">
+      ${treatment === 'casual_wht' ? row('Withholding tax (final)', money(p.wht, symbol)) : ''}
+      ${treatment === 'paye' ? row('SSNIT employee contribution', money(p.ssnit_employee, symbol)) + row('PAYE income tax', money(p.paye, symbol)) : ''}
+      ${deductions.map(d => row(d.type, money(d.amount, symbol))).join('')}
+      ${row('Total deductions', money(p.deductions, symbol), 'total')}
+    </table>
+    <h3>Net pay</h3>
+    <table class="grid">${row('Net pay', money(p.net_pay, symbol), 'total')}</table>
+    <div style="margin-top: 40px; display: flex; gap: 40px;">
+      <div style="flex: 1; border-top: 1px solid #141414; padding-top: 8px; text-align: center; font-size: 0.8rem; font-weight: bold;">PAID BY</div>
+      <div style="flex: 1; border-top: 1px solid #141414; padding-top: 8px; text-align: center; font-size: 0.8rem; font-weight: bold;">RECEIVED BY (SIGNATURE / THUMBPRINT)</div>
+    </div>`;
+}
+
 export function payslipHtml(p: PayrollEntry, symbol = 'GH₵') {
+  if (p.pay_type === 'casual') return casualSlipHtml(p, symbol);
   const allowances = parseItems(p.detailed_allowances);
   const deductions = otherDeductionItems(p.detailed_deductions);
   const gross = p.gross ?? Number(p.base_salary) + Number(p.allowances || 0);
@@ -126,11 +166,13 @@ export function voucherHtml(p: PayrollEntry, symbol = 'GH₵') {
   return `
     <table class="grid">
       <tr><th>Payee</th><td>${esc(p.name)} (${esc(p.employee_id)})</td><th>Voucher No.</th><td>${esc(voucherNumber(p))}</td></tr>
-      <tr><th>Period</th><td>${esc(`${p.month} ${p.year}`)}</td><th>Payment date</th><td>${esc(formatDate(p.payment_date || p.paid_at || undefined, 'Not set'))}</td></tr>
-      <tr><th>Pay to</th><td colspan="3">${esc([p.bank_name, p.branch, p.account_name, p.account_number].filter(Boolean).join(' / ') || 'Bank details not recorded')}</td></tr>
+      <tr><th>Period</th><td>${esc(payPeriod(p))}</td><th>Payment date</th><td>${esc(formatDate(p.payment_date || p.paid_at || undefined, 'Not set'))}</td></tr>
+      <tr><th>Pay to</th><td colspan="3">${esc(p.pay_type === 'casual'
+        ? `Cash / mobile money${p.employee_phone ? ` (${p.employee_phone})` : ''}`
+        : [p.bank_name, p.branch, p.account_name, p.account_number].filter(Boolean).join(' / ') || 'Bank details not recorded')}</td></tr>
     </table>
     <h3>Authorization</h3>
-    <p>Being payment of salary for ${esc(`${p.month} ${p.year}`)}.</p>
+    <p>Being payment of ${p.pay_type === 'casual' ? 'casual wages' : 'salary'} for ${esc(payPeriod(p))}.</p>
     <table class="grid">
       ${row('Gross pay', money(p.gross ?? p.base_salary, symbol))}
       ${row('Total deductions', `(${money(p.deductions, symbol)})`)}

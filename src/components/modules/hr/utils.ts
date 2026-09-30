@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { apiErrorMessage } from '../../../lib/api';
-import { PayItem } from '../../../lib/payrollCalc';
-import type { Setting } from './types';
+import { isStatutoryDeduction, PayItem } from '../../../lib/payrollCalc';
+import type { Employee, ProjectShare, Setting } from './types';
 
 export const errorMessage = apiErrorMessage;
 
@@ -34,8 +34,47 @@ export const parseItems = (value: unknown): PayItem[] => {
   }
 };
 
-/** Deductions other than the statutory SSNIT/PAYE lines the server adds. */
-export const otherDeductionItems = (value: unknown) => parseItems(value).filter(d => !/^SSNIT employee|^PAYE/.test(d.type));
+/** Deductions other than the statutory SSNIT/PAYE/withholding lines the server adds. */
+export const otherDeductionItems = (value: unknown) => parseItems(value).filter(d => !isStatutoryDeduction(d.type));
+
+export const parseBreakdown = (value: unknown): ProjectShare[] => {
+  if (typeof value !== 'string' || !value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((p: any) => ({
+      project_id: p.project_id ?? null, project_name: p.project_name ?? null,
+      days: Number(p.days) || 0, overtime_hours: Number(p.overtime_hours) || 0, amount: Number(p.amount) || 0,
+    })) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const WAGE_TYPE_LABELS: Record<string, string> = {
+  Salaried: 'Salaried (monthly)',
+  Hourly: 'Hourly',
+  Daily: 'Daily-rated casual',
+};
+export const rateUnit = (wageType?: string | null) => wageType === 'Daily' ? '/day' : wageType === 'Hourly' ? '/hr' : '/month';
+
+/** Rates that look like a monthly salary typed into an hourly or daily rate field. */
+export function payRateWarning(emp: Pick<Employee, 'wage_type' | 'salary'>): string | null {
+  const rate = Number(emp.salary) || 0;
+  if (emp.wage_type === 'Hourly' && rate > 500) return `An hourly rate of ${rate.toLocaleString()} looks like a monthly salary`;
+  if (emp.wage_type === 'Daily' && rate > 1000) return `A daily rate of ${rate.toLocaleString()} looks like a monthly salary`;
+  if (emp.wage_type === 'Daily' && rate === 0) return 'No daily rate set';
+  return null;
+}
+
+export const shortDate = (value: unknown) => {
+  const s = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return new Date(`${s}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+};
+export const periodText = (start: unknown, end: unknown) => {
+  const s = String(start || '').slice(0, 10), e = String(end || '').slice(0, 10);
+  return !e || s === e ? shortDate(s) : `${shortDate(s)} – ${shortDate(e)}`;
+};
 
 export const yearOptions = (around = new Date().getFullYear(), back = 3, forward = 1) =>
   Array.from({ length: back + forward + 1 }, (_, i) => around + forward - i);

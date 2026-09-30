@@ -35,6 +35,12 @@ const OTHER_FIELDS: { key: keyof PayrollConfig; label: string; step: string }[] 
   { key: 'standard_hours_per_day', label: 'Standard hours per day', step: '0.5' },
 ];
 
+const CASUAL_FIELDS: { key: keyof PayrollConfig; label: string; step: string; hint: string }[] = [
+  { key: 'casual_wht_rate', label: 'Casual withholding tax %', step: '0.5', hint: 'GRA final tax on casual workers’ gross pay (no SSNIT)' },
+  { key: 'casual_overtime_multiplier', label: 'Casual overtime (× hourly)', step: '0.25', hint: 'Hourly = daily rate ÷ hours per day' },
+  { key: 'casual_hours_per_day', label: 'Casual hours per day', step: '0.5', hint: 'Used to turn the daily rate into an hourly rate' },
+];
+
 export default function PayrollSettings({ onSaved }: { onSaved?: () => void }) {
   const { user } = useAuth();
   const canEditAccounts = PAYROLL_APPROVE_ROLES.includes(user?.role || '');
@@ -78,7 +84,7 @@ export default function PayrollSettings({ onSaved }: { onSaved?: () => void }) {
     try {
       await hrApi.savePayrollSettings({
         config: {
-          ...Object.fromEntries([...RATE_FIELDS, ...OTHER_FIELDS].map(f => [f.key, Number(config[f.key])])),
+          ...Object.fromEntries([...RATE_FIELDS, ...OTHER_FIELDS, ...CASUAL_FIELDS].map(f => [f.key, Number(config[f.key])])),
           tax_tiers: tiers,
           deduction_types: config.deduction_types.filter(d => d.name.trim()).map(d => ({ ...d, name: d.name.trim(), value: Number(d.value) })),
         },
@@ -187,6 +193,29 @@ export default function PayrollSettings({ onSaved }: { onSaved?: () => void }) {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-none shadow-sm rounded-2xl">
+        <CardHeader>
+          <CardTitle>Casual workers</CardTitle>
+          <CardDescription>
+            Daily-rated casual workers are paid days worked × daily rate + overtime hours × overtime rate, from the attendance register. A worker's own overtime rate
+            or tax treatment on their employee file overrides these.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {CASUAL_FIELDS.map(f => (
+            <div key={String(f.key)} className="grid gap-1">
+              <Label>{f.label}</Label>
+              <Input type="number" min="0" step={f.step} value={config[f.key]} onChange={e => setField(f.key, e.target.value)} />
+              <span className="text-[10px] text-[#8E9299]">{f.hint}</span>
+            </div>
+          ))}
+          <p className="md:col-span-3 text-xs text-[#8E9299]">
+            Example: a {money(120)}/day worker earns {money(120 / (Number(config.casual_hours_per_day) || 8) * Number(config.casual_overtime_multiplier))}/hour overtime;
+            a week of 6 days + 4 h overtime is {money(720 + 4 * 120 / (Number(config.casual_hours_per_day) || 8) * Number(config.casual_overtime_multiplier))} gross, less {config.casual_wht_rate}% withholding tax.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="border-none shadow-sm rounded-2xl">
         <CardHeader>

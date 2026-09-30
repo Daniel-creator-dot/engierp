@@ -99,6 +99,7 @@ export const hrApi = {
   addEmployee: (data: any) => api.post('/hr/employees', data),
   updateEmployee: (id: string, data: any) => api.patch(`/hr/employees/${id}`, data),
   bulkImportEmployees: (employees: any[], dryRun: boolean) => api.post('/hr/employees/bulk', { employees, dryRun }),
+  bulkUpdatePaySetup: (ids: string[], updates: Record<string, unknown>) => api.patch('/hr/employees/bulk-pay', { ids, updates }),
   // Pass { mine: true } for the signed-in user's own records (self-service), whatever their role.
   getLeaveRequests: (params?: { mine?: boolean }) => api.get('/hr/leave-requests', { params: params?.mine ? { mine: 1 } : undefined }),
   submitLeaveRequest: (data: any) => api.post('/hr/leave-requests', data),
@@ -115,8 +116,11 @@ export const hrApi = {
   deletePayroll: (id: number) => api.delete(`/hr/payroll/${id}`),
   getPayrollRuns: () => api.get('/hr/payroll-runs'),
   getPayrollRun: (id: number) => api.get(`/hr/payroll-runs/${id}`),
-  createPayrollRun: (data: { month: string; year: number; payment_date?: string; project_id?: string; notes?: string }) =>
-    api.post('/hr/payroll-runs', data),
+  createPayrollRun: (data: {
+    month?: string; year?: number; payment_date?: string; project_id?: string; notes?: string;
+    run_type?: 'monthly' | 'casual'; frequency?: 'Weekly' | 'Daily'; period_start?: string;
+  }) => api.post('/hr/payroll-runs', data),
+  refreshPayrollRun: (runId: number) => api.post(`/hr/payroll-runs/${runId}/refresh`),
   updatePayrollRunEntry: (runId: number, entryId: number, data: any) => api.patch(`/hr/payroll-runs/${runId}/entries/${entryId}`, data),
   removePayrollRunEntry: (runId: number, entryId: number) => api.delete(`/hr/payroll-runs/${runId}/entries/${entryId}`),
   payrollRunAction: (runId: number, action: 'review' | 'reopen' | 'approve' | 'mark-paid' | 'cancel') =>

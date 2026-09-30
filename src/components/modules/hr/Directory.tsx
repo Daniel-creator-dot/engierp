@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Download, Eye, FileSpreadsheet, Loader2, Pencil, Plus, Search, ShieldAlert, Upload } from 'lucide-react';
+import { AlertTriangle, Download, Eye, FileSpreadsheet, Loader2, Pencil, Plus, Search, ShieldAlert, SlidersHorizontal, Upload, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -7,6 +7,7 @@ import { Badge } from '../../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
+import { Checkbox } from '../../ui/checkbox';
 import { toast } from 'sonner';
 import { hrApi } from '../../../lib/api';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,12 +16,16 @@ import { isValidSsnit, normalisePayrollConfig } from '../../../lib/payrollCalc';
 import type { Employee, Setting } from './types';
 import EmployeeForm from './EmployeeForm';
 import BulkImport from './BulkImport';
+import BulkPaySetup from './BulkPaySetup';
 import {
-  EMPLOYMENT_TYPES, FIXED_TERM_TYPES, HR_ADMIN_ROLES, currencySymbol, downloadCsv, downloadWorkbook, errorMessage, getSetting, money,
+  EMPLOYMENT_TYPES, FIXED_TERM_TYPES, HR_ADMIN_ROLES, WAGE_TYPE_LABELS, currencySymbol, downloadCsv, downloadWorkbook, errorMessage,
+  getSetting, money, payRateWarning, rateUnit,
 } from './utils';
 
 const EXPIRY_WARNING_DAYS = 30;
 const ALL = 'all';
+const FLAGGED = 'flagged';
+const rateLooksWrong = (e: Employee) => Number(e.salary) > 0 && Boolean(payRateWarning(e));
 
 const statusBadge = (status: string) =>
   status === 'active' ? 'bg-green-100 text-green-700' : status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700';
@@ -41,7 +46,8 @@ export default function Directory({ settings }: { settings: Setting[] }) {
   const { user } = useAuth();
   const canEdit = HR_ADMIN_ROLES.includes(user?.role || '');
   const symbol = currencySymbol(settings);
-  const defaultLeaveDays = normalisePayrollConfig(getSetting(settings, 'payroll_config')).annual_leave_days;
+  const payrollConfig = useMemo(() => normalisePayrollConfig(getSetting(settings, 'payroll_config')), [settings]);
+  const defaultLeaveDays = payrollConfig.annual_leave_days;
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +55,9 @@ export default function Directory({ settings }: { settings: Setting[] }) {
   const [department, setDepartment] = useState(ALL);
   const [status, setStatus] = useState('current');
   const [employmentType, setEmploymentType] = useState(ALL);
+  const [payBasis, setPayBasis] = useState(ALL);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [viewing, setViewing] = useState<Employee | null>(null);
@@ -80,24 +89,45 @@ export default function Directory({ settings }: { settings: Setting[] }) {
       if (status === 'current' ? e.status === 'terminated' : status !== ALL && e.status !== status) return false;
       if (department !== ALL && e.department !== department) return false;
       if (employmentType !== ALL && (e.employment_type || 'Permanent') !== employmentType) return false;
+      if (payBasis === FLAGGED ? !rateLooksWrong(e) : payBasis !== ALL && (e.wage_type || 'Salaried') !== payBasis) return false;
       if (!q) return true;
       return [e.name, e.id, e.role, e.ssnit, e.phone, e.ghana_card].some(v => String(v || '').toLowerCase().includes(q));
     });
-  }, [employees, search, department, status, employmentType]);
+  }, [employees, search, department, status, employmentType, payBasis]);
 
   const current = employees.filter(e => e.status !== 'terminated');
   const compliance = useMemo(() => current.map(e => {
     const issues: string[] = [];
-    if (!e.ssnit) issues.push('No SSNIT number');
+    const casual = e.wage_type === 'Daily';
+    // Casual workers on final withholding tax don't contribute to SSNIT and are usually paid in cash.
+    if (!e.ssnit) { if (!casual) issues.push('No SSNIT number'); }
     else if (!isValidSsnit(e.ssnit)) issues.push('SSNIT number format looks wrong');
     if (!e.ghana_card) issues.push('No Ghana Card ID');
-    if (!e.bank_name || !e.account_number) issues.push('No salary bank account');
-    if (e.wage_type === 'Hourly' && Number(e.salary) > 500) issues.push(`Hourly rate of ${money(e.salary, symbol)} looks like a monthly salary`);
+    if (!casual && (!e.bank_name || !e.account_number)) issues.push('No salary bank account');
+    if (casual && !e.phone) issues.push('No phone number for mobile money');
+    if (rateLooksWrong(e)) issues.push(payRateWarning(e)!);
     if (!Number(e.salary)) issues.push('No salary or rate');
     return { employee: e, issues };
   }).filter(c => c.issues.length), [employees, symbol]);
-  const missingSsnit = current.filter(e => !e.ssnit || !isValidSsnit(e.ssnit)).length;
-  const suspiciousRates = current.filter(e => e.wage_type === 'Hourly' && Number(e.salary) > 500).length;
+  const missingSsnit = current.filter(e => e.wage_type !== 'Daily' && (!e.ssnit || !isValidSsnit(e.ssnit))).length;
+  const flaggedRates = current.filter(rateLooksWrong);
+  const selectedEmployees = employees.filter(e => selected.has(e.id));
+  const allFilteredSelected = filtered.length > 0 && filtered.every(e => selected.has(e.id));
+  const toggle = (id: string, on: boolean) => setSelected(prev => {
+    const next = new Set(prev);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
+  const toggleAllFiltered = (on: boolean) => setSelected(prev => {
+    const next = new Set(prev);
+    for (const e of filtered) { if (on) next.add(e.id); else next.delete(e.id); }
+    return next;
+  });
+  const reviewFlagged = () => {
+    setSelected(new Set(flaggedRates.map(e => e.id)));
+    setPayBasis(FLAGGED);
+    setStatus('current');
+  };
 
   const dateAlerts = current
     .flatMap(e => {
@@ -115,7 +145,7 @@ export default function Directory({ settings }: { settings: Setting[] }) {
     .sort((a, b) => a.days - b.days);
 
   const exportRows = () => [
-    ['Staff ID', 'Name', 'Role', 'Department', 'Status', 'Employment Type', 'Wage Type', 'Salary / Rate', 'Commenced', 'Exit Date',
+    ['Staff ID', 'Name', 'Role', 'Department', 'Status', 'Employment Type', 'Pay Basis', 'Salary / Rate', 'Commenced', 'Exit Date',
       'SSNIT', 'Ghana Card', 'Phone', 'Bank', 'Account Name', 'Account Number', 'Branch', 'Annual Leave Days'],
     ...filtered.map(e => [
       e.id, e.name, e.role, e.department, e.status, e.employment_type || '', e.wage_type || 'Salaried', Number(e.salary) || 0,
@@ -144,6 +174,14 @@ export default function Directory({ settings }: { settings: Setting[] }) {
           </Button>
           {canEdit && (
             <>
+              {selected.size > 0 && (
+                <>
+                  <Button className="rounded-xl gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setBulkPayOpen(true)}>
+                    <SlidersHorizontal className="w-4 h-4" /> Pay setup ({selected.size})
+                  </Button>
+                  <Button variant="ghost" className="rounded-xl gap-1 px-2" onClick={() => setSelected(new Set())} title="Clear selection"><X className="w-4 h-4" /></Button>
+                </>
+              )}
               <Button variant="outline" className="rounded-xl gap-2" onClick={() => setImportOpen(true)}><Upload className="w-4 h-4" /> Import</Button>
               <Button className="bg-[#141414] text-white gap-2 rounded-xl" onClick={openAdd}><Plus className="w-4 h-4" /> Add Personnel</Button>
             </>
@@ -162,9 +200,14 @@ export default function Directory({ settings }: { settings: Setting[] }) {
             </Button>
           </div>
           <p className="text-sm text-red-800">
-            {missingSsnit} of {current.length} current staff have no valid SSNIT number, so SSNIT contributions can't be filed for them.
-            {suspiciousRates > 0 && ` ${suspiciousRates} hourly employee(s) have rates above ${symbol}500/hour; check these before running payroll.`}
+            {missingSsnit} of {current.length} staff on PAYE have no valid SSNIT number, so SSNIT contributions can't be filed for them.
+            {flaggedRates.length > 0 && ` ${flaggedRates.length} employee(s) have a rate that looks like a monthly salary for their pay basis (hourly above ${symbol}500 or daily above ${symbol}1,000); fix these before running payroll.`}
           </p>
+          {canEdit && flaggedRates.length > 0 && (
+            <Button size="sm" variant="outline" className="h-8 rounded-xl border-red-200 text-red-800 bg-white" onClick={reviewFlagged}>
+              Select the {flaggedRates.length} flagged employee(s) to fix their pay setup
+            </Button>
+          )}
           {showCompliance && (
             <div className="max-h-64 overflow-y-auto divide-y divide-red-100">
               {compliance.map(({ employee, issues }) => (
@@ -219,6 +262,14 @@ export default function Directory({ settings }: { settings: Setting[] }) {
             {EMPLOYMENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={payBasis} onValueChange={setPayBasis}>
+          <SelectTrigger className="md:w-44 rounded-xl"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All pay bases</SelectItem>
+            {Object.entries(WAGE_TYPE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+            <SelectItem value={FLAGGED}>Rate looks wrong</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <CardContent className="p-0">
@@ -228,20 +279,34 @@ export default function Directory({ settings }: { settings: Setting[] }) {
           <Table>
             <TableHeader>
               <TableRow className="bg-[#F5F5F5]/50">
+                {canEdit && (
+                  <TableHead className="w-10">
+                    <Checkbox checked={allFilteredSelected} onCheckedChange={checked => toggleAllFiltered(Boolean(checked))} aria-label="Select all shown" />
+                  </TableHead>
+                )}
                 <TableHead>Staff ID</TableHead><TableHead>Name</TableHead><TableHead>Department</TableHead>
                 <TableHead>Commenced</TableHead><TableHead>SSNIT</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-[#8E9299]">No employees match these filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canEdit ? 8 : 7} className="text-center py-10 text-[#8E9299]">No employees match these filters.</TableCell></TableRow>
               )}
               {filtered.map(e => (
-                <TableRow key={e.id} className="hover:bg-blue-50/30">
+                <TableRow key={e.id} className={`hover:bg-blue-50/30 ${selected.has(e.id) ? 'bg-blue-50/50' : ''}`}>
+                  {canEdit && (
+                    <TableCell>
+                      <Checkbox checked={selected.has(e.id)} onCheckedChange={checked => toggle(e.id, Boolean(checked))} aria-label={`Select ${e.name}`} />
+                    </TableCell>
+                  )}
                   <TableCell className="font-mono text-xs font-bold">{e.id}</TableCell>
                   <TableCell>
                     <div className="font-bold">{e.name}</div>
-                    <div className="text-[10px] text-slate-500 uppercase">{e.role} · {e.wage_type === 'Hourly' ? 'Hourly wage' : 'Fixed salary'}</div>
+                    <div className="text-[10px] text-slate-500 uppercase">
+                      {e.role} · {WAGE_TYPE_LABELS[e.wage_type || 'Salaried'] || e.wage_type}
+                      {canEdit && ` · ${money(e.salary, symbol)}${rateUnit(e.wage_type)}`}
+                      {rateLooksWrong(e) && <span className="ml-1 text-amber-700 font-bold normal-case" title={payRateWarning(e) || ''}>⚠ check rate</span>}
+                    </div>
                   </TableCell>
                   <TableCell className="font-medium text-[#8E9299]">{e.department}</TableCell>
                   <TableCell>
@@ -269,9 +334,17 @@ export default function Directory({ settings }: { settings: Setting[] }) {
         employee={editing}
         departments={departments}
         defaultLeaveDays={defaultLeaveDays}
+        payrollConfig={payrollConfig}
         onSaved={load}
       />
       <BulkImport open={importOpen} onOpenChange={setImportOpen} onImported={load} />
+      <BulkPaySetup
+        open={bulkPayOpen}
+        onOpenChange={setBulkPayOpen}
+        employees={selectedEmployees}
+        symbol={symbol}
+        onSaved={() => { setSelected(new Set()); load(); }}
+      />
 
       <Dialog open={Boolean(viewing)} onOpenChange={o => !o && setViewing(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -299,7 +372,17 @@ export default function Directory({ settings }: { settings: Setting[] }) {
                   <Field label="Annual Leave">{viewing.annual_leave_days ?? defaultLeaveDays} days</Field>
                 </div>
                 <div className="grid grid-cols-2 gap-4 p-4 bg-[#F5F5F5] rounded-2xl">
-                  <Field label={viewing.wage_type === 'Hourly' ? 'Hourly Rate' : 'Monthly Basic Salary'}><span className="text-green-700 font-bold">{money(viewing.salary, symbol)}</span></Field>
+                  <Field label={viewing.wage_type === 'Daily' ? 'Daily Rate (casual)' : viewing.wage_type === 'Hourly' ? 'Hourly Rate' : 'Monthly Basic Salary'}>
+                    <span className="text-green-700 font-bold">{money(viewing.salary, symbol)}</span>
+                    {rateLooksWrong(viewing) && <span className="block text-xs text-amber-700">{payRateWarning(viewing)}</span>}
+                    {viewing.wage_type === 'Daily' && (
+                      <span className="block text-xs text-[#8E9299] font-normal">
+                        Paid {(viewing.pay_frequency || 'Weekly').toLowerCase()} · overtime {viewing.overtime_rate != null && viewing.overtime_rate !== ''
+                          ? `${money(viewing.overtime_rate, symbol)}/h` : `${payrollConfig.casual_overtime_multiplier}× hourly`}
+                        {' · '}{viewing.tax_treatment === 'paye' ? 'PAYE + SSNIT' : viewing.tax_treatment === 'none' ? 'no tax' : `${payrollConfig.casual_wht_rate}% final WHT`}
+                      </span>
+                    )}
+                  </Field>
                   <Field label="SSNIT Number">
                     {viewing.ssnit || <span className="text-red-600">Missing</span>}
                     {viewing.ssnit && !isValidSsnit(viewing.ssnit) && <span className="block text-xs text-amber-700">Format looks wrong</span>}

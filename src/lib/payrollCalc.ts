@@ -15,8 +15,18 @@ export interface PayrollConfig {
   max_carry_over_days: number;
   overtime_multiplier: number;
   standard_hours_per_day: number;
+  casual_wht_rate: number;
+  casual_overtime_multiplier: number;
+  casual_hours_per_day: number;
   [key: string]: any;
 }
+
+export type TaxTreatment = 'casual_wht' | 'paye' | 'none';
+export const TAX_TREATMENTS: { value: TaxTreatment; label: string }[] = [
+  { value: 'casual_wht', label: 'Casual: final withholding tax, no SSNIT' },
+  { value: 'paye', label: 'PAYE and SSNIT (like permanent staff)' },
+  { value: 'none', label: 'No tax or SSNIT (exempt)' },
+];
 
 // GRA monthly PAYE bands for residents, effective 2024. Each threshold is the width of its band;
 // income beyond the last band is taxed at the last rate.
@@ -41,6 +51,9 @@ export const DEFAULT_PAYROLL_CONFIG: PayrollConfig = {
   max_carry_over_days: 5,
   overtime_multiplier: 1.5,
   standard_hours_per_day: 8,
+  casual_wht_rate: 5,
+  casual_overtime_multiplier: 1.5,
+  casual_hours_per_day: 8,
 };
 
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -80,6 +93,9 @@ export function normalisePayrollConfig(raw: unknown): PayrollConfig {
     max_carry_over_days: num(parsed.max_carry_over_days, DEFAULT_PAYROLL_CONFIG.max_carry_over_days),
     overtime_multiplier: num(parsed.overtime_multiplier, DEFAULT_PAYROLL_CONFIG.overtime_multiplier),
     standard_hours_per_day: num(parsed.standard_hours_per_day, DEFAULT_PAYROLL_CONFIG.standard_hours_per_day),
+    casual_wht_rate: num(parsed.casual_wht_rate, DEFAULT_PAYROLL_CONFIG.casual_wht_rate),
+    casual_overtime_multiplier: num(parsed.casual_overtime_multiplier, DEFAULT_PAYROLL_CONFIG.casual_overtime_multiplier),
+    casual_hours_per_day: num(parsed.casual_hours_per_day, DEFAULT_PAYROLL_CONFIG.casual_hours_per_day) || 8,
   };
 }
 
@@ -141,6 +157,90 @@ export function computePay(input: PayInput, config: PayrollConfig): PayResult {
     total_deductions: totalDeductions,
     net_pay: round2(gross - totalDeductions),
   };
+}
+
+// Daily-rated casual workers: pay = days x daily rate + overtime hours x overtime rate.
+export const isCasualWage = (wageType: unknown) => wageType === 'Daily';
+
+export function effectiveTaxTreatment(emp: { wage_type?: string | null; tax_treatment?: string | null }): TaxTreatment {
+  if (emp.tax_treatment === 'casual_wht' || emp.tax_treatment === 'paye' || emp.tax_treatment === 'none') return emp.tax_treatment;
+  return isCasualWage(emp.wage_type) ? 'casual_wht' : 'paye';
+}
+
+/** Per-hour overtime rate: the worker's override, else (daily rate / hours per day) x the casual multiplier. */
+export function casualOvertimeRate(dailyRate: number, override: unknown, config: PayrollConfig): number {
+  const o = Number(override);
+  if (override !== null && override !== undefined && override !== '' && Number.isFinite(o) && o >= 0) return round2(o);
+  return round2((Number(dailyRate) || 0) / (config.casual_hours_per_day || 8) * config.casual_overtime_multiplier);
+}
+
+export const casualWhtLabel = (config: PayrollConfig) => `Withholding tax (${config.casual_wht_rate}% final)`;
+
+// Deduction lines the system calculates itself; everything else in detailed_deductions is user-entered.
+export const isStatutoryDeduction = (type: unknown) => /^(SSNIT employee|PAYE|Withholding tax)/i.test(String(type || ''));
+
+export interface CasualPayInput {
+  days: number;
+  dailyRate: number;
+  overtimeHours: number;
+  overtimeRate: number;
+  taxTreatment: TaxTreatment;
+  allowances?: PayItem[];      // excluding overtime, which is added here
+  deductions?: PayItem[];
+}
+
+export interface CasualPayResult extends PayResult {
+  wht: number;
+  overtime_pay: number;
+  allowance_items: PayItem[];  // including the overtime line
+}
+
+export function computeCasualPay(input: CasualPayInput, config: PayrollConfig): CasualPayResult {
+  const basic = round2((Number(input.days) || 0) * (Number(input.dailyRate) || 0));
+  const overtimePay = round2((Number(input.overtimeHours) || 0) * (Number(input.overtimeRate) || 0));
+  const allowanceItems: PayItem[] = [
+    ...(overtimePay ? [{ type: `Overtime (${round2(input.overtimeHours)} h)`, amount: overtimePay, taxable: true }] : []),
+    ...(input.allowances || []).filter(a => Number(a.amount) && !/^Overtime/i.test(a.type)),
+  ];
+  if (input.taxTreatment === 'paye') {
+    const r = computePay({ basic, allowances: allowanceItems, deductions: input.deductions }, config);
+    return { ...r, wht: 0, overtime_pay: overtimePay, allowance_items: allowanceItems };
+  }
+  const allowances = round2(allowanceItems.reduce((s, a) => s + Number(a.amount), 0));
+  const gross = round2(basic + allowances);
+  const wht = input.taxTreatment === 'casual_wht' ? round2(gross * config.casual_wht_rate / 100) : 0;
+  const otherDeductions = round2((input.deductions || []).reduce((s, d) => s + (Number(d.amount) || 0), 0));
+  const totalDeductions = round2(wht + otherDeductions);
+  return {
+    basic,
+    allowances,
+    taxable_allowances: allowances,
+    gross,
+    ssnit_employee: 0,
+    ssnit_employer: 0,
+    taxable_income: gross,
+    paye: 0,
+    other_deductions: otherDeductions,
+    total_deductions: totalDeductions,
+    net_pay: round2(gross - totalDeductions),
+    wht,
+    overtime_pay: overtimePay,
+    allowance_items: allowanceItems,
+  };
+}
+
+const isoOf = (d: Date) => d.toISOString().slice(0, 10);
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoOf(d);
+}
+/** Casual pay week containing the date: Monday to Saturday (a Sunday belongs to the week just ended). */
+export function casualWeek(iso: string): { start: string; end: string } {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const dow = d.getUTCDay();
+  const start = addDays(iso, dow === 0 ? -6 : 1 - dow);
+  return { start, end: addDays(start, 5) };
 }
 
 /** Amount for a configured deduction type (percentages apply to basic pay). */

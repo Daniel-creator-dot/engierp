@@ -41,7 +41,21 @@ export interface PayrollEntry {
   status: string;
   paid_at?: string | null;
   created_at?: string;
+  employee_phone?: string | null;
+  employment_type?: string | null;
+  pay_type?: 'casual' | null;
+  days_worked?: number | string | null;
+  daily_rate?: number | string | null;
+  overtime_rate?: number | string | null;
+  overtime_pay?: number | string | null;
+  wht?: number | string | null;
+  tax_treatment?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  project_breakdown?: string | null;
 }
+
+export interface ProjectShare { project_id: string | null; project_name?: string | null; days: number; overtime_hours: number; amount: number }
 
 export interface PayrollRun {
   id: number;
@@ -59,6 +73,12 @@ export interface PayrollRun {
   total_ssnit_employee?: number | string;
   total_ssnit_employer?: number | string;
   total_other_deductions?: number | string;
+  total_wht?: number | string;
+  total_days?: number | string;
+  run_type?: 'monthly' | 'casual';
+  frequency?: 'Weekly' | 'Daily' | null;
+  period_start?: string | null;
+  period_end?: string | null;
   reviewed_at?: string | null;
   approved_at?: string | null;
   paid_at?: string | null;

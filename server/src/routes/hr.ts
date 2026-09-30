@@ -7,10 +7,13 @@ import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { Conn, LedgerError, reverseJournal, round2, sendError, toIsoDate } from '../lib/ledger';
 import {
-  loadPayrollAccounts, loadPayrollConfig, parseItems, payrollRowValues, postPayroll,
+  casualOvertimeRate, casualRowValues, effectiveTaxTreatment, isCasualWage, loadPayrollAccounts, loadPayrollConfig,
+  parseBreakdown, parseItems, payrollRowValues, postPayroll,
   PAYROLL_ACCOUNT_DEFAULT_CODES, PAYROLL_ACCOUNT_LABELS, PayItem, PayrollConfig,
 } from '../lib/payroll';
-import { isValidSsnit, MONTHS, normalisePayrollConfig, normaliseSsnit, workingDaysBetween } from '../../../src/lib/payrollCalc';
+import {
+  addDays, casualWeek, isStatutoryDeduction, isValidSsnit, MONTHS, normalisePayrollConfig, normaliseSsnit, workingDaysBetween,
+} from '../../../src/lib/payrollCalc';
 
 const router = Router();
 
@@ -24,7 +27,9 @@ const ATTENDANCE_EDIT = ['admin', 'hr', 'pm'];
 const ATTENDANCE_VIEW = ['admin', 'hr', 'pm', 'accountant'];
 
 const EMPLOYEE_STATUSES = ['active', 'on-leave', 'terminated'];
-const WAGE_TYPES = ['Salaried', 'Hourly'];
+const WAGE_TYPES = ['Salaried', 'Hourly', 'Daily'];
+const PAY_FREQUENCIES = ['Weekly', 'Daily'];
+const TAX_TREATMENTS = ['casual_wht', 'paye', 'none'];
 const EMPLOYMENT_TYPES = ['Permanent', 'Contract', 'Casual', 'Intern', 'National Service'];
 const LEAVE_TYPES = ['Annual', 'Sick', 'Casual', 'Study', 'Maternity', 'Paternity', 'Compassionate', 'Unpaid'];
 const ATTENDANCE_TYPES = ['Present', 'Half Day', 'Absent', 'Leave', 'Sick'];
@@ -33,7 +38,9 @@ const EMPLOYEE_FIELDS = [
   'name', 'role', 'department', 'salary', 'joinDate', 'status', 'ssnit', 'ghana_card', 'phone', 'address',
   'bank_name', 'account_name', 'account_number', 'branch', 'wage_type', 'date_of_birth', 'employment_type',
   'probation_end_date', 'contract_end_date', 'exit_date', 'annual_leave_days',
+  'overtime_rate', 'pay_frequency', 'tax_treatment',
 ];
+const PAY_SETUP_FIELDS = ['wage_type', 'salary', 'employment_type', 'pay_frequency', 'tax_treatment', 'overtime_rate'];
 const REQUIRED_EMPLOYEE_FIELDS = ['name', 'role', 'department', 'joinDate'];
 const EMPLOYEE_DATE_FIELDS = ['joinDate', 'date_of_birth', 'probation_end_date', 'contract_end_date', 'exit_date'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -107,11 +114,28 @@ function normaliseEmployee(data: Record<string, any>, partial: boolean): string 
   }
   if ('status' in data && !EMPLOYEE_STATUSES.includes(data.status)) return 'Status must be active, on-leave or terminated';
   if (!partial && !data.status) data.status = 'active';
-  if ('wage_type' in data && !WAGE_TYPES.includes(data.wage_type)) return 'Wage type must be Salaried or Hourly';
-  if (!partial && !data.wage_type) data.wage_type = 'Salaried';
   if ('employment_type' in data) {
     if (!data.employment_type) data.employment_type = null;
     else if (!EMPLOYMENT_TYPES.includes(data.employment_type)) return `Employment type must be one of: ${EMPLOYMENT_TYPES.join(', ')}`;
+  }
+  if ('wage_type' in data && !WAGE_TYPES.includes(data.wage_type)) return 'Pay basis must be Salaried, Hourly or Daily';
+  if (!partial && !data.wage_type) data.wage_type = data.employment_type === 'Casual' ? 'Daily' : 'Salaried';
+  if (!partial && data.wage_type === 'Daily' && !data.pay_frequency) data.pay_frequency = 'Weekly';
+  if ('pay_frequency' in data) {
+    if (!data.pay_frequency) data.pay_frequency = null;
+    else if (!PAY_FREQUENCIES.includes(data.pay_frequency)) return 'Pay frequency must be Weekly or Daily';
+  }
+  if ('tax_treatment' in data) {
+    if (!data.tax_treatment) data.tax_treatment = null;
+    else if (!TAX_TREATMENTS.includes(data.tax_treatment)) return 'Tax treatment must be casual_wht, paye or none';
+  }
+  if ('overtime_rate' in data) {
+    if (data.overtime_rate === '' || data.overtime_rate == null) data.overtime_rate = null;
+    else {
+      const rate = Number(data.overtime_rate);
+      if (!Number.isFinite(rate) || rate < 0) return 'Overtime rate must be a positive number';
+      data.overtime_rate = round2(rate);
+    }
   }
   if ('ssnit' in data) {
     if (!data.ssnit) data.ssnit = null;
@@ -179,6 +203,31 @@ router.post('/employees', authenticateToken, authorizeRole(HR_ADMIN), async (req
   }
 });
 
+// Sets pay basis / rate / employment type (and casual pay options) on several employees at once.
+router.patch('/employees/bulk-pay', authenticateToken, authorizeRole(HR_ADMIN), async (req: AuthRequest, res) => {
+  try {
+    const ids: string[] = Array.isArray(req.body?.ids) ? [...new Set<string>(req.body.ids.map(String))] : [];
+    if (ids.length === 0) return res.status(400).json({ message: 'Select at least one employee' });
+    if (ids.length > 500) return res.status(400).json({ message: 'Update at most 500 employees at a time' });
+    const updates = pick(req.body?.updates || {}, PAY_SETUP_FIELDS);
+    if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Choose at least one field to change' });
+    const error = normaliseEmployee(updates, true);
+    if (error) return res.status(400).json({ message: error });
+    if (updates.wage_type === 'Daily' && !('pay_frequency' in updates)) updates.pay_frequency = 'Weekly';
+
+    const count = await db.transaction(async trx => {
+      const existing = await trx('employees').whereIn('id', ids).select('id', ...PAY_SETUP_FIELDS);
+      if (existing.length !== ids.length) throw new HttpError('One or more employees were not found', 404);
+      await trx('employees').whereIn('id', ids).update({ ...updates, updated_at: trx.fn.now() });
+      await logAudit(req, 'bulk_pay_update', 'employee', null, { employees: existing }, { ids, updates }, trx);
+      return existing.length;
+    });
+    res.json({ message: `Pay setup updated for ${count} employee(s)`, count });
+  } catch (error) {
+    handle(res, error, 'Error updating pay setup');
+  }
+});
+
 router.patch('/employees/:id', authenticateToken, authorizeRole(HR_ADMIN), async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
@@ -225,7 +274,9 @@ router.post('/employees/bulk', authenticateToken, authorizeRole(HR_ADMIN), async
         else seenCard.set(key, `row ${index + 2}`);
       }
       if (data.name && existingNames.has(String(data.name).toLowerCase())) warnings.push('An employee with this name already exists');
-      if (!data.ssnit) warnings.push('No SSNIT number');
+      if (!data.ssnit && data.wage_type !== 'Daily') warnings.push('No SSNIT number');
+      if (data.wage_type === 'Daily' && Number(data.salary) > 1000) warnings.push('Daily rate above GH₵ 1,000 looks like a monthly salary');
+      if (data.wage_type === 'Hourly' && Number(data.salary) > 500) warnings.push('Hourly rate above GH₵ 500 looks like a monthly salary');
       return { row: index + 2, data, errors, warnings };
     });
 
@@ -441,12 +492,13 @@ const PAYROLL_SELECT = [
   'employees.name', 'employees.department', 'employees.role as employee_role', 'employees.wage_type',
   'employees.ssnit as employee_ssnit', 'employees.ghana_card as employee_ghana_card',
   'employees.bank_name', 'employees.account_name', 'employees.account_number', 'employees.branch',
+  'employees.phone as employee_phone', 'employees.employment_type',
 ];
 
 const payrollQuery = (conn: Conn) => conn('payroll').select(PAYROLL_SELECT).join('employees', 'payroll.employee_id', 'employees.id');
 
 async function assertNoDuplicatePayroll(conn: Conn, employeeId: string, month: string, year: number, exceptId?: number) {
-  const query = conn('payroll').where({ employee_id: employeeId, month, year }).whereNot('status', 'Rejected');
+  const query = conn('payroll').where({ employee_id: employeeId, month, year }).whereNull('pay_type').whereNot('status', 'Rejected');
   if (exceptId) query.whereNot('id', exceptId);
   const existing = await query.first();
   if (existing) throw new HttpError(`Payroll for ${month} ${year} already exists for this employee (status: ${existing.status})`, 409);
@@ -456,6 +508,113 @@ function cleanItems(value: unknown, label: string): PayItem[] {
   const items = parseItems(value);
   if (items.some(i => i.amount < 0)) throw new HttpError(`${label} cannot be negative`);
   return items;
+}
+
+// ---------------------------------------------------------------- Casual (daily-rated) pay
+
+const periodLabel = (start: unknown, end: unknown) => {
+  const s = toIsoDate(start as any), e = toIsoDate(end as any);
+  return s === e ? s : `${s} to ${e}`;
+};
+const runLabel = (run: any) => run.run_type === 'casual'
+  ? `Casual pay ${periodLabel(run.period_start, run.period_end)}`
+  : `${run.month} ${run.year} payroll`;
+
+// Serialises casual pay creation so two runs can't pay the same worker for the same days.
+const lockCasualPay = (trx: Knex.Transaction) => trx.raw(`SELECT pg_advisory_xact_lock(hashtext('hr_casual_pay'))`);
+
+/** Existing live casual entries per employee whose period overlaps start..end. */
+async function casualOverlaps(conn: Conn, employeeIds: string[], start: string, end: string, exceptId?: number) {
+  if (employeeIds.length === 0) return new Map<string, any>();
+  const query = conn('payroll').where('pay_type', 'casual').whereIn('employee_id', employeeIds)
+    .whereNot('status', 'Rejected').where('period_start', '<=', end).where('period_end', '>=', start)
+    .select('id', 'employee_id', 'period_start', 'period_end', 'status');
+  if (exceptId) query.whereNot('id', exceptId);
+  const rows = await query;
+  return new Map<string, any>(rows.map((r: any) => [r.employee_id, r]));
+}
+
+interface CasualAttendance { days: number; overtime: number; breakdown: { project_id: string | null; project_name: string | null; days: number; overtime_hours: number }[] }
+
+/**
+ * Days and overtime per worker from the attendance register: Present = 1 day, Half Day = 0.5. A worker marked on
+ * more than one project on the same day is capped at one day, split between those projects.
+ */
+async function casualAttendance(conn: Conn, employeeIds: string[], start: string, end: string) {
+  const result = new Map<string, CasualAttendance>();
+  if (employeeIds.length === 0) return result;
+  const rows = await conn('timesheets')
+    .leftJoin('projects', 'timesheets.project_id', 'projects.id')
+    .whereIn('timesheets.employee_id', employeeIds)
+    .whereBetween('timesheets.date', [start, end])
+    .select('timesheets.employee_id', 'timesheets.date', 'timesheets.project_id', 'timesheets.attendance', 'timesheets.overtime_hours', 'projects.name as project_name');
+  const byDay = new Map<string, any[]>();
+  for (const r of rows) {
+    const key = `${r.employee_id}|${toIsoDate(r.date)}`;
+    byDay.set(key, [...(byDay.get(key) || []), r]);
+  }
+  for (const [key, dayRows] of byDay) {
+    const employeeId = key.split('|')[0];
+    const units = dayRows.map(r => r.attendance === 'Present' ? 1 : r.attendance === 'Half Day' ? 0.5 : 0);
+    const total = units.reduce((s, u) => s + u, 0);
+    const scale = total > 1 ? 1 / total : 1;
+    const a = result.get(employeeId) || { days: 0, overtime: 0, breakdown: [] };
+    dayRows.forEach((r, i) => {
+      const days = units[i] * scale;
+      const overtime = units[i] ? Number(r.overtime_hours || 0) : 0;
+      if (!days && !overtime) return;
+      const projectId = r.project_id || null;
+      let p = a.breakdown.find(b => b.project_id === projectId);
+      if (!p) { p = { project_id: projectId, project_name: r.project_name || null, days: 0, overtime_hours: 0 }; a.breakdown.push(p); }
+      p.days += days; p.overtime_hours += overtime;
+      a.days += days; a.overtime += overtime;
+    });
+    result.set(employeeId, a);
+  }
+  for (const a of result.values()) {
+    a.days = round2(a.days); a.overtime = round2(a.overtime);
+    a.breakdown = a.breakdown.map(b => ({ ...b, days: round2(b.days), overtime_hours: round2(b.overtime_hours) }));
+  }
+  return result;
+}
+
+/** Payroll row values for a casual worker, with the per-project split priced at their rates. */
+function casualEntry(employee: any, worked: { days: number; overtime: number; breakdown: CasualAttendance['breakdown'] },
+  config: PayrollConfig, allowances: PayItem[], deductions: PayItem[], stored?: { daily_rate: number; overtime_rate: number; tax_treatment: string | null }) {
+  const rate = stored ? stored.daily_rate : Number(employee.salary || 0);
+  const otRate = stored ? stored.overtime_rate : casualOvertimeRate(rate, employee.overtime_rate, config);
+  const taxTreatment = effectiveTaxTreatment(stored?.tax_treatment ? { tax_treatment: stored.tax_treatment } : employee);
+  const { values, pay } = casualRowValues({
+    days: worked.days, dailyRate: rate, overtimeHours: worked.overtime, overtimeRate: otRate, taxTreatment, allowances, deductions,
+  }, config);
+  const breakdown = worked.breakdown.map(b => ({ ...b, amount: round2(b.days * rate + b.overtime_hours * otRate) }));
+  const projects = new Set(breakdown.map(b => b.project_id));
+  return {
+    pay,
+    values: {
+      ...values,
+      project_breakdown: breakdown.length ? JSON.stringify(breakdown) : null,
+      project_id: projects.size === 1 ? [...projects][0] : null,
+    },
+  };
+}
+
+/** Scales the stored per-project split to edited day / overtime totals. */
+function rescaleBreakdown(raw: unknown, days: number, overtime: number) {
+  const breakdown = parseBreakdown(raw);
+  const oldDays = breakdown.reduce((s, b) => s + b.days, 0);
+  const oldOt = breakdown.reduce((s, b) => s + b.overtime_hours, 0);
+  if (breakdown.length === 0) return [];
+  if ((days && !oldDays) || (overtime && !oldOt)) {
+    // Can't scale from zero: put the extra on the project with the most attendance.
+    const main = [...breakdown].sort((a, b) => b.days + b.overtime_hours - a.days - a.overtime_hours)[0];
+    return [{ project_id: main.project_id, project_name: main.project_name ?? null, days, overtime_hours: overtime }];
+  }
+  return breakdown.map(b => ({
+    project_id: b.project_id, project_name: b.project_name ?? null,
+    days: oldDays ? round2(b.days * days / oldDays) : 0,
+    overtime_hours: oldOt ? round2(b.overtime_hours * overtime / oldOt) : 0,
+  }));
 }
 
 // Own payslips (approved or paid) for everyone; the full register for HR, accounts and admin.
@@ -480,9 +639,10 @@ router.get('/payroll', authenticateToken, async (req: AuthRequest, res) => {
 // A one-off payroll entry for one employee (outside a payroll run). It waits for approval.
 router.post('/payroll', authenticateToken, authorizeRole(PAYROLL_PREPARE), async (req: AuthRequest, res) => {
   try {
-    const { month, year } = assertPeriod(req.body.month, req.body.year);
     const employee = await db('employees').where({ id: req.body.employee_id }).first();
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    if (isCasualWage(employee.wage_type)) return await createCasualPayment(req, res, employee);
+    const { month, year } = assertPeriod(req.body.month, req.body.year);
     await assertNoDuplicatePayroll(db, employee.id, month, year);
     const config = await loadPayrollConfig(db);
     const hours = req.body.hours_worked != null && req.body.hours_worked !== '' ? Number(req.body.hours_worked) : null;
@@ -516,6 +676,49 @@ router.post('/payroll', authenticateToken, authorizeRole(PAYROLL_PREPARE), async
   }
 });
 
+// A one-off payment to a casual worker for days worked in a period (e.g. someone leaving mid-week).
+async function createCasualPayment(req: AuthRequest, res: Response, employee: any) {
+  const periodStart = String(req.body.period_start || req.body.payment_date || toIsoDate(null));
+  const periodEnd = String(req.body.period_end || periodStart);
+  if (!isValidIsoDate(periodStart) || !isValidIsoDate(periodEnd) || periodEnd < periodStart) {
+    return res.status(400).json({ message: 'Choose a valid period (end on or after start)' });
+  }
+  if (periodEnd > addDays(periodStart, 30)) return res.status(400).json({ message: 'A casual payment can cover at most 31 days' });
+  const days = Number(req.body.days_worked);
+  const overtime = Number(req.body.overtime_hours || 0);
+  const spanDays = Math.round((Date.parse(periodEnd) - Date.parse(periodStart)) / 86400000) + 1;
+  if (!Number.isFinite(days) || days < 0 || days > spanDays) return res.status(400).json({ message: `Days worked must be between 0 and ${spanDays}` });
+  if (!Number.isFinite(overtime) || overtime < 0 || overtime > spanDays * 16) return res.status(400).json({ message: 'Overtime hours look wrong' });
+  if (!days && !overtime) return res.status(400).json({ message: 'Enter the days or overtime hours worked' });
+
+  const config = await loadPayrollConfig(db);
+  const projectId = req.body.project_id && req.body.project_id !== 'none' ? String(req.body.project_id) : null;
+  const { values, pay } = casualEntry(employee, {
+    days, overtime, breakdown: projectId ? [{ project_id: projectId, project_name: null, days, overtime_hours: overtime }] : [],
+  }, config, cleanItems(req.body.allowances ?? [], 'Allowances'), cleanItems(req.body.deductions ?? [], 'Deductions'));
+  if (pay.net_pay < 0) return res.status(400).json({ message: 'Deductions are larger than gross pay' });
+  const end = new Date(`${periodEnd}T00:00:00Z`);
+  const paymentDate = req.body.payment_date && isValidIsoDate(req.body.payment_date) ? req.body.payment_date : periodEnd;
+
+  const id = await db.transaction(async trx => {
+    await lockCasualPay(trx);
+    const clash = (await casualOverlaps(trx, [employee.id], periodStart, periodEnd)).get(employee.id);
+    if (clash) throw new HttpError(`${employee.name} already has casual pay for ${periodLabel(clash.period_start, clash.period_end)} (status: ${clash.status})`, 409);
+    const [inserted] = await trx('payroll').insert({
+      ...values,
+      employee_id: employee.id, month: MONTHS[end.getUTCMonth()], year: end.getUTCFullYear(),
+      period_start: periodStart, period_end: periodEnd, payment_date: paymentDate,
+      notes: req.body.notes || null, status: 'Pending', created_by: req.user?.id ?? null,
+    }).returning('id');
+    return typeof inserted === 'object' ? inserted.id : inserted;
+  });
+  logAudit(req, 'create', 'payroll', id, undefined, { employee_id: employee.id, period_start: periodStart, period_end: periodEnd, days, overtime, net_pay: pay.net_pay });
+  notify({ roles: PAYROLL_APPROVE }, 'Casual payment awaiting approval',
+    `${employee.name}: ${periodLabel(periodStart, periodEnd)}, net pay GHS ${pay.net_pay.toLocaleString()}`,
+    { type: 'hr', link: 'hr-payroll', excludeUserId: req.user?.id });
+  return res.status(201).json({ id, message: 'Casual payment submitted for approval' });
+}
+
 // Approve (post to the ledger and mark paid) or reject a one-off payroll entry.
 router.patch('/payroll/:id', authenticateToken, authorizeRole(PAYROLL_APPROVE), async (req: AuthRequest, res) => {
   try {
@@ -532,10 +735,12 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(PAYROLL_APPROVE), 
         return row;
       }
       const employee = await trx('employees').where({ id: row.employee_id }).first();
-      const journalId = await postPayroll(trx, {
+      const [journalId] = await postPayroll(trx, {
         rows: [row],
         date: row.payment_date || toIsoDate(null),
-        description: `Payroll: ${employee?.name || row.employee_id} - ${row.month} ${row.year}`,
+        description: row.pay_type === 'casual'
+          ? `Casual pay: ${employee?.name || row.employee_id} - ${periodLabel(row.period_start, row.period_end)}`
+          : `Payroll: ${employee?.name || row.employee_id} - ${row.month} ${row.year}`,
         referenceType: 'payroll',
         referenceId: row.id,
         projectId: row.project_id,
@@ -547,8 +752,9 @@ router.patch('/payroll/:id', authenticateToken, authorizeRole(PAYROLL_APPROVE), 
       return row;
     });
     if (status === 'Paid') {
+      const period = entry.pay_type === 'casual' ? periodLabel(entry.period_start, entry.period_end) : `${entry.month} ${entry.year}`;
       notifyEmployee(entry.employee_id, 'Payment approved',
-        `Your ${entry.month} ${entry.year} pay of GHS ${Number(entry.net_pay).toLocaleString()} has been approved.`, 'hr-payroll');
+        `Your ${period} pay of GHS ${Number(entry.net_pay).toLocaleString()} has been approved.`, 'hr-payroll');
     }
     res.json({ message: status === 'Paid' ? 'Payroll approved and posted to the ledger' : 'Payroll entry rejected' });
   } catch (error) {
@@ -579,6 +785,8 @@ const RUN_TOTALS = [
   db.raw('COALESCE(SUM(payroll.ssnit_employee), 0) as total_ssnit_employee'),
   db.raw('COALESCE(SUM(payroll.ssnit_employer), 0) as total_ssnit_employer'),
   db.raw('COALESCE(SUM(payroll.other_deductions), 0) as total_other_deductions'),
+  db.raw('COALESCE(SUM(payroll.wht), 0) as total_wht'),
+  db.raw('COALESCE(SUM(payroll.days_worked), 0) as total_days'),
 ];
 
 async function loadRun(conn: Conn, id: number | string, lock = false) {
@@ -632,20 +840,22 @@ router.get('/payroll-runs/:id', authenticateToken, authorizeRole(PAYROLL_PREPARE
 // Creates a draft run with an entry for every active employee who has no payroll for the period yet.
 router.post('/payroll-runs', authenticateToken, authorizeRole(PAYROLL_PREPARE), async (req: AuthRequest, res) => {
   try {
+    if (req.body.run_type === 'casual') return await createCasualRun(req, res);
     const { month, year } = assertPeriod(req.body.month, req.body.year);
     const paymentDate = req.body.payment_date && isValidIsoDate(req.body.payment_date) ? req.body.payment_date : null;
     const projectId = req.body.project_id && req.body.project_id !== 'none' ? req.body.project_id : null;
     const { end } = periodRange(month, year);
 
     const result = await db.transaction(async trx => {
-      const clash = await trx('payroll_runs').where({ month, year }).whereNot('status', 'Cancelled').first();
+      const clash = await trx('payroll_runs').where({ month, year, run_type: 'monthly' }).whereNot('status', 'Cancelled').first();
       if (clash) throw new HttpError(`A ${month} ${year} payroll run already exists (status: ${clash.status})`, 409);
       const config = await loadPayrollConfig(trx);
       const employees = await trx('employees')
         .whereIn('status', ['active', 'on-leave'])
+        .where(q => q.whereNull('wage_type').orWhereNot('wage_type', 'Daily'))
         .where(q => q.whereNull('joinDate').orWhere('joinDate', '<=', end))
         .orderBy('name');
-      const existing = await trx('payroll').where({ month, year }).whereNot('status', 'Rejected').select('employee_id');
+      const existing = await trx('payroll').where({ month, year }).whereNull('pay_type').whereNot('status', 'Rejected').select('employee_id');
       const already = new Set(existing.map((e: any) => e.employee_id));
       const hours = await hourlyTimesheetTotals(trx, month, year);
 
@@ -686,6 +896,70 @@ router.post('/payroll-runs', authenticateToken, authorizeRole(PAYROLL_PREPARE), 
   }
 });
 
+// Casual run: weekly (Monday to Saturday, paid Saturday) or a single day, priced from the attendance register.
+async function createCasualRun(req: AuthRequest, res: Response) {
+  const frequency = req.body.frequency === 'Daily' ? 'Daily' : 'Weekly';
+  const date = String(req.body.period_start || req.body.date || '');
+  if (!isValidIsoDate(date)) return res.status(400).json({ message: frequency === 'Daily' ? 'Choose the day to pay for' : 'Choose a date in the week to pay for' });
+  const { start, end } = frequency === 'Daily' ? { start: date, end: date } : casualWeek(date);
+  if (start > toIsoDate(null)) return res.status(400).json({ message: 'That period has not started yet' });
+  const paymentDate = req.body.payment_date && isValidIsoDate(req.body.payment_date) ? req.body.payment_date : end;
+  const endDate = new Date(`${end}T00:00:00Z`);
+  const month = MONTHS[endDate.getUTCMonth()];
+  const year = endDate.getUTCFullYear();
+
+  const result = await db.transaction(async trx => {
+    await lockCasualPay(trx);
+    const config = await loadPayrollConfig(trx);
+    const workers = await trx('employees').where('wage_type', 'Daily')
+      .where(q => frequency === 'Daily' ? q.where('pay_frequency', 'Daily') : q.whereNull('pay_frequency').orWhereNot('pay_frequency', 'Daily'))
+      .where(q => q.whereNull('joinDate').orWhere('joinDate', '<=', end))
+      .orderBy('name');
+    const ids = workers.map((w: any) => w.id);
+    const attendance = await casualAttendance(trx, ids, start, end);
+    const overlaps = await casualOverlaps(trx, ids, start, end);
+
+    const rows: any[] = [];
+    const alreadyPaid: string[] = [];
+    const noAttendance: string[] = [];
+    for (const w of workers) {
+      const worked = attendance.get(w.id);
+      // Terminated workers are still paid for days they worked in the period.
+      if (!worked || (!worked.days && !worked.overtime)) { if (w.status !== 'terminated') noAttendance.push(w.name); continue; }
+      if (overlaps.has(w.id)) { alreadyPaid.push(w.name); continue; }
+      const { values } = casualEntry(w, worked, config, [], []);
+      rows.push({
+        ...values,
+        employee_id: w.id, month, year, period_start: start, period_end: end, payment_date: paymentDate,
+        notes: Number(w.salary) > 0 ? null : 'No daily rate set on the employee file',
+        status: 'Draft', created_by: req.user?.id ?? null,
+      });
+    }
+    if (rows.length === 0) {
+      throw new HttpError(alreadyPaid.length
+        ? `Every casual worker with attendance for ${periodLabel(start, end)} is already in another casual run or payment`
+        : `No attendance is recorded for ${frequency === 'Daily' ? 'daily-paid' : 'weekly-paid'} casual workers in ${periodLabel(start, end)}. Record it under HR > Attendance first.`, 400);
+    }
+    const [inserted] = await trx('payroll_runs').insert({
+      run_type: 'casual', frequency, period_start: start, period_end: end, month, year,
+      payment_date: paymentDate, notes: req.body.notes || null, status: 'Draft', created_by: req.user?.id ?? null,
+    }).returning('id');
+    const runId = typeof inserted === 'object' ? inserted.id : inserted;
+    await trx('payroll').insert(rows.map(r => ({ ...r, run_id: runId })));
+    await logAudit(req, 'create', 'payroll_run', runId, undefined, { run_type: 'casual', frequency, period_start: start, period_end: end, workers: rows.length }, trx);
+    return { id: runId, count: rows.length, alreadyPaid, noAttendance };
+  });
+
+  const notes = [
+    result.alreadyPaid.length ? `skipped ${result.alreadyPaid.length} already paid for these days` : '',
+    result.noAttendance.length ? `${result.noAttendance.length} casual worker(s) had no attendance` : '',
+  ].filter(Boolean).join('; ');
+  return res.status(201).json({
+    id: result.id, count: result.count, skipped: result.alreadyPaid, no_attendance: result.noAttendance,
+    message: `Draft casual pay for ${periodLabel(start, end)} created for ${result.count} worker(s)${notes ? `; ${notes}` : ''}.`,
+  });
+}
+
 // Edit one employee's pay in a draft or reviewed run (a reviewed run goes back to draft).
 router.patch('/payroll-runs/:id/entries/:entryId', authenticateToken, authorizeRole(PAYROLL_PREPARE), async (req, res) => {
   try {
@@ -700,7 +974,26 @@ router.patch('/payroll-runs/:id/entries/:entryId', authenticateToken, authorizeR
       let allowances = 'allowances' in req.body ? cleanItems(req.body.allowances, 'Allowances') : parseItems(entry.detailed_allowances);
       const deductions = 'deductions' in req.body
         ? cleanItems(req.body.deductions, 'Deductions')
-        : parseItems(entry.detailed_deductions).filter(d => !/^SSNIT employee|^PAYE/.test(d.type));
+        : parseItems(entry.detailed_deductions).filter(d => !isStatutoryDeduction(d.type));
+
+      if (entry.pay_type === 'casual') {
+        const days = 'days_worked' in req.body ? Number(req.body.days_worked) : Number(entry.days_worked || 0);
+        const overtime = 'overtime_hours' in req.body ? Number(req.body.overtime_hours) : Number(entry.overtime_hours || 0);
+        const span = Math.round((Date.parse(toIsoDate(entry.period_end)) - Date.parse(toIsoDate(entry.period_start))) / 86400000) + 1;
+        if (!Number.isFinite(days) || days < 0 || days > span) throw new HttpError(`Days worked must be between 0 and ${span}`);
+        if (!Number.isFinite(overtime) || overtime < 0 || overtime > span * 16) throw new HttpError('Overtime hours look wrong');
+        const { values, pay } = casualEntry(employee || {}, {
+          days, overtime, breakdown: rescaleBreakdown(entry.project_breakdown, days, overtime),
+        }, config, allowances, deductions, {
+          daily_rate: Number(entry.daily_rate || 0), overtime_rate: Number(entry.overtime_rate || 0), tax_treatment: entry.tax_treatment,
+        });
+        if (pay.net_pay < 0) throw new HttpError('Deductions are larger than gross pay');
+        await trx('payroll').where({ id: entry.id }).update({
+          ...values, notes: 'notes' in req.body ? (req.body.notes || null) : entry.notes, updated_at: trx.fn.now(),
+        });
+        if (run.status === 'Reviewed') await trx('payroll_runs').where({ id: run.id }).update({ status: 'Draft', reviewed_by: null, reviewed_at: null, updated_at: trx.fn.now() });
+        return payrollQuery(trx).where('payroll.id', entry.id).first();
+      }
       let basic = Number(entry.base_salary);
       let hoursWorked = entry.hours_worked != null ? Number(entry.hours_worked) : null;
       let overtime = entry.overtime_hours != null ? Number(entry.overtime_hours) : null;
@@ -748,6 +1041,57 @@ router.delete('/payroll-runs/:id/entries/:entryId', authenticateToken, authorize
   }
 });
 
+// Re-prices a draft casual run from the attendance register (after late attendance corrections or rate changes),
+// keeping any allowances and deductions typed in, and adds workers whose attendance was recorded since.
+router.post('/payroll-runs/:id/refresh', authenticateToken, authorizeRole(PAYROLL_PREPARE), async (req: AuthRequest, res) => {
+  try {
+    const result = await db.transaction(async trx => {
+      await lockCasualPay(trx);
+      const run = await loadRun(trx, req.params.id, true);
+      if (run.run_type !== 'casual') throw new HttpError('Only casual runs are priced from attendance', 400);
+      if (!['Draft', 'Reviewed'].includes(run.status)) throw new HttpError(`A ${run.status.toLowerCase()} run can no longer be edited`, 409);
+      const start = toIsoDate(run.period_start), end = toIsoDate(run.period_end);
+      const config = await loadPayrollConfig(trx);
+      const entries = await trx('payroll').where({ run_id: run.id });
+      const inRun = new Set(entries.map((e: any) => e.employee_id));
+      const workers = await trx('employees').where('wage_type', 'Daily')
+        .where(q => run.frequency === 'Daily' ? q.where('pay_frequency', 'Daily') : q.whereNull('pay_frequency').orWhereNot('pay_frequency', 'Daily'))
+        .orWhereIn('id', [...inRun]);
+      const ids = workers.map((w: any) => w.id);
+      const attendance = await casualAttendance(trx, ids, start, end);
+      const overlaps = await casualOverlaps(trx, ids.filter((id: string) => !inRun.has(id)), start, end);
+      let updated = 0, added = 0;
+      for (const w of workers) {
+        const worked = attendance.get(w.id) || { days: 0, overtime: 0, breakdown: [] };
+        const entry = entries.find((e: any) => e.employee_id === w.id);
+        if (entry) {
+          const allowances = parseItems(entry.detailed_allowances).filter(a => !/^Overtime/i.test(a.type));
+          const deductions = parseItems(entry.detailed_deductions).filter(d => !isStatutoryDeduction(d.type));
+          const { values } = casualEntry(w, worked, config, allowances, deductions);
+          await trx('payroll').where({ id: entry.id }).update({
+            ...values, notes: worked.days || worked.overtime ? entry.notes : 'No attendance recorded for this period', updated_at: trx.fn.now(),
+          });
+          updated++;
+        } else if ((worked.days || worked.overtime) && !overlaps.has(w.id) && isCasualWage(w.wage_type)) {
+          const { values } = casualEntry(w, worked, config, [], []);
+          await trx('payroll').insert({
+            ...values, run_id: run.id, employee_id: w.id, month: run.month, year: run.year,
+            period_start: start, period_end: end, payment_date: run.payment_date, status: 'Draft', created_by: req.user?.id ?? null,
+          });
+          added++;
+        }
+      }
+      if (run.status === 'Reviewed') await trx('payroll').where({ run_id: run.id }).update({ status: 'Draft' });
+      await trx('payroll_runs').where({ id: run.id }).update({ status: 'Draft', reviewed_by: null, reviewed_at: null, updated_at: trx.fn.now() });
+      await logAudit(req, 'refresh', 'payroll_run', run.id, undefined, { updated, added }, trx);
+      return { updated, added };
+    });
+    res.json({ ...result, message: `Re-priced ${result.updated} worker(s) from attendance${result.added ? `; added ${result.added}` : ''}` });
+  } catch (error) {
+    handle(res, error, 'Error refreshing casual run');
+  }
+});
+
 async function transition(req: AuthRequest, res: Response, from: string[], apply: (trx: Knex.Transaction, run: any) => Promise<string>) {
   try {
     const message = await db.transaction(async trx => {
@@ -769,9 +1113,9 @@ router.post('/payroll-runs/:id/review', authenticateToken, authorizeRole(PAYROLL
     await trx('payroll').where({ run_id: run.id }).update({ status: 'Reviewed', updated_at: trx.fn.now() });
     await logAudit(req, 'review', 'payroll_run', run.id, { status: run.status }, { status: 'Reviewed' }, trx);
     notify({ roles: PAYROLL_APPROVE }, 'Payroll awaiting approval',
-      `${run.month} ${run.year} payroll for ${Number(count[0]?.count)} employee(s) is ready for approval.`,
+      `${runLabel(run)} for ${Number(count[0]?.count)} employee(s) is ready for approval.`,
       { type: 'hr', link: 'hr-payroll', excludeUserId: req.user?.id });
-    return `${run.month} ${run.year} payroll marked as reviewed and sent for approval`;
+    return `${runLabel(run)} marked as reviewed and sent for approval`;
   }));
 
 router.post('/payroll-runs/:id/reopen', authenticateToken, authorizeRole(PAYROLL_PREPARE), (req: AuthRequest, res) =>
@@ -781,24 +1125,27 @@ router.post('/payroll-runs/:id/reopen', authenticateToken, authorizeRole(PAYROLL
     return 'Run reopened for editing';
   }));
 
-// Approval posts one journal for the whole run.
+// Approval posts the run to the ledger (one journal per project) and locks the period's attendance.
 router.post('/payroll-runs/:id/approve', authenticateToken, authorizeRole(PAYROLL_APPROVE), (req: AuthRequest, res) =>
   transition(req, res, ['Reviewed'], async (trx, run) => {
     const rows = await trx('payroll').where({ run_id: run.id });
-    const journalId = await postPayroll(trx, {
+    const journalIds = await postPayroll(trx, {
       rows,
       date: run.payment_date || toIsoDate(null),
-      description: `Payroll run: ${run.month} ${run.year} (${rows.length} employees)`,
+      description: run.run_type === 'casual'
+        ? `${runLabel(run)} (${rows.length} workers)`
+        : `Payroll run: ${run.month} ${run.year} (${rows.length} employees)`,
       referenceType: 'payroll_run',
       referenceId: run.id,
       projectId: run.project_id,
     });
+    const journalId = journalIds[0];
     await trx('payroll_runs').where({ id: run.id }).update({
       status: 'Approved', journal_id: journalId, approved_by: req.user?.id ?? null, approved_at: trx.fn.now(), updated_at: trx.fn.now(),
     });
     await trx('payroll').where({ run_id: run.id }).update({ status: 'Approved', journal_id: journalId, approved_by: req.user?.id ?? null, updated_at: trx.fn.now() });
-    await logAudit(req, 'approve', 'payroll_run', run.id, { status: run.status }, { status: 'Approved', journal_id: journalId, employees: rows.length }, trx);
-    return `${run.month} ${run.year} payroll approved and posted to the ledger`;
+    await logAudit(req, 'approve', 'payroll_run', run.id, { status: run.status }, { status: 'Approved', journal_ids: journalIds, employees: rows.length }, trx);
+    return `${runLabel(run)} approved and posted to the ledger${journalIds.length > 1 ? ` (${journalIds.length} journals, one per project)` : ''}`;
   }));
 
 router.post('/payroll-runs/:id/mark-paid', authenticateToken, authorizeRole(PAYROLL_APPROVE), async (req: AuthRequest, res) => {
@@ -808,13 +1155,17 @@ router.post('/payroll-runs/:id/mark-paid', authenticateToken, authorizeRole(PAYR
     await trx('payroll').where({ run_id: run.id }).update({ status: 'Paid', paid_at: trx.fn.now(), updated_at: trx.fn.now() });
     await logAudit(req, 'mark_paid', 'payroll_run', run.id, { status: run.status }, { status: 'Paid' }, trx);
     paidRun = run;
-    return `${run.month} ${run.year} payroll marked as paid; staff are being notified`;
+    return `${runLabel(run)} marked as paid; staff are being notified`;
   });
   if (paidRun) {
     const entries = await db('payroll').where({ run_id: paidRun.id }).select('employee_id', 'net_pay');
+    const casual = paidRun.run_type === 'casual';
     for (const e of entries) {
-      await notifyEmployee(e.employee_id, 'Salary paid',
-        `Your ${paidRun.month} ${paidRun.year} salary of GHS ${Number(e.net_pay).toLocaleString()} has been paid. Your payslip is available in the ERP.`, 'hr-payroll');
+      await notifyEmployee(e.employee_id, casual ? 'Pay released' : 'Salary paid',
+        casual
+          ? `Your pay for ${periodLabel(paidRun.period_start, paidRun.period_end)} of GHS ${Number(e.net_pay).toLocaleString()} has been paid.`
+          : `Your ${paidRun.month} ${paidRun.year} salary of GHS ${Number(e.net_pay).toLocaleString()} has been paid. Your payslip is available in the ERP.`,
+        'hr-payroll');
     }
   }
 });
@@ -824,10 +1175,12 @@ router.post('/payroll-runs/:id/cancel', authenticateToken, authorizeRole(PAYROLL
   transition(req, res, ['Draft', 'Reviewed', 'Approved'], async (trx, run) => {
     if (run.status === 'Approved') {
       if (!hasRole(req, PAYROLL_APPROVE)) throw new HttpError('Only an admin or accountant can cancel an approved run', 403);
-      if (run.journal_id) {
-        await reverseJournal(trx, run.journal_id, {
+      const posted = await trx('journal_entries').where({ reference_type: 'payroll_run', reference_id: String(run.id) }).pluck('id');
+      const journalIds = [...new Set([...posted, ...(run.journal_id ? [run.journal_id] : [])].map(Number))];
+      for (const journalId of journalIds) {
+        await reverseJournal(trx, journalId, {
           date: toIsoDate(null),
-          description: `Reversal of payroll run: ${run.month} ${run.year}`,
+          description: `Reversal of ${runLabel(run)}`,
           reference_type: 'payroll_run_reversal',
           reference_id: run.id,
         });
@@ -842,7 +1195,8 @@ router.post('/payroll-runs/:id/cancel', authenticateToken, authorizeRole(PAYROLL
 // ---------------------------------------------------------------- Payroll settings
 
 const CONFIG_KEYS = ['ssnit_employee', 'ssnit_employer', 'ssnit_tier1', 'ssnit_tier2', 'tax_tiers', 'deduction_types',
-  'annual_leave_days', 'max_carry_over_days', 'overtime_multiplier', 'standard_hours_per_day'];
+  'annual_leave_days', 'max_carry_over_days', 'overtime_multiplier', 'standard_hours_per_day',
+  'casual_wht_rate', 'casual_overtime_multiplier', 'casual_hours_per_day'];
 
 router.get('/payroll-settings', authenticateToken, authorizeRole(PAYROLL_PREPARE), async (req, res) => {
   try {
@@ -870,8 +1224,14 @@ router.put('/payroll-settings', authenticateToken, authorizeRole(PAYROLL_PREPARE
           }
         }
       }
-      for (const key of ['ssnit_employee', 'ssnit_employer', 'ssnit_tier1', 'ssnit_tier2']) {
+      for (const key of ['ssnit_employee', 'ssnit_employer', 'ssnit_tier1', 'ssnit_tier2', 'casual_wht_rate']) {
         if (key in incoming && !(Number(incoming[key]) >= 0 && Number(incoming[key]) <= 100)) return res.status(400).json({ message: `${key} must be a percentage` });
+      }
+      if ('casual_overtime_multiplier' in incoming && !(Number(incoming.casual_overtime_multiplier) >= 1 && Number(incoming.casual_overtime_multiplier) <= 5)) {
+        return res.status(400).json({ message: 'Casual overtime multiplier must be between 1 and 5' });
+      }
+      if ('casual_hours_per_day' in incoming && !(Number(incoming.casual_hours_per_day) >= 1 && Number(incoming.casual_hours_per_day) <= 16)) {
+        return res.status(400).json({ message: 'Casual hours per day must be between 1 and 16' });
       }
       const row = await db('settings').where({ key: 'payroll_config' }).first();
       let current: Record<string, any> = {};
@@ -940,11 +1300,22 @@ router.post('/appraisals', authenticateToken, authorizeRole(HR_ADMIN), async (re
 
 // ---------------------------------------------------------------- Attendance & timesheets
 
-async function assertPayrollOpen(conn: Conn, date: string) {
+// Attendance is locked for a worker once pay based on it is approved: the month for staff in an approved monthly
+// run, or the exact period for a casual worker's approved pay.
+async function assertPayrollOpen(conn: Conn, date: string, employeeIds: string[]) {
   const d = new Date(`${date}T00:00:00Z`);
   const month = MONTHS[d.getUTCMonth()];
-  const run = await conn('payroll_runs').where({ month, year: d.getUTCFullYear() }).whereIn('status', ['Approved', 'Paid']).first();
-  if (run) throw new HttpError(`${month} ${d.getUTCFullYear()} payroll has been ${run.status.toLowerCase()}; attendance for that month is locked`, 409);
+  const locked = await conn('payroll').join('employees', 'payroll.employee_id', 'employees.id')
+    .whereIn('payroll.employee_id', employeeIds)
+    .whereIn('payroll.status', ['Approved', 'Paid'])
+    .where(q => q
+      .where(c => c.where('payroll.pay_type', 'casual').where('payroll.period_start', '<=', date).where('payroll.period_end', '>=', date))
+      .orWhere(m => m.whereNull('payroll.pay_type').whereNotNull('payroll.run_id').where({ 'payroll.month': month, 'payroll.year': d.getUTCFullYear() })))
+    .select('employees.name', 'payroll.pay_type', 'payroll.status');
+  if (locked.length) {
+    const names = [...new Set(locked.map((l: any) => l.name))];
+    throw new HttpError(`Pay covering ${date} is already approved for ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}; their attendance for that day is locked`, 409);
+  }
 }
 
 router.get('/attendance/roster', authenticateToken, authorizeRole(ATTENDANCE_EDIT), async (req, res) => {
@@ -999,8 +1370,8 @@ router.put('/attendance', authenticateToken, authorizeRole(ATTENDANCE_EDIT), asy
     });
 
     await db.transaction(async trx => {
-      await assertPayrollOpen(trx, date);
       const ids = rows.map(r => r.employee_id);
+      await assertPayrollOpen(trx, date, ids);
       const known = await trx('employees').whereIn('id', ids).select('id');
       if (known.length !== new Set(ids).size) throw new HttpError('One or more employees were not found');
       const del = trx('timesheets').where({ date }).whereIn('employee_id', ids);
@@ -1026,14 +1397,17 @@ router.get('/attendance/summary', authenticateToken, authorizeRole(ATTENDANCE_VI
       .leftJoin('projects', 'timesheets.project_id', 'projects.id')
       .whereBetween('timesheets.date', [start, end])
       .select('timesheets.employee_id', 'timesheets.project_id', 'timesheets.attendance', 'timesheets.hours', 'timesheets.overtime_hours',
-        'timesheets.date', 'employees.name', 'employees.department', 'employees.wage_type', 'employees.salary', 'projects.name as project_name');
+        'timesheets.date', 'employees.name', 'employees.department', 'employees.wage_type', 'employees.salary', 'employees.overtime_rate',
+        'projects.name as project_name');
 
     const byEmployee = new Map<string, any>();
     for (const r of rows) {
       const e = byEmployee.get(r.employee_id) || {
         employee_id: r.employee_id, name: r.name, department: r.department, wage_type: r.wage_type, rate: Number(r.salary),
+        overtime_rate: casualOvertimeRate(Number(r.salary), r.overtime_rate, config),
         days: new Set<string>(), days_present: 0, days_absent: 0, days_leave: 0, hours: 0, overtime_hours: 0, projects: new Map<string, any>(),
       };
+      const units = r.attendance === 'Present' ? 1 : r.attendance === 'Half Day' ? 0.5 : 0;
       const date = toIsoDate(r.date);
       if (r.attendance === 'Present') { if (!e.days.has(date)) e.days_present += 1; e.days.add(date); }
       else if (r.attendance === 'Half Day') { if (!e.days.has(date)) e.days_present += 0.5; e.days.add(date); }
@@ -1042,7 +1416,8 @@ router.get('/attendance/summary', authenticateToken, authorizeRole(ATTENDANCE_VI
       e.hours += Number(r.hours || 0);
       e.overtime_hours += Number(r.overtime_hours || 0);
       const key = r.project_id || 'none';
-      const p = e.projects.get(key) || { project_id: r.project_id, project_name: r.project_name || 'General / office', hours: 0, overtime_hours: 0 };
+      const p = e.projects.get(key) || { project_id: r.project_id, project_name: r.project_name || 'General / office', days: 0, hours: 0, overtime_hours: 0 };
+      p.days += units;
       p.hours += Number(r.hours || 0);
       p.overtime_hours += Number(r.overtime_hours || 0);
       e.projects.set(key, p);
@@ -1053,19 +1428,24 @@ router.get('/attendance/summary', authenticateToken, authorizeRole(ATTENDANCE_VI
     const employees = [...byEmployee.values()].map(e => {
       const totalHours = e.hours + e.overtime_hours;
       const projects = [...e.projects.values()].map((p: any) => {
-        const cost = e.wage_type === 'Hourly'
-          ? p.hours * e.rate + p.overtime_hours * e.rate * config.overtime_multiplier
-          : totalHours ? e.rate * ((p.hours + p.overtime_hours) / totalHours) : 0;
+        const cost = e.wage_type === 'Daily'
+          ? p.days * e.rate + p.overtime_hours * e.overtime_rate
+          : e.wage_type === 'Hourly'
+            ? p.hours * e.rate + p.overtime_hours * e.rate * config.overtime_multiplier
+            : totalHours ? e.rate * ((p.hours + p.overtime_hours) / totalHours) : 0;
         const t = projectTotals.get(p.project_id || 'none') || { project_id: p.project_id, project_name: p.project_name, hours: 0, overtime_hours: 0, labour_cost: 0, employees: 0 };
         t.hours += p.hours; t.overtime_hours += p.overtime_hours; t.labour_cost += cost; t.employees += 1;
         projectTotals.set(p.project_id || 'none', t);
         return { ...p, labour_cost: round2(cost) };
       });
       const { days, ...rest } = e;
+      const estimated = e.wage_type === 'Daily'
+        ? e.days_present * e.rate + e.overtime_hours * e.overtime_rate
+        : e.wage_type === 'Hourly' ? e.hours * e.rate + e.overtime_hours * e.rate * config.overtime_multiplier : e.rate;
       return {
         ...rest, projects,
         hours: round2(e.hours), overtime_hours: round2(e.overtime_hours),
-        estimated_pay: round2(e.wage_type === 'Hourly' ? e.hours * e.rate + e.overtime_hours * e.rate * config.overtime_multiplier : e.rate),
+        estimated_pay: round2(estimated),
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
 
