@@ -19,7 +19,8 @@ import {
   Printer,
   ChevronDown,
   ChevronRight,
-  Eye
+  Eye,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   Card, 
@@ -63,6 +64,13 @@ import { hrApi, settingsApi, projectsApi } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { GHANA_BANKS } from '../../lib/constants';
+import { ageInYears, daysUntil, formatDate, inclusiveDays, serviceLength, todayIso } from '../../lib/dates';
+
+const EMPLOYMENT_TYPES = ['Permanent', 'Contract', 'Casual', 'Intern', 'National Service'];
+const FIXED_TERM_TYPES = ['Contract', 'Casual', 'Intern', 'National Service'];
+const EXPIRY_WARNING_DAYS = 30;
+
+const errorMessage = (error: any, fallback: string) => error?.response?.data?.message || fallback;
 
 interface HRProps {
   activeSub?: string;
@@ -93,6 +101,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
   const [newEmployeeWageType, setNewEmployeeWageType] = useState('Salaried');
   const [editEmployeeWageType, setEditEmployeeWageType] = useState('Salaried');
+  const [newEmploymentType, setNewEmploymentType] = useState('Permanent');
+  const [editEmploymentType, setEditEmploymentType] = useState('Permanent');
+  const [editStatus, setEditStatus] = useState<string>('active');
   const [isIndividualPayrollOpen, setIsIndividualPayrollOpen] = useState(false);
   const [selectedBatchEmployees, setSelectedBatchEmployees] = useState<number[]>([]);
   const [payrollData, setPayrollData] = useState<any>({
@@ -124,6 +135,25 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
 
     return tax;
   };
+
+  const employmentDateAlerts = employees
+    .filter(e => e.status !== 'terminated')
+    .flatMap(e => {
+      const alerts: { employee: Employee; label: string; date: string; days: number }[] = [];
+      const contractDays = daysUntil(e.contract_end_date);
+      if (e.contract_end_date && contractDays !== null && contractDays <= EXPIRY_WARNING_DAYS) {
+        alerts.push({ employee: e, label: 'Contract ends', date: e.contract_end_date, days: contractDays });
+      }
+      const probationDays = daysUntil(e.probation_end_date);
+      if (e.probation_end_date && probationDays !== null && probationDays >= 0 && probationDays <= EXPIRY_WARNING_DAYS) {
+        alerts.push({ employee: e, label: 'Probation ends', date: e.probation_end_date, days: probationDays });
+      }
+      return alerts;
+    })
+    .sort((a, b) => a.days - b.days);
+
+  const describeDays = (days: number) =>
+    days < 0 ? `${Math.abs(days)} day${days === -1 ? '' : 's'} ago` : days === 0 ? 'today' : `in ${days} day${days === 1 ? '' : 's'}`;
 
   const togglePeriod = (period: string) => {
     setExpandedPeriods(prev => ({ ...prev, [period]: !prev[period] }));
@@ -177,7 +207,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       role: formData.get('role'),
       department: formData.get('department'),
       salary: Number(formData.get('salary')),
-      joinDate: new Date().toISOString().split('T')[0],
+      joinDate: formData.get('joinDate'),
+      date_of_birth: formData.get('date_of_birth'),
+      employment_type: formData.get('employment_type'),
+      probation_end_date: formData.get('probation_end_date'),
+      contract_end_date: FIXED_TERM_TYPES.includes(newEmploymentType) ? formData.get('contract_end_date') : null,
       status: 'active',
       ssnit: formData.get('ssnit'),
       ghana_card: formData.get('ghana_card'),
@@ -194,10 +228,19 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       toast.success('Employee registered successfully');
       setIsAddEmployeeOpen(false);
       setNewEmployeeWageType('Salaried'); // Reset state
+      setNewEmploymentType('Permanent');
       fetchData();
     } catch (error) {
-      toast.error('Failed to add employee');
+      toast.error(errorMessage(error, 'Failed to add employee'));
     }
+  };
+
+  const openEditEmployee = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setEditEmployeeWageType(employee.wage_type || 'Salaried');
+    setEditEmploymentType(employee.employment_type || 'Permanent');
+    setEditStatus(employee.status);
+    setIsEditEmployeeOpen(true);
   };
 
   const handleEditEmployee = async (e: React.FormEvent) => {
@@ -210,6 +253,12 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       department: formData.get('department'),
       salary: Number(formData.get('salary')),
       status: formData.get('status'),
+      joinDate: formData.get('joinDate'),
+      date_of_birth: formData.get('date_of_birth'),
+      employment_type: formData.get('employment_type'),
+      probation_end_date: formData.get('probation_end_date'),
+      contract_end_date: FIXED_TERM_TYPES.includes(editEmploymentType) ? formData.get('contract_end_date') : null,
+      exit_date: editStatus === 'terminated' ? formData.get('exit_date') : null,
       ssnit: formData.get('ssnit'),
       ghana_card: formData.get('ghana_card'),
       phone: formData.get('phone'),
@@ -226,7 +275,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       setIsEditEmployeeOpen(false);
       fetchData();
     } catch (error) {
-      toast.error('Failed to update employee');
+      toast.error(errorMessage(error, 'Failed to update employee'));
     }
   };
 
@@ -305,13 +354,18 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
       reason: formData.get('reason')
     };
 
+    if (String(data.endDate) < String(data.startDate)) {
+      toast.error('End date cannot be before the start date');
+      return;
+    }
+
     try {
       await hrApi.submitLeaveRequest(data);
       toast.success('Leave request submitted for review');
       setIsLeaveRequestOpen(false);
       fetchData();
     } catch (error) {
-      toast.error('Failed to submit leave request');
+      toast.error(errorMessage(error, 'Failed to submit leave request'));
     }
   };
 
@@ -492,7 +546,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
               {(user?.role === 'admin' || user?.role === 'hr') && (
                 <Dialog open={isAddEmployeeOpen} onOpenChange={setIsAddEmployeeOpen}>
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 rounded-xl"><Plus className="w-4 h-4" /> Add Personnel</Button></DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <form onSubmit={handleAddEmployee}>
                     <DialogHeader><DialogTitle>Personnel Onboarding</DialogTitle></DialogHeader>
                     <div className="p-4 space-y-4">
@@ -500,6 +554,26 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" required /></div>
+                      </div>
+                      <div className="space-y-4 p-4 bg-[#F5F5F5]/60 rounded-2xl">
+                        <p className="text-xs font-black uppercase tracking-widest text-[#141414]">Employment Dates</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Commencement Date</Label><Input name="joinDate" type="date" defaultValue={todayIso()} required className="bg-white" /></div>
+                          <div className="grid gap-2">
+                            <Label>Employment Type</Label>
+                            <Select name="employment_type" value={newEmploymentType} onValueChange={setNewEmploymentType}>
+                              <SelectTrigger className="bg-white border-slate-200 rounded-xl"><SelectValue /></SelectTrigger>
+                              <SelectContent>{EMPLOYMENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Date of Birth</Label><Input name="date_of_birth" type="date" max={todayIso()} className="bg-white" /></div>
+                          <div className="grid gap-2"><Label>Probation End Date</Label><Input name="probation_end_date" type="date" className="bg-white" /></div>
+                        </div>
+                        {FIXED_TERM_TYPES.includes(newEmploymentType) && (
+                          <div className="grid gap-2"><Label>Contract End Date</Label><Input name="contract_end_date" type="date" required className="bg-white" /></div>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
@@ -545,9 +619,20 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
               </Dialog>
               )}
             </CardHeader>
+            {employmentDateAlerts.length > 0 && (
+              <div className="m-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-2">
+                <p className="text-xs font-black uppercase tracking-widest text-amber-800 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Upcoming employment dates</p>
+                {employmentDateAlerts.map((a, i) => (
+                  <div key={`${a.employee.id}-${i}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span><span className="font-bold">{a.employee.name}</span> <span className="text-amber-800">· {a.label} {formatDate(a.date)}</span></span>
+                    <Badge className={a.days < 0 ? 'bg-red-100 text-red-700 border-none' : 'bg-amber-100 text-amber-800 border-none'}>{describeDays(a.days)}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
             <CardContent className="p-0">
               <Table>
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff ID</TableHead><TableHead>Name</TableHead><TableHead>Department</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff ID</TableHead><TableHead>Name</TableHead><TableHead>Department</TableHead><TableHead>Commenced</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {employees.map(e => (
                     <TableRow key={e.id} className="hover:bg-blue-50/30">
@@ -559,7 +644,11 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                       </TableCell>
                       <TableCell className="font-medium text-[#8E9299]">{e.department}</TableCell>
-                      <TableCell><Badge className={e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>{e.status}</Badge></TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{formatDate(e.joinDate)}</div>
+                        <div className="text-[10px] text-slate-500 uppercase">{serviceLength(e.joinDate, e.exit_date)}{e.employment_type ? ` · ${e.employment_type}` : ''}</div>
+                      </TableCell>
+                      <TableCell><Badge className={e.status === 'active' ? 'bg-green-100 text-green-700' : e.status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}>{e.status}</Badge></TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="sm" onClick={() => { 
                           setSelectedEmployee(e); 
@@ -581,7 +670,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
                         {(user?.role === 'admin' || user?.role === 'hr') && (
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(e); setIsEditEmployeeOpen(true); }} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
+                          <Button variant="ghost" size="sm" onClick={() => openEditEmployee(e)} className="h-8 w-8 p-0 rounded-full hover:bg-white hover:shadow-sm">
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -623,9 +712,58 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </div>
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold uppercase text-[#8E9299]">Status</p>
-                          <Badge className={selectedEmployee.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                          <Badge className={selectedEmployee.status === 'active' ? 'bg-green-100 text-green-700' : selectedEmployee.status === 'terminated' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}>
                             {selectedEmployee.status}
                           </Badge>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-[#141414]">Employment</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-[#F5F5F5] pt-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Commencement Date</p>
+                            <p className="font-medium">{formatDate(selectedEmployee.joinDate)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Length of Service</p>
+                            <p className="font-medium">{serviceLength(selectedEmployee.joinDate, selectedEmployee.exit_date)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Employment Type</p>
+                            <p className="font-medium">{selectedEmployee.employment_type || 'Not set'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Probation Ends</p>
+                            <p className="font-medium">
+                              {formatDate(selectedEmployee.probation_end_date, 'Not set')}
+                              {selectedEmployee.probation_end_date && (daysUntil(selectedEmployee.probation_end_date) ?? 0) < 0 && <span className="text-xs text-green-600"> (completed)</span>}
+                            </p>
+                          </div>
+                          {(selectedEmployee.contract_end_date || FIXED_TERM_TYPES.includes(selectedEmployee.employment_type || '')) && (
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-[#8E9299]">Contract Ends</p>
+                              <p className="font-medium">
+                                {formatDate(selectedEmployee.contract_end_date, 'Not set')}
+                                {selectedEmployee.contract_end_date && selectedEmployee.status !== 'terminated' && (
+                                  <span className={`text-xs ${(daysUntil(selectedEmployee.contract_end_date) ?? 0) < 0 ? 'text-red-600' : 'text-[#8E9299]'}`}> ({describeDays(daysUntil(selectedEmployee.contract_end_date) ?? 0)})</span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[10px] font-bold uppercase text-[#8E9299]">Date of Birth</p>
+                            <p className="font-medium">
+                              {formatDate(selectedEmployee.date_of_birth, 'Not set')}
+                              {ageInYears(selectedEmployee.date_of_birth) !== null && <span className="text-xs text-[#8E9299]"> (age {ageInYears(selectedEmployee.date_of_birth)})</span>}
+                            </p>
+                          </div>
+                          {selectedEmployee.status === 'terminated' && (
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-[#8E9299]">Exit Date</p>
+                              <p className="font-medium text-red-600">{formatDate(selectedEmployee.exit_date, 'Not recorded')}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -684,7 +822,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
             </Dialog>
 
             <Dialog open={isEditEmployeeOpen} onOpenChange={setIsEditEmployeeOpen}>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 {selectedEmployee && (
                   <form onSubmit={handleEditEmployee}>
                     <DialogHeader><DialogTitle>Edit Personnel Record</DialogTitle></DialogHeader>
@@ -693,6 +831,26 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Primary Role</Label><Input name="role" defaultValue={selectedEmployee.role} required /></div>
                         <div className="grid gap-2"><Label>Department</Label><Input name="department" defaultValue={selectedEmployee.department} required /></div>
+                      </div>
+                      <div className="space-y-4 p-4 bg-[#F5F5F5]/60 rounded-2xl">
+                        <p className="text-xs font-black uppercase tracking-widest text-[#141414]">Employment Dates</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Commencement Date</Label><Input name="joinDate" type="date" defaultValue={selectedEmployee.joinDate?.slice(0, 10)} required className="bg-white" /></div>
+                          <div className="grid gap-2">
+                            <Label>Employment Type</Label>
+                            <Select name="employment_type" value={editEmploymentType} onValueChange={setEditEmploymentType}>
+                              <SelectTrigger className="bg-white border-slate-200 rounded-xl"><SelectValue /></SelectTrigger>
+                              <SelectContent>{EMPLOYMENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid gap-2"><Label>Date of Birth</Label><Input name="date_of_birth" type="date" max={todayIso()} defaultValue={selectedEmployee.date_of_birth || ''} className="bg-white" /></div>
+                          <div className="grid gap-2"><Label>Probation End Date</Label><Input name="probation_end_date" type="date" defaultValue={selectedEmployee.probation_end_date || ''} className="bg-white" /></div>
+                        </div>
+                        {FIXED_TERM_TYPES.includes(editEmploymentType) && (
+                          <div className="grid gap-2"><Label>Contract End Date</Label><Input name="contract_end_date" type="date" defaultValue={selectedEmployee.contract_end_date || ''} required className="bg-white" /></div>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2">
@@ -733,7 +891,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid gap-2"><Label>Residential Address</Label><Textarea name="address" defaultValue={selectedEmployee.address} /></div>
                       <div className="grid gap-2">
                         <Label>Status</Label>
-                        <Select name="status" defaultValue={selectedEmployee.status} key={`${selectedEmployee.id}-status`}>
+                        <Select name="status" value={editStatus} onValueChange={setEditStatus} key={`${selectedEmployee.id}-status`}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="active">Active</SelectItem>
@@ -742,6 +900,9 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                           </SelectContent>
                         </Select>
                       </div>
+                      {editStatus === 'terminated' && (
+                        <div className="grid gap-2"><Label>Exit Date</Label><Input name="exit_date" type="date" defaultValue={selectedEmployee.exit_date || todayIso()} required /></div>
+                      )}
                     </div>
                     <DialogFooter><Button type="submit" className="bg-blue-600 text-white w-full rounded-xl font-bold">COMMIT UPDATES</Button></DialogFooter>
                   </form>
@@ -932,13 +1093,15 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
             </div>
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff Member</TableHead><TableHead>Type</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Staff Member</TableHead><TableHead>Type</TableHead><TableHead>Period</TableHead><TableHead>Days</TableHead><TableHead>Requested</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
                     {leaveRequests.map(l => (
                       <TableRow key={l.id}>
                         <TableCell className="font-bold">{l.employee_name || l.employee_id}</TableCell>
                         <TableCell><Badge variant="outline" className="rounded-md font-medium text-[10px] uppercase">{l.type}</Badge></TableCell>
-                        <TableCell className="text-xs text-[#8E9299]">{l.startDate} → {l.endDate}</TableCell>
+                        <TableCell className="text-xs text-[#8E9299]">{formatDate(l.startDate)} → {formatDate(l.endDate)}</TableCell>
+                        <TableCell className="text-xs font-bold">{inclusiveDays(l.startDate, l.endDate)}</TableCell>
+                        <TableCell className="text-xs text-[#8E9299]">{formatDate(l.created_at)}</TableCell>
                         <TableCell>
                           <Badge className={
                             l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
@@ -961,7 +1124,7 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {leaveRequests.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-12 text-[#8E9299]">No current absence records.</TableCell></TableRow>}
+                    {leaveRequests.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-12 text-[#8E9299]">No current absence records.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
@@ -1149,11 +1312,19 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-[10px] font-bold uppercase text-[#8E9299]">Start Date</p>
-                          <p className="font-medium">{selectedLeave.startDate}</p>
+                          <p className="font-medium">{formatDate(selectedLeave.startDate)}</p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold uppercase text-[#8E9299]">End Date</p>
-                          <p className="font-medium">{selectedLeave.endDate}</p>
+                          <p className="font-medium">{formatDate(selectedLeave.endDate)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Duration</p>
+                          <p className="font-medium">{inclusiveDays(selectedLeave.startDate, selectedLeave.endDate)} day(s)</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase text-[#8E9299]">Requested On</p>
+                          <p className="font-medium">{formatDate(selectedLeave.created_at)}</p>
                         </div>
                       </div>
                       <div className="space-y-1">

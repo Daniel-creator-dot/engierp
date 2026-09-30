@@ -52,6 +52,11 @@ export interface Employee {
   account_number?: string;
   branch?: string;
   wage_type?: string;
+  date_of_birth?: string | null;
+  employment_type?: string | null;
+  probation_end_date?: string | null;
+  contract_end_date?: string | null;
+  exit_date?: string | null;
 }
 
 export interface Invoice {
@@ -87,6 +92,7 @@ export interface LeaveRequest {
   endDate: string;
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  created_at?: string;
 }
 
 export interface PayrollRecord {

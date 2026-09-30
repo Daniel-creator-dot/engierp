@@ -5,6 +5,42 @@ import { sendSMS } from '../utils/sms';
 
 const router = Router();
 
+const EMPLOYEE_DATE_FIELDS = ['joinDate', 'date_of_birth', 'probation_end_date', 'contract_end_date', 'exit_date'];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isValidIsoDate = (value: string) => ISO_DATE.test(value) && !Number.isNaN(new Date(value).getTime());
+
+// Returns an error message, or null when the submitted date fields are valid. Blank dates are stored as NULL.
+const normalizeEmployeeDates = (data: Record<string, any>): string | null => {
+  for (const field of EMPLOYEE_DATE_FIELDS) {
+    if (!(field in data)) continue;
+    const value = data[field] === null || data[field] === undefined ? '' : String(data[field]).trim();
+    if (!value) {
+      data[field] = null;
+    } else if (!isValidIsoDate(value)) {
+      return `Invalid date for ${field}. Use the format YYYY-MM-DD.`;
+    } else {
+      data[field] = value;
+    }
+  }
+  if ('joinDate' in data && !data.joinDate) return 'Commencement date is required';
+  return null;
+};
+
+const checkEmployeeDateOrder = (data: Record<string, any>): string | null => {
+  const joinDate = isValidIsoDate(String(data.joinDate || '')) ? data.joinDate : null;
+  if (!joinDate) return null;
+  if (data.date_of_birth && data.date_of_birth >= joinDate) {
+    return 'Date of birth must be before the commencement date';
+  }
+  for (const field of ['probation_end_date', 'contract_end_date', 'exit_date']) {
+    if (data[field] && data[field] < joinDate) {
+      return `${field.replace(/_/g, ' ')} cannot be before the commencement date`;
+    }
+  }
+  return null;
+};
+
 // Get all employees (HR/Accountant/Admin)
 router.get('/employees', authenticateToken, authorizeRole(['hr', 'accountant', 'admin']), async (req, res) => {
   try {
@@ -18,7 +54,9 @@ router.get('/employees', authenticateToken, authorizeRole(['hr', 'accountant', '
 // Add employee
 router.post('/employees', authenticateToken, authorizeRole(['hr', 'admin']), async (req, res) => {
   try {
-    const employee = req.body;
+    const employee = { ...req.body, joinDate: req.body.joinDate ?? '' };
+    const dateError = normalizeEmployeeDates(employee) || checkEmployeeDateOrder(employee);
+    if (dateError) return res.status(400).json({ message: dateError });
     await db('employees').insert(employee);
     res.status(201).json(employee);
   } catch (error) {
@@ -30,7 +68,11 @@ router.post('/employees', authenticateToken, authorizeRole(['hr', 'admin']), asy
 router.patch('/employees/:id', authenticateToken, authorizeRole(['hr', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
+    const existing = await db('employees').where({ id }).first();
+    if (!existing) return res.status(404).json({ message: 'Employee not found' });
+    const dateError = normalizeEmployeeDates(updates) || checkEmployeeDateOrder({ ...existing, ...updates });
+    if (dateError) return res.status(400).json({ message: dateError });
     await db('employees').where({ id }).update({ ...updates, updated_at: db.fn.now() });
     res.json({ message: 'Employee file updated' });
   } catch (error) {
@@ -64,6 +106,13 @@ router.post('/leave-requests', authenticateToken, async (req: AuthRequest, res) 
     const empId = req.user?.employee_id;
 
     if (!empId) return res.status(401).json({ message: 'User not associated with employee record' });
+
+    if (!isValidIsoDate(String(startDate || '')) || !isValidIsoDate(String(endDate || ''))) {
+      return res.status(400).json({ message: 'Start and end dates are required (YYYY-MM-DD)' });
+    }
+    if (endDate < startDate) {
+      return res.status(400).json({ message: 'End date cannot be before the start date' });
+    }
 
     // Calculate requested duration
     const start = new Date(startDate);
