@@ -117,10 +117,24 @@ export const procurementApi = {
   getSupplierHistory: (id: string) => api.get(`/procurement/suppliers/${id}/history`),
   getInventory: () => api.get('/procurement/inventory'),
   addInventory: (data: any) => api.post('/procurement/inventory', data),
+  updateInventory: (id: string, data: any) => api.patch(`/procurement/inventory/${id}`, data),
+  getStockMovements: (id: string) => api.get(`/procurement/inventory/${id}/movements`),
+  recordStockMovement: (id: string, data: { type: 'issue' | 'adjustment'; quantity: number; project_id?: string; notes?: string }) =>
+    api.post(`/procurement/inventory/${id}/movements`, data),
   getPurchaseOrders: () => api.get('/procurement/purchase-orders'),
+  getPurchaseOrder: (id: string) => api.get(`/procurement/purchase-orders/${id}`),
   createPurchaseOrder: (data: any) => api.post('/procurement/purchase-orders', data),
+  editPurchaseOrder: (id: string, data: any) => api.put(`/procurement/purchase-orders/${id}`, data),
   updateLogistics: (id: string, data: any) => api.patch(`/procurement/purchase-orders/${id}`, data),
   updatePOStatus: (id: string, data: { status: string }) => api.patch(`/procurement/purchase-orders/${id}`, data),
+  approvePO: (id: string) => api.post(`/procurement/purchase-orders/${id}/approve`),
+  rejectPO: (id: string, reason?: string) => api.post(`/procurement/purchase-orders/${id}/reject`, { reason }),
+  cancelPO: (id: string) => api.post(`/procurement/purchase-orders/${id}/cancel`),
+  receiveGoods: (id: string, data: { receipt_date: string; delivery_note?: string; notes?: string; lines: Array<{ po_item_id: number; quantity: number; inventory_item_id?: string; add_to_stock?: boolean }> }) =>
+    api.post(`/procurement/purchase-orders/${id}/receive`, data),
+  convertToBill: (id: string, data: { account_id: number; bill_date: string; due_date?: string }) =>
+    api.post(`/procurement/purchase-orders/${id}/convert-to-bill`, data),
+  getBillAccounts: () => api.get('/procurement/bill-accounts'),
 };
 
 export const accountingApi = {
