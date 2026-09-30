@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db';
 import { naturalBalance, round2, sendError, toIsoDate } from '../lib/ledger';
 import { CREDIT_NOTE_METHOD } from '../lib/accounting';
+import { loadPayrollAccounts } from '../lib/payroll';
 
 // Mounted inside routes/accounting.ts, which already enforces admin/accountant access.
 const router = Router();
@@ -83,19 +84,86 @@ router.get('/reports/balance-sheet', async (req, res) => {
   }
 });
 
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const utcDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+/**
+ * The comparison window for a report range: the same number of whole months before it when the range is
+ * month-aligned (e.g. September -> August, Q3 -> Q2), otherwise the same number of days immediately before.
+ */
+function priorRange(startDate: string, endDate: string) {
+  const start = utcDate(startDate);
+  const end = utcDate(endDate);
+  const dayAfterEnd = new Date(end.getTime() + 86400000);
+  if (start.getUTCDate() === 1 && dayAfterEnd.getUTCDate() === 1) {
+    const months = (dayAfterEnd.getUTCFullYear() - start.getUTCFullYear()) * 12 + dayAfterEnd.getUTCMonth() - start.getUTCMonth();
+    const priorStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - months, 1));
+    return { from: isoDay(priorStart), to: isoDay(new Date(start.getTime() - 86400000)) };
+  }
+  const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  return { from: isoDay(new Date(start.getTime() - days * 86400000)), to: isoDay(new Date(start.getTime() - 86400000)) };
+}
+
+function summarise(rows: any[], payrollIds: number[]) {
+  const stats: Record<string, number> = { Asset: 0, Liability: 0, Equity: 0, Income: 0, Expense: 0, PayrollCost: 0 };
+  for (const r of rows) {
+    const movement = Number(r.total_debit) - Number(r.total_credit);
+    stats[r.type] = round2((stats[r.type] || 0) + naturalBalance(r.type, movement));
+    if (payrollIds.includes(Number(r.id))) stats.PayrollCost = round2(stats.PayrollCost + movement);
+  }
+  return stats;
+}
+
 router.get('/reports/management', async (req, res) => {
   try {
     const startDate = str(req.query.startDate);
     const endDate = str(req.query.endDate);
-    const rows = await accountSums({ from: startDate, to: endDate });
-    const stats: Record<string, number> = { Asset: 0, Liability: 0, Equity: 0, Income: 0, Expense: 0 };
-    for (const r of rows as any[]) stats[r.type] = round2((stats[r.type] || 0) + naturalBalance(r.type, Number(r.total_debit) - Number(r.total_credit)));
+    const payrollAccounts = await loadPayrollAccounts(db);
+    const payrollIds = [...new Set([
+      payrollAccounts.salary_expense_account_id,
+      payrollAccounts.site_labour_account_id,
+      payrollAccounts.employer_ssnit_account_id,
+    ].filter((id): id is number => !!id))];
+
+    const prior = startDate && endDate ? priorRange(startDate, endDate) : null;
+    // At least six months of trend so a single-month report still has context; the client highlights the range.
+    const trendEnd = utcDate(endDate || toIsoDate());
+    const sixMonthsBack = isoDay(new Date(Date.UTC(trendEnd.getUTCFullYear(), trendEnd.getUTCMonth() - 5, 1)));
+    const trendFrom = startDate && startDate < sixMonthsBack ? startDate : sixMonthsBack;
+    const monthlyQuery = db('ledger_entries as le')
+      .join('journal_entries as j', 'le.journal_id', 'j.id')
+      .join('chart_of_accounts as c', 'le.account_id', 'c.id')
+      .whereIn('c.type', ['Income', 'Expense'])
+      .select(
+        db.raw(`to_char(date_trunc('month', j.date), 'YYYY-MM') AS month`),
+        db.raw(`COALESCE(SUM(CASE WHEN c.type = 'Income' THEN le.credit - le.debit ELSE 0 END), 0) AS income`),
+        db.raw(`COALESCE(SUM(CASE WHEN c.type = 'Expense' THEN le.debit - le.credit ELSE 0 END), 0) AS expense`)
+      )
+      .groupByRaw('1')
+      .orderByRaw('1');
+    monthlyQuery.where('j.date', '>=', trendFrom);
+    if (endDate) monthlyQuery.where('j.date', '<=', endDate);
 
     const payrollQuery = db('payroll').where('status', 'Paid').sum('net_pay as total_paid');
     if (startDate) payrollQuery.where('payment_date', '>=', startDate);
     if (endDate) payrollQuery.where('payment_date', '<=', endDate);
-    const [payrollResult]: any = await payrollQuery;
+
+    const [rows, priorRows, monthly, [payrollResult], payrollNames]: any = await Promise.all([
+      accountSums({ from: startDate, to: endDate }),
+      prior ? accountSums({ from: prior.from, to: prior.to, types: ['Income', 'Expense'] }) : Promise.resolve(null),
+      monthlyQuery,
+      payrollQuery,
+      payrollIds.length ? db('chart_of_accounts').whereIn('id', payrollIds).orderBy('code').select('code', 'name') : Promise.resolve([]),
+    ]);
+
+    const stats: Record<string, any> = summarise(rows, payrollIds);
     stats.TotalPayroll = Number(payrollResult?.total_paid || 0);
+    stats.PayrollAccounts = (payrollNames as any[]).map((a) => `${a.code} ${a.name}`);
+    stats.Monthly = (monthly as any[]).map((m) => ({ month: m.month, income: round2(m.income), expense: round2(m.expense) }));
+    if (prior && priorRows) {
+      const p = summarise(priorRows, payrollIds);
+      stats.Prior = { from: prior.from, to: prior.to, Income: p.Income, Expense: p.Expense, PayrollCost: p.PayrollCost };
+    }
     res.json(stats);
   } catch (error) {
     sendError(res, error, 'Error generating management reports');
