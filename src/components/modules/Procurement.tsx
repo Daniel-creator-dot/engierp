@@ -62,7 +62,7 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { procurementApi, projectsApi, settingsApi, apiErrorMessage } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { categoryOptions, useCategories } from '../../lib/catalog';
+import CategorySelect from '../CategorySelect';
 import { formatDate, todayIso } from '../../lib/dates';
 import { escapeHtml } from '../../lib/html';
 import { printDocument } from '../../lib/printDocument';
@@ -132,8 +132,6 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const [currency, setCurrency] = useState('GHS');
   const [isLoading, setIsLoading] = useState(true);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
-  const supplierCategories = useCategories('supplier');
-  const inventoryCategories = useCategories('inventory');
 
   // Purchase orders
   const [isPoFormOpen, setIsPoFormOpen] = useState(false);
@@ -525,10 +523,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Category</Label>
-          <Select name="category" defaultValue={s?.category} required>
-            <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select category..." /></SelectTrigger>
-            <SelectContent className="rounded-xl">{categoryOptions(supplierCategories, s?.category).map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-          </Select>
+          <CategorySelect type="supplier" name="category" defaultValue={s?.category} required triggerClassName="bg-[#F5F5F5] border-none rounded-xl h-11" contentClassName="rounded-xl" />
         </div>
         <div className="space-y-2">
           <Label>GRA TIN</Label>
@@ -738,10 +733,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                       <div className="space-y-2"><Label>Item name</Label><Input name="name" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                       <div className="space-y-2">
                         <Label>Category</Label>
-                        <Select name="category" defaultValue={inventoryCategories.some(c => c.name === 'Materials') ? 'Materials' : undefined}>
-                          <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select category..." /></SelectTrigger>
-                          <SelectContent className="rounded-xl">{inventoryCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <CategorySelect type="inventory" name="category" defaultValue="Materials" triggerClassName="bg-[#F5F5F5] border-none rounded-xl h-11" contentClassName="rounded-xl" />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Opening quantity</Label><Input name="quantity" type="number" min="0" step="any" defaultValue="0" className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
@@ -809,10 +801,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Category</Label>
-                          <Select name="category" defaultValue={editingItem.category}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>{categoryOptions(inventoryCategories, editingItem.category).map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <CategorySelect type="inventory" name="category" defaultValue={editingItem.category} />
                         </div>
                         <div className="space-y-2"><Label>Unit</Label><Input name="unit" defaultValue={editingItem.unit} required /></div>
                       </div>

@@ -10,10 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import { accountingApi, catalogApi, CategoryType } from '../../lib/api';
-import { Category, CATEGORY_TYPE_LABELS, Service } from '../../lib/catalog';
+import { canManageCategories, Category, CATEGORY_TYPE_LABELS, editableCategoryTypes, notifyCategoriesChanged, Service } from '../../lib/catalog';
 import { formatCurrency } from '../../lib/currency';
-
-const CATEGORY_TYPES = Object.keys(CATEGORY_TYPE_LABELS) as CategoryType[];
+import { useAuth } from '../../contexts/AuthContext';
 
 const CATEGORY_TYPE_HINTS: Record<CategoryType, string> = {
   expense: 'Used when recording supplier bills (e.g. Food, Fuel, Transport).',
@@ -30,6 +29,12 @@ interface CatalogManagerProps {
 }
 
 export default function CatalogManager({ currency }: CatalogManagerProps) {
+  const { user } = useAuth();
+  // Admins/accountants manage everything; other roles (e.g. procurement) can
+  // only add and rename the category types they use, and never touch services.
+  const fullAccess = canManageCategories(user?.role);
+  const categoryTypes = useMemo(() => editableCategoryTypes(user?.role), [user?.role]);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<any[]>([]);
@@ -54,10 +59,10 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
     try {
       const [catRes, svcRes, coaRes] = await Promise.all([
         catalogApi.getCategories(),
-        catalogApi.getServices(),
-        accountingApi.getCOA(),
+        fullAccess ? catalogApi.getServices() : Promise.resolve({ data: [] as Service[] }),
+        fullAccess ? accountingApi.getCOA() : Promise.resolve({ data: [] as any[] }),
       ]);
-      setCategories(catRes.data);
+      setCategories((catRes.data as Category[]).filter(c => categoryTypes.includes(c.type)));
       setServices(svcRes.data);
       setExpenseAccounts(coaRes.data.filter((a: any) => a.type === 'Expense'));
     } catch (error) {
@@ -75,7 +80,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
 
   const openNewCategory = () => {
     setEditingCategory(null);
-    setCategoryForm({ name: '', type: typeFilter === 'all' ? 'expense' : typeFilter, description: '', account_id: 'none' });
+    setCategoryForm({ name: '', type: typeFilter === 'all' ? categoryTypes[0] : typeFilter, description: '', account_id: 'none' });
     setCategoryDialogOpen(true);
   };
 
@@ -107,6 +112,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
         await catalogApi.createCategory(payload);
         toast.success('Category added');
       }
+      notifyCategoriesChanged(categoryForm.type);
       setCategoryDialogOpen(false);
       loadAll();
     } catch (error) {
@@ -224,7 +230,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
               <SelectTrigger className="w-44 bg-white border-none shadow-sm rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
-                {CATEGORY_TYPES.map(t => <SelectItem key={t} value={t}>{CATEGORY_TYPE_LABELS[t]}</SelectItem>)}
+                {categoryTypes.map(t => <SelectItem key={t} value={t}>{CATEGORY_TYPE_LABELS[t]}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button onClick={openNewCategory} className="bg-[#141414] text-white gap-2 rounded-xl px-6"><Plus className="w-4 h-4" /> Add Category</Button>
@@ -254,10 +260,14 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
                     <TableCell>{statusBadge(c.is_active)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       <Button variant="ghost" size="icon" title="Edit" onClick={() => openEditCategory(c)} className="h-8 w-8 rounded-full"><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button variant="ghost" size="icon" title={c.is_active ? 'Archive' : 'Restore'} onClick={() => toggleCategoryActive(c)} className="h-8 w-8 rounded-full">
-                        {c.is_active ? <Archive className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" title="Delete" onClick={() => deleteCategory(c)} className="h-8 w-8 rounded-full text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
+                      {fullAccess && (
+                        <>
+                          <Button variant="ghost" size="icon" title={c.is_active ? 'Archive' : 'Restore'} onClick={() => toggleCategoryActive(c)} className="h-8 w-8 rounded-full">
+                            {c.is_active ? <Archive className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Delete" onClick={() => deleteCategory(c)} className="h-8 w-8 rounded-full text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -270,6 +280,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
         </CardContent>
       </Card>
 
+      {fullAccess && (
       <Card className="border-none shadow-sm overflow-hidden">
         <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -319,6 +330,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent className="rounded-2xl">
@@ -337,7 +349,7 @@ export default function CatalogManager({ currency }: CatalogManagerProps) {
                 <Select value={categoryForm.type} onValueChange={(v: any) => setCategoryForm({ ...categoryForm, type: v })} disabled={!!editingCategory}>
                   <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORY_TYPES.map(t => <SelectItem key={t} value={t}>{CATEGORY_TYPE_LABELS[t]}</SelectItem>)}
+                    {categoryTypes.map(t => <SelectItem key={t} value={t}>{CATEGORY_TYPE_LABELS[t]}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

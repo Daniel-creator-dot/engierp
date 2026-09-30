@@ -65,6 +65,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { accountingApi, settingsApi, projectsApi, procurementApi, catalogApi } from '../../lib/api';
 import { Service, useCategories } from '../../lib/catalog';
+import CategorySelect from '../CategorySelect';
 import { Transaction, Invoice } from '../../types';
 import { getCurrencySymbol } from '../../lib/currency';
 
@@ -1104,17 +1105,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         </div>
                         <div className="space-y-2">
                           <Label>Expense Category</Label>
-                          <Select
+                          <CategorySelect
+                            type="expense"
                             value={billCategory}
                             onValueChange={(name) => {
                               setBillCategory(name);
                               const linkedAccount = expenseCategories.find(c => c.name === name)?.account_id;
                               if (linkedAccount && coa.some(a => a.id === linkedAccount)) setBillAccountId(String(linkedAccount));
                             }}
-                          >
-                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="e.g. Food, Fuel, Transport..." /></SelectTrigger>
-                            <SelectContent>{expenseCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-                          </Select>
+                            placeholder="e.g. Food, Fuel, Transport..."
+                            triggerClassName="bg-[#F5F5F5] border-none"
+                          />
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>

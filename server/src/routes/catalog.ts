@@ -1,11 +1,39 @@
 import { Router } from 'express';
+import type { Knex } from 'knex';
 import db from '../db';
-import { authenticateToken, authorizeRole } from '../middleware/auth';
+import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 const MANAGERS = ['admin', 'accountant'];
 export const CATEGORY_TYPES = ['expense', 'supplier', 'inventory', 'asset', 'service'] as const;
+
+// Roles besides MANAGERS that may add and rename (but not archive or delete)
+// categories of a type. Keep in sync with CATEGORY_EDITORS in src/lib/catalog.ts.
+const CATEGORY_EDITORS: Record<string, string[]> = {
+  supplier: ['procurement'],
+  inventory: ['procurement'],
+};
+
+const canEditCategoryType = (role: string | undefined, type: string) =>
+  !!role && (MANAGERS.includes(role) || (CATEGORY_EDITORS[type] || []).includes(role));
+
+const TYPE_LABELS: Record<string, string> = {
+  expense: 'expense', supplier: 'supplier', inventory: 'inventory', asset: 'equipment', service: 'service',
+};
+
+const findDuplicateCategory = (conn: Knex, type: string, name: string, excludeId?: number) => {
+  const query = conn('categories').where({ type }).whereRaw('lower(trim(name)) = lower(?)', [name.trim()]);
+  if (excludeId) query.whereNot({ id: excludeId });
+  return query.first();
+};
+
+const duplicateResponse = (duplicate: any) => ({
+  message: duplicate.is_active
+    ? `A ${TYPE_LABELS[duplicate.type] || duplicate.type} category named "${duplicate.name}" already exists.`
+    : `A ${TYPE_LABELS[duplicate.type] || duplicate.type} category named "${duplicate.name}" already exists but is archived. Ask an admin or accountant to restore it.`,
+  category: duplicate,
+});
 
 // Existing records store the category name as plain text, so renames and
 // deletions have to look at these columns.
@@ -59,7 +87,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/categories', authenticateToken, authorizeRole(MANAGERS), async (req, res) => {
+router.post('/categories', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const name = String(req.body.name || '').trim();
     const type = String(req.body.type || '').trim();
@@ -68,6 +96,12 @@ router.post('/categories', authenticateToken, authorizeRole(MANAGERS), async (re
     if (!CATEGORY_TYPES.includes(type as any)) {
       return res.status(400).json({ message: `Category type must be one of: ${CATEGORY_TYPES.join(', ')}` });
     }
+    if (!canEditCategoryType(req.user?.role, type)) {
+      return res.status(403).json({ message: `You don't have permission to add ${TYPE_LABELS[type]} categories` });
+    }
+
+    const duplicate = await findDuplicateCategory(db, type, name);
+    if (duplicate) return res.status(409).json(duplicateResponse(duplicate));
 
     const [inserted] = await db('categories').insert({
       name,
@@ -85,7 +119,7 @@ router.post('/categories', authenticateToken, authorizeRole(MANAGERS), async (re
   }
 });
 
-router.patch('/categories/:id', authenticateToken, authorizeRole(MANAGERS), async (req, res) => {
+router.patch('/categories/:id', authenticateToken, async (req: AuthRequest, res) => {
   const trx = await db.transaction();
   try {
     const existing = await trx('categories').where({ id: req.params.id }).first();
@@ -94,12 +128,27 @@ router.patch('/categories/:id', authenticateToken, authorizeRole(MANAGERS), asyn
       return res.status(404).json({ message: 'Category not found' });
     }
 
+    const role = req.user?.role;
+    if (!canEditCategoryType(role, existing.type)) {
+      await trx.rollback();
+      return res.status(403).json({ message: `You don't have permission to edit ${TYPE_LABELS[existing.type]} categories` });
+    }
+    if (req.body.is_active !== undefined && !MANAGERS.includes(role || '')) {
+      await trx.rollback();
+      return res.status(403).json({ message: 'Only admins and accountants can archive or restore categories' });
+    }
+
     const updates: Record<string, any> = { updated_at: trx.fn.now() };
     if (req.body.name !== undefined) {
       const name = String(req.body.name).trim();
       if (!name) {
         await trx.rollback();
         return res.status(400).json({ message: 'Category name is required' });
+      }
+      const duplicate = await findDuplicateCategory(trx, existing.type, name, existing.id);
+      if (duplicate) {
+        await trx.rollback();
+        return res.status(409).json(duplicateResponse(duplicate));
       }
       updates.name = name;
     }

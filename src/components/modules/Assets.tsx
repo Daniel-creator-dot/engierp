@@ -46,7 +46,7 @@ import {
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { assetsApi, projectsApi, apiErrorMessage } from '../../lib/api';
-import { categoryOptions, useCategories } from '../../lib/catalog';
+import CategorySelect from '../CategorySelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDate, todayIso } from '../../lib/dates';
 
@@ -79,7 +79,6 @@ export default function Assets() {
   const canFinance = ['admin', 'accountant'].includes(role);
   const canAllocate = ['pm', 'admin', 'accountant'].includes(role);
 
-  const assetCategories = useCategories('asset');
   const [equipment, setEquipment] = useState<any[]>([]);
   const [allocations, setAllocations] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -563,12 +562,7 @@ export default function Assets() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label>Category</Label>
-                  <Select value={assetForm.category} onValueChange={v => setAssetForm({ ...assetForm, category: v })}>
-                    <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue placeholder="Select category..." /></SelectTrigger>
-                    <SelectContent>
-                      {categoryOptions(assetCategories, assetForm.category).map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <CategorySelect type="asset" value={assetForm.category} onValueChange={v => setAssetForm({ ...assetForm, category: v })} triggerClassName="bg-[#F5F5F5] border-none h-11" />
                 </div>
                 <div className="grid gap-2"><Label>Daily Hire Rate (GH₵)</Label><Input type="number" min="0" step="0.01" value={assetForm.daily_cost} onChange={e => setAssetForm({ ...assetForm, daily_cost: e.target.value })} placeholder="0.00" className="bg-[#F5F5F5] border-none font-bold h-11" /></div>
               </div>

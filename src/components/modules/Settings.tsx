@@ -69,7 +69,7 @@ import AuditLogViewer from '../settings/AuditLogViewer';
 
 export default function Settings() {
   const { user: currentUser } = useAuth();
-  const canManageCatalog = currentUser?.role === 'admin' || currentUser?.role === 'accountant';
+  const canManageCatalog = ['admin', 'accountant', 'procurement'].includes(currentUser?.role || '');
   const [currency, setCurrency] = useState('GHS');
   const [smsConfig, setSmsConfig] = useState<any>({
     provider: 'Hubtel',
