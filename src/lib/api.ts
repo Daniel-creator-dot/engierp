@@ -217,7 +217,14 @@ export const assetsApi = {
   getAllocations: () => api.get('/assets/allocations'),
   allocateEquipment: (data: any) => api.post('/assets/allocations', data),
   depreciate: (periodEndDate?: string) => api.post('/assets/depreciate', { periodEndDate }),
-  dispose: (id: string, data: any) => api.post(`/assets/dispose/${id}`, data),
+  dispose: (id: string, data: { disposal_date: string; disposal_value: number; proceeds_account_id?: number | null }) =>
+    api.post(`/assets/dispose/${id}`, data),
+  returnAllocation: (id: number, end_date: string) => api.post(`/assets/allocations/${id}/return`, { end_date }),
+  getDepreciationRuns: () => api.get('/assets/depreciation-runs'),
+  runDepreciation: (period: string) => api.post('/assets/depreciation-runs', { period }),
+  undoDepreciationRun: (id: number) => api.delete(`/assets/depreciation-runs/${id}`),
+  getAccountMappings: () => api.get('/assets/account-mappings'),
+  saveAccountMappings: (data: any) => api.put('/assets/account-mappings', data),
 };
 
 export const dashboardApi = {
