@@ -237,12 +237,23 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
     setSelectedSupplier(supplier);
     try {
       const res = await procurementApi.getSupplierHistory(supplier.id);
-      setSupplierHistory(res.data);
+      setSupplierHistory({
+        purchaseOrders: res.data?.purchaseOrders || [],
+        bills: res.data?.bills || [],
+        payments: res.data?.payments || [],
+        summary: res.data?.summary || { totalOrdered: 0, totalBilled: 0, totalPaid: 0, balanceDue: 0 },
+      });
       setIsHistoryModalOpen(true);
-    } catch (error) {
-      toast.error('Failed to load supplier account history');
+    } catch (error: any) {
+      const serverMessage = error?.response?.data?.error || error?.response?.data?.message;
+      toast.error(serverMessage ? `Failed to load supplier account history: ${serverMessage}` : 'Failed to load supplier account history');
     }
   };
+
+  const isPaidStatus = (status?: string) => (status || '').toLowerCase() === 'paid';
+  const formatStatus = (status?: string) => (status || 'unknown').replace(/_/g, ' ').toUpperCase();
+  const formatDate = (value?: string) => (value ? new Date(value).toLocaleDateString() : '—');
+  const currencySymbol = currency === 'USD' ? '$' : 'GH₵';
 
   const handlePrintDocument = (title: string, content: string) => {
     const getSetting = (key: string) => companySettings.find((s: any) => s.key === key)?.value || '';
@@ -585,7 +596,30 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                 </DialogHeader>
                 
                 {supplierHistory && (
+                  supplierHistory.purchaseOrders.length === 0 && supplierHistory.bills.length === 0 && supplierHistory.payments.length === 0 ? (
+                    <div className="py-12 flex flex-col items-center text-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center">
+                        <FileText className="w-7 h-7 text-slate-400" />
+                      </div>
+                      <p className="font-bold text-[#141414]">No account activity yet</p>
+                      <p className="text-sm text-slate-500 max-w-sm">Purchase orders, bills and payments for this supplier will appear here once they are recorded.</p>
+                    </div>
+                  ) : (
                   <div className="grid gap-8 py-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Total Ordered', value: supplierHistory.summary.totalOrdered, className: 'text-[#141414]' },
+                        { label: 'Total Billed', value: supplierHistory.summary.totalBilled, className: 'text-[#141414]' },
+                        { label: 'Total Paid', value: supplierHistory.summary.totalPaid, className: 'text-green-600' },
+                        { label: 'Balance Due', value: supplierHistory.summary.balanceDue, className: supplierHistory.summary.balanceDue > 0 ? 'text-red-600' : 'text-green-600' },
+                      ].map((item) => (
+                        <div key={item.label} className="p-4 rounded-2xl bg-slate-50">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{item.label}</p>
+                          <p className={`text-lg font-black ${item.className}`}>{currencySymbol}{Number(item.value || 0).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* Purchase Orders Section */}
                     <div className="space-y-4">
                       <h3 className="font-bold flex items-center gap-2"><FileText className="w-5 h-5 text-blue-600" /> Purchase Orders</h3>
@@ -604,10 +638,10 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                               {supplierHistory.purchaseOrders.map((po: any) => (
                                 <TableRow key={po.id}>
                                   <TableCell className="font-bold text-blue-600">{po.id}</TableCell>
-                                  <TableCell>{new Date(po.order_date).toLocaleDateString()}</TableCell>
-                                  <TableCell className="text-right font-black">{currency === 'USD' ? '$' : 'GH₵'}{Number(po.total_amount).toLocaleString()}</TableCell>
+                                  <TableCell>{formatDate(po.order_date)}</TableCell>
+                                  <TableCell className="text-right font-black">{currencySymbol}{Number(po.total_amount).toLocaleString()}</TableCell>
                                   <TableCell>
-                                    <Badge className="bg-yellow-50 text-yellow-700 border-none font-bold text-[10px]">{po.status.toUpperCase()}</Badge>
+                                    <Badge className="bg-yellow-50 text-yellow-700 border-none font-bold text-[10px]">{formatStatus(po.status)}</Badge>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -631,6 +665,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                                 <TableHead>Date</TableHead>
                                 <TableHead>Due Date</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">Balance</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                               </TableRow>
@@ -639,14 +674,15 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                               {supplierHistory.bills.map((bill: any) => (
                                 <TableRow key={bill.id}>
                                   <TableCell className="font-bold">{bill.id}</TableCell>
-                                  <TableCell>{new Date(bill.date).toLocaleDateString()}</TableCell>
-                                  <TableCell className={new Date(bill.due_date) < new Date() && bill.status !== 'Paid' ? 'text-red-500 font-bold' : ''}>
-                                    {new Date(bill.due_date).toLocaleDateString()}
+                                  <TableCell>{formatDate(bill.date)}</TableCell>
+                                  <TableCell className={bill.due_date && new Date(bill.due_date) < new Date() && !isPaidStatus(bill.status) ? 'text-red-500 font-bold' : ''}>
+                                    {formatDate(bill.due_date)}
                                   </TableCell>
-                                  <TableCell className="text-right font-black">{currency === 'USD' ? '$' : 'GH₵'}{Number(bill.total_amount).toLocaleString()}</TableCell>
+                                  <TableCell className="text-right font-black">{currencySymbol}{Number(bill.total_amount).toLocaleString()}</TableCell>
+                                  <TableCell className="text-right font-bold">{currencySymbol}{Number(bill.balance_due || 0).toLocaleString()}</TableCell>
                                   <TableCell>
-                                    <Badge className={bill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
-                                      {bill.status.toUpperCase()}
+                                    <Badge className={isPaidStatus(bill.status) ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                                      {formatStatus(bill.status)}
                                     </Badge>
                                   </TableCell>
                                   <TableCell className="text-right">
@@ -682,9 +718,9 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                               {supplierHistory.payments.map((pmt: any) => (
                                 <TableRow key={pmt.payment_id}>
                                   <TableCell className="font-bold text-slate-500">{pmt.payment_id}</TableCell>
-                                  <TableCell>{new Date(pmt.date).toLocaleDateString()}</TableCell>
+                                  <TableCell>{formatDate(pmt.date)}</TableCell>
                                   <TableCell><Badge variant="outline">{pmt.method}</Badge></TableCell>
-                                  <TableCell className="text-right font-black text-green-600">{currency === 'USD' ? '$' : 'GH₵'}{Number(pmt.amount).toLocaleString()}</TableCell>
+                                  <TableCell className="text-right font-black text-green-600">{currencySymbol}{Number(pmt.amount).toLocaleString()}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -695,6 +731,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                       )}
                     </div>
                   </div>
+                  )
                 )}
               </DialogContent>
             </Dialog>
@@ -714,20 +751,24 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     </div>
                     <div className="space-y-2">
                       <Label>Date</Label>
-                      <div>{new Date(selectedBill.date).toLocaleDateString()}</div>
+                      <div>{formatDate(selectedBill.date)}</div>
                     </div>
                     <div className="space-y-2">
                       <Label>Due Date</Label>
-                      <div>{new Date(selectedBill.due_date).toLocaleDateString()}</div>
+                      <div>{formatDate(selectedBill.due_date)}</div>
                     </div>
                     <div className="space-y-2">
                       <Label>Total Amount</Label>
-                      <div className="font-black text-lg">{currency === 'USD' ? '$' : 'GH₵'}{Number(selectedBill.total_amount).toLocaleString()}</div>
+                      <div className="font-black text-lg">{currencySymbol}{Number(selectedBill.total_amount).toLocaleString()}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amount Paid / Balance</Label>
+                      <div className="font-bold">{currencySymbol}{Number(selectedBill.paid_amount || 0).toLocaleString()} / {currencySymbol}{Number(selectedBill.balance_due || 0).toLocaleString()}</div>
                     </div>
                     <div className="space-y-2">
                       <Label>Status</Label>
-                      <Badge className={selectedBill.status === 'Paid' ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
-                        {selectedBill.status.toUpperCase()}
+                      <Badge className={isPaidStatus(selectedBill.status) ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                        {formatStatus(selectedBill.status)}
                       </Badge>
                     </div>
                   </div>

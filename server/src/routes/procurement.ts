@@ -46,11 +46,12 @@ router.get('/suppliers/:id/history', authenticateToken, async (req, res) => {
       .where({ supplier_id: id })
       .orderBy('order_date', 'desc');
       
-    const bills = await db('bills')
+    const rawBills = await db('bills')
       .where({ supplier_id: id })
-      .orderBy('date', 'desc');
+      .orderBy('created_at', 'desc');
       
-    const billIds = bills.map(b => b.id);
+    // payments.target_id is varchar while bills.id is integer
+    const billIds = rawBills.map((b: any) => String(b.id));
     let payments: any[] = [];
     
     if (billIds.length > 0) {
@@ -59,10 +60,46 @@ router.get('/suppliers/:id/history', authenticateToken, async (req, res) => {
         .whereIn('target_id', billIds)
         .orderBy('date', 'desc');
     }
+
+    const paidByBill = new Map<string, number>();
+    for (const p of payments) {
+      paidByBill.set(String(p.target_id), (paidByBill.get(String(p.target_id)) || 0) + Number(p.amount || 0));
+    }
+
+    const bills = rawBills.map((bill: any) => {
+      const amount = Number(bill.amount || 0);
+      const paidAmount = paidByBill.get(String(bill.id)) || 0;
+      let status = 'unpaid';
+      if (paidAmount >= amount && amount > 0) status = 'paid';
+      else if (paidAmount > 0) status = 'partially_paid';
+      return {
+        ...bill,
+        date: bill.created_at,
+        total_amount: amount,
+        paid_amount: paidAmount,
+        balance_due: Math.max(0, amount - paidAmount),
+        status,
+      };
+    });
+
+    const totalBilled = bills.reduce((sum: number, b: any) => sum + b.total_amount, 0);
+    const totalPaid = bills.reduce((sum: number, b: any) => sum + b.paid_amount, 0);
+    const totalOrdered = purchaseOrders.reduce((sum: number, po: any) => sum + Number(po.total_amount || 0), 0);
     
-    res.json({ purchaseOrders, bills, payments });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching supplier history' });
+    res.json({
+      purchaseOrders,
+      bills,
+      payments,
+      summary: {
+        totalOrdered,
+        totalBilled,
+        totalPaid,
+        balanceDue: Math.max(0, totalBilled - totalPaid),
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching supplier history:', error);
+    res.status(500).json({ message: error.message || 'Error fetching supplier history' });
   }
 });
 
