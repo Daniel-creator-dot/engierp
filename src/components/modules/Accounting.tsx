@@ -14,6 +14,7 @@ import {
   FileText,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   PiggyBank,
   FileSpreadsheet,
   Edit,
@@ -66,8 +67,21 @@ import { toast } from 'sonner';
 import { accountingApi, settingsApi, projectsApi, procurementApi, catalogApi } from '../../lib/api';
 import { Service, useCategories } from '../../lib/catalog';
 import CategorySelect from '../CategorySelect';
-import { Transaction, Invoice } from '../../types';
+import { Invoice } from '../../types';
 import { getCurrencySymbol } from '../../lib/currency';
+import { escapeHtml } from '../../lib/html';
+import { formatDate, todayIso } from '../../lib/dates';
+import { brandingFrom, downloadCsv, errorText, fmtMoney, openPrintWindow } from './accounting/print';
+import AttachmentsButton from './accounting/AttachmentsButton';
+import ArAgingPanel from './accounting/ArAgingPanel';
+import BankReconcilePanel from './accounting/BankReconcilePanel';
+import CashFlowPanel from './accounting/CashFlowPanel';
+import TaxReportsPanel from './accounting/TaxReportsPanel';
+import RecurringPanel from './accounting/RecurringPanel';
+import { PeriodLockCard, TaxSettingsCard } from './accounting/SettingsCards';
+
+const LEDGER_TYPES = ['manual', 'invoice', 'bill', 'payment', 'credit_note', 'invoice_void', 'bill_void', 'opening_balance', 'payroll', 'depreciation', 'disposal'];
+const JOURNAL_PAGE_SIZE = 50;
 
 
 interface AccountingProps {
@@ -169,7 +183,22 @@ const AccountingGuidance = ({ title, message }: { title: string, message: string
 );
 
 export default function Accounting({ activeSub = 'accounting-transactions', user, onNavigate }: AccountingProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerFilters, setLedgerFilters] = useState({ q: '', startDate: '', endDate: '', type: 'all', page: 1 });
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [isLedgerLoading, setIsLedgerLoading] = useState(false);
+  const [editingJournal, setEditingJournal] = useState<{ date: string; description: string; project_id?: string | null } | null>(null);
+  const [journalFormKey, setJournalFormKey] = useState(0);
+  const [taxComponents, setTaxComponents] = useState<{ code: string; name: string; rate: number }[]>([]);
+  const [invoiceApplyTax, setInvoiceApplyTax] = useState(true);
+  const [billPaymentWhtRate, setBillPaymentWhtRate] = useState('0');
+  const [defaultWhtRate, setDefaultWhtRate] = useState(7.5);
+  const [obDate, setObDate] = useState('');
+  const [obInfo, setObInfo] = useState<{ journal: { id: number; date: string } | null; entries_on_or_before: number; entries_after: number } | null>(null);
+  const [voidTarget, setVoidTarget] = useState<{ kind: 'invoice' | 'bill'; id: string; label: string } | null>(null);
+  const [creditNoteTarget, setCreditNoteTarget] = useState<any>(null);
+  const [linkBankTarget, setLinkBankTarget] = useState<any>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -209,15 +238,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [selectedTarget, setSelectedTarget] = useState<any>(null);
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
-  const [invoiceItems, setInvoiceItems] = useState<{ description: string, quantity: number, unitPrice: number }[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
+  const [invoiceItems, setInvoiceItems] = useState<{ description: string, quantity: number, unitPrice: number, service_id?: number | null }[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
   const [billCategory, setBillCategory] = useState('');
   const [billAccountId, setBillAccountId] = useState('');
   const expenseCategories = useCategories('expense');
   const [services, setServices] = useState<Service[]>([]);
-  const [invoiceTaxOverride, setInvoiceTaxOverride] = useState<string>('');
-  const [invoiceTaxNameOverride, setInvoiceTaxNameOverride] = useState<string>('');
+  const [arView, setArView] = useState<'invoices' | 'aging'>('invoices');
 
   // Journal Items state
   const [journalItems, setJournalItems] = useState([
@@ -250,6 +278,43 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     fetchData();
   }, [activeSub, reportStartDate, reportEndDate]);
 
+  useEffect(() => {
+    if (activeSub === 'accounting-transactions') fetchLedger();
+  }, [activeSub, ledgerFilters]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLedgerFilters(f => (f.q === ledgerSearch.trim() ? f : { ...f, q: ledgerSearch.trim(), page: 1 }));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [ledgerSearch]);
+
+  const ledgerParams = () => ({
+    q: ledgerFilters.q || undefined,
+    startDate: ledgerFilters.startDate || undefined,
+    endDate: ledgerFilters.endDate || undefined,
+    type: ledgerFilters.type !== 'all' ? ledgerFilters.type : undefined,
+  });
+
+  const fetchLedger = async () => {
+    setIsLedgerLoading(true);
+    try {
+      const res = await accountingApi.getTransactions({ ...ledgerParams(), page: ledgerFilters.page, pageSize: JOURNAL_PAGE_SIZE });
+      setTransactions(res.data.rows);
+      setLedgerTotal(res.data.total);
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to load the general ledger'));
+    } finally {
+      setIsLedgerLoading(false);
+    }
+  };
+
+  const loadOpeningBalances = async (date?: string) => {
+    const res = await accountingApi.getOpeningBalances(date);
+    setObInfo(res.data);
+    return res.data;
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -257,45 +322,51 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       setCompanySettings(settingsRes.data);
 
       if (activeSub === 'accounting-bank') {
-        const [accRes, txRes] = await Promise.all([
+        const [accRes, txRes, coaRes] = await Promise.all([
           accountingApi.getBankAccounts(),
-          accountingApi.getBankTransactions()
+          accountingApi.getBankTransactions(),
+          accountingApi.getCOA()
         ]);
         setBankAccounts(accRes.data);
         setBankTx(txRes.data);
+        setCOA(coaRes.data);
       } else if (activeSub === 'accounting-ar' || activeSub === 'accounting-invoices') {
-        const [invRes, projRes, accRes, svcRes] = await Promise.all([
+        const [invRes, projRes, accRes, svcRes, taxRes] = await Promise.all([
           accountingApi.getInvoices(),
           projectsApi.getProjects(),
           accountingApi.getBankAccounts(),
-          catalogApi.getServices({ active: true }).catch(() => ({ data: [] as Service[] }))
+          catalogApi.getServices({ active: true }).catch(() => ({ data: [] as Service[] })),
+          accountingApi.getTaxSettings().catch(() => ({ data: { tax_components: [] } }))
         ]);
         setInvoices(invRes.data);
         setProjects(projRes.data);
         setBankAccounts(accRes.data);
         setServices(svcRes.data);
+        setTaxComponents(taxRes.data.tax_components || []);
       } else if (activeSub === 'accounting-ap') {
-        const [billsRes, supRes, accRes, coaRes, projRes] = await Promise.all([
+        const [billsRes, supRes, accRes, coaRes, projRes, taxRes] = await Promise.all([
           accountingApi.getBills(),
           procurementApi.getSuppliers(),
           accountingApi.getBankAccounts(),
           accountingApi.getCOA(),
-          projectsApi.getProjects()
+          projectsApi.getProjects(),
+          accountingApi.getTaxSettings().catch(() => ({ data: { wht_rate: 7.5 } }))
         ]);
         setBills(billsRes.data);
         setSuppliers(supRes.data);
         setBankAccounts(accRes.data);
         setCOA(coaRes.data);
         setProjects(projRes.data);
+        setDefaultWhtRate(Number(taxRes.data.wht_rate ?? 7.5));
       } else if (activeSub === 'accounting-transactions') {
-        const [txRes, coaRes, btx] = await Promise.all([
-          accountingApi.getTransactions(),
+        const [coaRes, btx, projRes] = await Promise.all([
           accountingApi.getCOA(),
-          accountingApi.getBankTransactions()
+          accountingApi.getBankTransactions(),
+          projectsApi.getProjects().catch(() => ({ data: [] }))
         ]);
-        setTransactions(txRes.data);
         setCOA(coaRes.data);
         setBankTx(btx.data);
+        setProjects(projRes.data);
       } else if (activeSub === 'accounting-coa') {
         const [coaRes, accRes] = await Promise.all([
           accountingApi.getCOA(),
@@ -304,30 +375,41 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setCOA(coaRes.data);
         setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-reports') {
-        const [tb, inc, bs, mgmt, btx] = await Promise.all([
+        const [tb, inc, bs, mgmt, btx, invRes, billsRes, projRes, accRes] = await Promise.all([
           accountingApi.getTrialBalance(reportStartDate, reportEndDate),
           accountingApi.getIncomeStatement(reportStartDate, reportEndDate),
           accountingApi.getBalanceSheet(reportEndDate),
           accountingApi.getManagementAccounts(reportStartDate, reportEndDate),
-          accountingApi.getBankTransactions()
+          accountingApi.getBankTransactions(),
+          accountingApi.getInvoices(),
+          accountingApi.getBills(),
+          projectsApi.getProjects().catch(() => ({ data: [] })),
+          accountingApi.getBankAccounts()
         ]);
         setTrialBalance(tb.data);
         setIncomeStatement(inc.data);
         setBalanceSheet(bs.data);
         setManagementAccounts(mgmt.data);
         setBankTx(btx.data);
+        setInvoices(invRes.data);
+        setBills(billsRes.data);
+        setProjects(projRes.data);
+        setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-foundation') {
-        const [fyRes, coaRes] = await Promise.all([
+        const [fyRes, coaRes, obRes] = await Promise.all([
           accountingApi.getFiscalYear(),
-          accountingApi.getCOA()
+          accountingApi.getCOA(),
+          accountingApi.getOpeningBalances()
         ]);
         setFiscalYear(fyRes.data);
         setCOA(coaRes.data);
-        
-        // Initialize opening balances from current COA
+
+        // Prefill only from the existing opening-balance journal, never from running balances.
         const balMap: Record<string, number> = {};
-        coaRes.data.forEach((a: any) => { balMap[String(a.id)] = Number(a.balance || 0); });
+        (obRes.data.balances || []).forEach((b: any) => { balMap[String(b.account_id)] = Number(b.amount || 0); });
         setOpeningBalances(balMap);
+        setObInfo(obRes.data);
+        setObDate(obRes.data.journal?.date || '');
         
         // Initialize profile data from settings
         setProfileData({
@@ -353,38 +435,34 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const handleAddBankAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
+    const coaLink = formData.get('coa_account_id') as string;
     const data = {
       account_name: formData.get('account_name'),
       account_number: formData.get('account_number'),
       bank_name: formData.get('bank_name'),
       type: formData.get('type'),
-      balance: Number(formData.get('balance') || 0)
+      coa_account_id: coaLink && coaLink !== 'new' ? Number(coaLink) : null
     };
     try {
       await accountingApi.addBankAccount(data);
-      toast.success('Account verified and added');
+      toast.success('Bank account added');
       setIsAddBankOpen(false);
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to add bank account');
+      toast.error(errorText(error, 'Failed to add bank account'));
     }
   };
 
-  const handleSimulateBankFeed = async () => {
-    if (bankAccounts.length === 0) return toast.error('Add a bank account first');
-    const data = {
-      bank_account_id: bankAccounts[0].id,
-      date: new Date().toISOString().split('T')[0],
-      description: `Feed Import - ${Math.floor(Math.random() * 1000)}`,
-      amount: Math.floor(Math.random() * 10000),
-      type: Math.random() > 0.5 ? 'Credit' : 'Debit'
-    };
+  const handleLinkBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
     try {
-      await accountingApi.importBankTransaction(data);
-      toast.success('Simulated transaction imported');
+      await accountingApi.updateBankAccount(linkBankTarget.id, { coa_account_id: Number(formData.get('coa_account_id')) });
+      toast.success('Bank account linked to the ledger');
+      setLinkBankTarget(null);
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Feed import failed');
+      toast.error(errorText(error, 'Failed to link bank account'));
     }
   };
 
@@ -396,9 +474,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const project = projects.find(p => p.id === projId);
 
     const subtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const currentTaxRate = invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate);
-    const taxAmount = subtotal * (currentTaxRate / 100);
+    const taxAmount = invoiceApplyTax ? taxComponents.reduce((s, c) => s + Math.round(subtotal * c.rate) / 100, 0) : 0;
     const totalAmount = subtotal + taxAmount;
+    const invoiceDate = (formData.get('date') as string) || todayIso();
 
     const initialPaymentAmount = Number(formData.get('initial_payment') || 0);
     const paymentMethod = formData.get('payment_method') as string;
@@ -420,29 +498,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       return;
     }
 
-    const invoiceId = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
     const data = {
-      id: invoiceId,
       client: project?.client || formData.get('client_name'),
-      amount: totalAmount,
-      tax_amount: taxAmount,
-      tax_rate: currentTaxRate,
-      tax_name: invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name,
-      subtotal: subtotal,
+      date: invoiceDate,
       dueDate: formData.get('dueDate'),
       project_id: projId,
-      status: 'unpaid',
-      items: JSON.stringify(invoiceItems)
+      apply_tax: invoiceApplyTax,
+      items: invoiceItems
     };
     try {
-      await accountingApi.createInvoice(data);
+      const created = await accountingApi.createInvoice(data);
+      const invoiceId = created.data.id;
       if (initialPaymentAmount > 0) {
         const paymentData: any = {
-          payment_id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
           target_type: 'Invoice',
           target_id: invoiceId,
           amount: initialPaymentAmount,
-          date: new Date().toISOString().split('T')[0],
+          date: invoiceDate,
           method: paymentMethod,
           reference: paymentReference || (paymentMethod === 'Cash' ? 'Cash Payment' : '')
         };
@@ -450,16 +522,21 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         if (paymentMethod !== 'Cash') {
           paymentData.bank_account_id = paymentBankAccountId;
         }
-        await accountingApi.recordPayment(paymentData);
-        toast.success('Sales invoice generated and initial payment recorded');
+        try {
+          await accountingApi.recordPayment(paymentData);
+          toast.success(`Invoice ${invoiceId} posted and initial payment recorded`);
+        } catch (paymentError: any) {
+          toast.error(`Invoice ${invoiceId} was posted, but the payment failed: ${errorText(paymentError, 'unknown error')}`);
+        }
       } else {
-        toast.success('Sales invoice generated');
+        toast.success(`Invoice ${invoiceId} posted`);
       }
       setIsCreateInvoiceOpen(false);
       setInvoiceItems([{ description: '', quantity: 1, unitPrice: 0 }]);
+      setInvoiceApplyTax(true);
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to generate invoice');
+      toast.error(errorText(error, 'Failed to generate invoice'));
     }
   };
 
@@ -468,13 +545,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const formData = new FormData(e.target as HTMLFormElement);
     const method = formData.get('method') as string;
     const data: any = {
-      payment_id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
       target_type: selectedTarget?.type,
       target_id: selectedTarget?.id,
       amount: Number(formData.get('amount')),
-      date: new Date().toISOString().split('T')[0],
+      date: (formData.get('date') as string) || todayIso(),
       method: method,
-      reference: formData.get('reference') || (method === 'Cash' ? 'Cash Payment' : '')
+      reference: formData.get('reference') || (method === 'Cash' ? 'Cash Payment' : ''),
+      wht_rate: Number(formData.get('wht_rate') || 0)
     };
     // Only include bank_account_id if not Cash payment
     if (method !== 'Cash') {
@@ -485,9 +562,44 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       toast.success('Payment recorded to ledger');
       setIsPayInvoiceOpen(false);
       setIsPayBillOpen(false);
+      setBillPaymentWhtRate('0');
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to record payment');
+      toast.error(errorText(error, 'Failed to record payment'));
+    }
+  };
+
+  const handleVoid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidTarget) return;
+    const formData = new FormData(e.target as HTMLFormElement);
+    const payload = { date: formData.get('date') as string, reason: formData.get('reason') as string };
+    try {
+      if (voidTarget.kind === 'invoice') await accountingApi.voidInvoice(voidTarget.id, payload);
+      else await accountingApi.voidBill(voidTarget.id, payload);
+      toast.success(`${voidTarget.label} voided; a reversing journal was posted`);
+      setVoidTarget(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to void'));
+    }
+  };
+
+  const handleCreditNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!creditNoteTarget) return;
+    const formData = new FormData(e.target as HTMLFormElement);
+    try {
+      const res = await accountingApi.createCreditNote(creditNoteTarget.id, {
+        date: formData.get('date') as string,
+        amount: Number(formData.get('amount')),
+        reason: formData.get('reason') as string
+      });
+      toast.success(`Credit note ${res.data.id} issued`);
+      setCreditNoteTarget(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to issue credit note'));
     }
   };
 
@@ -504,7 +616,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       quantity: Number(formData.get('quantity')),
       unit_price: Number(formData.get('unit_price')),
       amount: Number(formData.get('amount')),
+      date: (formData.get('date') as string) || todayIso(),
       due_date: formData.get('due_date'),
+      reference: formData.get('reference') || undefined,
       category: billCategory || coa.find(a => String(a.id) === billAccountId)?.name,
       account_id: Number(billAccountId),
       project_id: formData.get('project_id')
@@ -529,8 +643,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const data = {
       code: formData.get('code'),
       name: formData.get('name'),
-      type: formData.get('type'),
-      balance: Number(formData.get('balance') || 0)
+      type: formData.get('type')
     };
     try {
       await accountingApi.updateCOA(selectedTarget.id, data);
@@ -558,24 +671,90 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const handlePostJournal = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const data = {
+    const projectId = formData.get('project_id') as string;
+    const data: any = {
       date: formData.get('date'),
       description: formData.get('description'),
-      project_id: formData.get('project_id'),
+      project_id: projectId && projectId !== 'none' ? projectId : null,
       items: journalItems.filter(item => item.account_id !== '')
     };
     try {
       if (editingJournalId) {
-        await accountingApi.deleteJournal(editingJournalId);
+        await accountingApi.updateJournal(editingJournalId, data);
+      } else {
+        try {
+          await accountingApi.postJournal(data);
+        } catch (error: any) {
+          if (error.response?.status !== 409 || !error.response?.data?.duplicate) throw error;
+          if (!window.confirm(error.response.data.message)) return;
+          await accountingApi.postJournal({ ...data, force: true });
+        }
       }
-      await accountingApi.postJournal(data);
       toast.success(editingJournalId ? 'Journal entry updated' : 'Journal entry posted');
       setIsJournalOpen(false);
       setEditingJournalId(null);
+      setEditingJournal(null);
       setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
       fetchData();
+      if (activeSub === 'accounting-transactions') fetchLedger();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to post journal entry');
+      toast.error(errorText(error, 'Failed to post journal entry'));
+    }
+  };
+
+  const openNewJournal = () => {
+    setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]);
+    setEditingJournalId(null);
+    setEditingJournal(null);
+    setJournalFormKey(k => k + 1);
+    setIsJournalOpen(true);
+  };
+
+  /** Loads a journal into the editor; system-generated entries must be changed from their source document. */
+  const openJournalEditor = async (journalId: string | number) => {
+    try {
+      const res = await accountingApi.getJournalDetails(journalId);
+      if (!res.data.editable) {
+        toast.info(`This is a ${String(res.data.reference_type).replace('_', ' ')} entry. Change it from its source document (void or credit note) instead of editing the journal.`);
+        return false;
+      }
+      if (!coa.length) {
+        const coaRes = await accountingApi.getCOA();
+        setCOA(coaRes.data);
+      }
+      setJournalItems(res.data.items.map((i: any) => ({ account_id: String(i.account_id), debit: Number(i.debit), credit: Number(i.credit) })));
+      setEditingJournal({ date: String(res.data.date).slice(0, 10), description: res.data.description || '', project_id: res.data.project_id });
+      setEditingJournalId(String(res.data.id));
+      setJournalFormKey(k => k + 1);
+      setIsJournalOpen(true);
+      return true;
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to load journal'));
+      return false;
+    }
+  };
+
+  const handleDeleteJournal = async (journalId: string | number) => {
+    if (!window.confirm('Delete this manual journal entry? Its effect on account balances will be reversed.')) return false;
+    try {
+      await accountingApi.deleteJournal(journalId);
+      toast.success('Journal entry deleted and balances reversed');
+      fetchData();
+      if (activeSub === 'accounting-transactions') fetchLedger();
+      return true;
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to delete journal'));
+      return false;
+    }
+  };
+
+  const handleExportLedger = async () => {
+    try {
+      const res = await accountingApi.exportTransactions(ledgerParams());
+      downloadCsv('general_ledger', ['Date', 'Journal #', 'Description', 'Type', 'Reference', 'Project', 'Account Code', 'Account Name', 'Debit', 'Credit'],
+        res.data.map((r: any) => [String(r.date).slice(0, 10), r.journal_id, r.description, r.reference_type, r.reference_id, r.project_id, r.account_code, r.account_name, Number(r.debit || 0).toFixed(2), Number(r.credit || 0).toFixed(2)]));
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to export the ledger'));
     }
   };
 
@@ -588,92 +767,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         settingsApi.updateSetting('company_tin', profileData.tin),
         settingsApi.updateSetting('company_phone', profileData.phone)
       ]);
-      toast.success('Corporate identity updated in global ledger');
+      toast.success('Company profile saved');
       fetchData();
-    } catch (error) {
-      toast.error('Failed to update company profile');
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to update company profile'));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handlePrintDocument = (title: string, content: string) => {
-    const logo = getSetting('company_logo');
-    const signature = getSetting('company_signature');
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Print window was blocked. Please allow popups for this site.');
-      return;
-    }
+  const branding = () => brandingFrom(companySettings, user);
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${title}</title>
-          <style>
-            body { font-family: 'Inter', sans-serif; padding: 40px; color: #141414; line-height: 1.5; }
-            .header { border-bottom: 2px solid #141414; padding-bottom: 20px; margin-bottom: 40px; }
-            .logo-container { text-align: center; margin-bottom: 30px; }
-            .logo { max-height: 120px; max-width: 400px; }
-            .meta-header { display: flex; justify-content: space-between; align-items: flex-end; }
-            .footer { margin-top: 60px; border-top: 1px solid #E4E3E0; padding-top: 20px; }
-            .footer-grid { display: flex; justify-content: space-between; }
-            .signature { max-height: 60px; }
-            .footer-note { margin-top: 30px; padding: 20px; background: #F5F5F5; border-radius: 12px; font-size: 0.85rem; text-align: center; font-style: italic; color: #4B5563; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #E4E3E0; padding: 12px; text-align: left; }
-            th { background: #F5F5F5; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-            .total-row { font-weight: bold; background: #F5F5F5; }
-            .branding-banner { display: flex; flex-direction: column; }
-            .address-block { font-size: 0.8rem; color: #8E9299; margin-top: 4px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo-container">
-              ${logo ? `<img src="${logo}" class="logo" />` : `<h1>${getSetting('company_name') || 'ENGINEERING ERP'}</h1>`}
-            </div>
-            <div class="meta-header">
-              <div class="address-block">
-                <strong>${getSetting('company_name') || 'ENGINEERING ERP'}</strong><br/>
-                ${getSetting('company_address') || ''}
-              </div>
-              <div style="text-align: right">
-                <h2>${title}</h2>
-                <p>Generated: ${new Date().toLocaleDateString()}</p>
-              </div>
-            </div>
-          </div>
-          ${content}
-          <div class="footer">
-            <div class="footer-grid">
-              <div>
-                <p>Authorized Signature</p>
-                ${signature ? `<img src="${signature}" class="signature" />` : '<div style="height: 60px; width: 200px; border-bottom: 1px solid #000;"></div>'}
-              </div>
-              <div style="text-align: right; color: #8E9299; font-size: 0.75rem;">
-                <p>Digital ERP Hash: ${Math.random().toString(36).substring(7).toUpperCase()}</p>
-              </div>
-            </div>
-            ${getSetting('company_footer_note') ? `<div class="footer-note">${getSetting('company_footer_note')}</div>` : ''}
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+  /** `content` must already be escaped; docNumber is printed in the header and footer. */
+  const handlePrintDocument = (title: string, content: string, docNumber?: string) => {
+    openPrintWindow(title, content, branding(), docNumber);
   };
 
-  const handleExportCSV = (filename: string, headers: string[], rows: string[][]) => {
-    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    toast.success(`${filename}.csv exported successfully`);
-  };
+  const handleExportCSV = (filename: string, headers: string[], rows: string[][]) => downloadCsv(filename, headers, rows);
 
   const handlePrintIncomeStatement = () => {
     const logo = getSetting('company_logo');
@@ -687,11 +797,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const netIncome = totalRevenue - totalExpenses;
 
     const revenueRows = incomeStatement.filter(a => a.type === 'Income').map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_credit - a.total_debit).toLocaleString()}</td></tr>`
+      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_credit - a.total_debit).toLocaleString()}</td></tr>`
     ).join('');
 
     const expenseRows = incomeStatement.filter(a => a.type === 'Expense').map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_debit - a.total_credit).toLocaleString()}</td></tr>`
+      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_debit - a.total_credit).toLocaleString()}</td></tr>`
     ).join('');
 
     const content = `
@@ -801,17 +911,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
     const assetRows = assets.map((a: any) => {
       const bal = Number(a.total_debit || 0) - Number(a.total_credit || 0);
-      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
     }).join('');
 
     const liabilityRows = liabilities.map((a: any) => {
       const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
-      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
     }).join('');
 
     const equityRows = equity.map((a: any) => {
       const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
-      return `<tr><td style="padding: 8px 16px;">${a.name}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
     }).join('');
 
     const content = `
@@ -931,33 +1041,41 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         return (
           <div className="space-y-6">
             <AccountingGuidance 
-              title="Treasury & Bank Feed Governance" 
-              message="Manage company treasury and bank feeds. Reconciliation matches bank statements with ledger entries, ensuring your digital records reflect real-world cash positions." 
+              title="Bank & Cash" 
+              message="Each bank account is linked to a ledger account; the balance shown is the ledger balance. Import your bank statement, let the system match lines to ledger postings, and post anything unmatched (e.g. bank charges)." 
             />
             <div className="flex justify-end gap-2">
-               <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('bank_transactions', ['Date','Description','Bank','Amount','Type','Status'], bankTx.map((tx: any) => [new Date(tx.date).toLocaleDateString(), tx.description, tx.bank_name, String(tx.amount), tx.type, tx.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-               <Button onClick={handleSimulateBankFeed} variant="outline" className="gap-2 font-bold h-11"><Download className="w-4 h-4" /> Fetch Feeds</Button>
                <Dialog open={isAddBankOpen} onOpenChange={setIsAddBankOpen}>
-                 <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Link Account</Button></DialogTrigger>
+                 <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 shadow-lg"><Plus className="w-4 h-4" /> Add Bank Account</Button></DialogTrigger>
                  <DialogContent className="rounded-2xl">
                    <form onSubmit={handleAddBankAccount}>
-                     <DialogHeader><DialogTitle>Register Treasury Account</DialogTitle></DialogHeader>
+                     <DialogHeader><DialogTitle>Add Bank Account</DialogTitle></DialogHeader>
                      <div className="grid gap-4 py-4">
-                       <div className="space-y-2"><Label>Institution Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
+                       <div className="space-y-2"><Label>Bank Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
                        <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
                        <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
                           <div className="space-y-2">
                             <Label>Account Type</Label>
-                            <Select name="type" required>
+                            <Select name="type" required defaultValue="Current">
                               <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
                               <SelectContent><SelectItem value="Current">Current / Checking</SelectItem><SelectItem value="Savings">Savings</SelectItem><SelectItem value="Mobile Money">Mobile Money</SelectItem><SelectItem value="Petty Cash">Petty Cash</SelectItem></SelectContent>
                             </Select>
                           </div>
                        </div>
-                       <div className="space-y-2"><Label>Opening Balance</Label><Input type="number" step="0.01" name="balance" defaultValue={0} required className="bg-[#F5F5F5] border-none h-11" /></div>
+                       <div className="space-y-2">
+                         <Label>Ledger Account</Label>
+                         <Select name="coa_account_id" defaultValue="new">
+                           <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue /></SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="new">Create a new ledger account</SelectItem>
+                             {coa.filter(a => a.type === 'Asset').map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>)}
+                           </SelectContent>
+                         </Select>
+                         <p className="text-xs text-[#8E9299]">To bring in an existing balance, use Opening Balances under Foundation & Setup.</p>
+                       </div>
                      </div>
-                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">VERIFY & LINK</Button></DialogFooter>
+                     <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">ADD ACCOUNT</Button></DialogFooter>
                    </form>
                  </DialogContent>
                </Dialog>
@@ -969,19 +1087,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   key={b.id} 
                   className="border-none shadow-sm rounded-2xl bg-gradient-to-br from-[#141414] to-slate-900 text-white overflow-hidden cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
                   onClick={() => {
-                    const matchingCOA = coa.find(a => 
-                      a.name.toLowerCase().includes(b.account_name.toLowerCase()) || 
-                      b.account_name.toLowerCase().includes(a.name.toLowerCase())
-                    );
                     setSelectedPeriodLabel(`Statement for ${b.account_name} (${b.bank_name})`);
                     setPeriodFilterDates(null);
                     setPeriodFilterAccountId(String(b.id));
-                    setSelectedCOAId(matchingCOA ? String(matchingCOA.id) : null);
+                    setSelectedCOAId(b.coa_account_id ? String(b.coa_account_id) : null);
                     setDrillDownMode('ledger');
                     setIsPeriodBankDetailsOpen(true);
-
-                    if (matchingCOA) {
-                      accountingApi.getLedgerEntries(matchingCOA.id).then(res => setLedgerEntries(res.data));
+                    if (b.coa_account_id) {
+                      accountingApi.getLedgerEntries(b.coa_account_id).then(res => setLedgerEntries(res.data));
                     } else {
                       setLedgerEntries([]);
                     }
@@ -996,83 +1109,60 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <CardTitle className="text-lg">{b.account_name}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-sm font-mono text-white/50 mb-4">{b.account_number.replace(/\d(?=\d{4})/g, "*")}</div>
-                    <div className="text-3xl font-black">{currSym}{Number(b.balance).toLocaleString()}</div>
+                    <div className="text-sm font-mono text-white/50 mb-1">{String(b.account_number || '').replace(/\d(?=\d{4})/g, "*")}</div>
+                    {b.coa_account_id ? (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-3">Ledger: {b.coa_code} {b.coa_name}</div>
+                        <div className="text-3xl font-black">{currSym}{fmtMoney(b.ledger_balance)}</div>
+                      </>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-yellow-300 font-bold">Not linked to a ledger account</p>
+                        <Button size="sm" variant="secondary" className="h-8 text-xs font-bold" onClick={(e) => { e.stopPropagation(); setLinkBankTarget(b); }}>Link ledger account</Button>
+                      </div>
+                    )}
                     <div className="mt-4 flex items-center justify-between">
                       <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Next Cheque</div>
-                      <div className="text-xs font-mono font-bold text-blue-400 bg-blue-400/10 px-2 py-1 rounded-lg">#{b.next_cheque_number || 1}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs font-mono font-bold text-blue-400 bg-blue-400/10 px-2 py-1 rounded-lg">#{b.next_cheque_number || 1}</div>
+                        {b.coa_account_id && (
+                          <button className="text-[10px] font-bold text-white/40 hover:text-white underline" onClick={(e) => { e.stopPropagation(); setLinkBankTarget(b); }}>Change link</button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
-              <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {bankTx.map((tx, idx) => (
-                    <TableRow key={idx} className="hover:bg-blue-50/20">
-                      <TableCell className="text-xs font-bold text-[#8E9299]">{new Date(tx.date).toLocaleDateString()}</TableCell>
-                      <TableCell className="font-bold">{tx.description}</TableCell>
-                      <TableCell className="text-xs">{tx.bank_name}</TableCell>
-                      <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}</TableCell>
-                      <TableCell><Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                            onClick={async () => {
-                              if (tx.status === 'Reconciled' && tx.matched_ledger_id) {
-                                try {
-                                  // Find the journal_id from the ledger entry
-                                  const journalDetails = await accountingApi.getJournalDetails(tx.matched_ledger_id);
-                                  setJournalItems(journalDetails.data.items.map((i: any) => ({
-                                    account_id: String(i.account_id),
-                                    debit: Number(i.debit),
-                                    credit: Number(i.credit)
-                                  })));
-                                  setEditingJournalId(journalDetails.data.id);
-                                  setIsJournalOpen(true);
-                                } catch (err) {
-                                  toast.error("Failed to load linked journal");
-                                }
-                              } else {
-                                setSelectedBankTx(tx);
-                                setIsEditBankTxOpen(true);
-                              }
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:text-red-700"
-                            onClick={async () => {
-                              if (window.confirm("Delete this bank transaction from the feed?")) {
-                                try {
-                                  await accountingApi.deleteBankTransaction(tx.id);
-                                  toast.success("Bank transaction removed");
-                                  fetchData();
-                                } catch (err) {
-                                  toast.error("Failed to delete transaction");
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {bankTx.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-10 text-[#8E9299]">No transactions to reconcile. Fetch feeds to populate.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </div>
+            <BankReconcilePanel
+              bankAccounts={bankAccounts}
+              bankTx={bankTx}
+              coa={coa}
+              currSym={currSym}
+              onChanged={fetchData}
+              onEditLine={(tx) => { setSelectedBankTx(tx); setIsEditBankTxOpen(true); }}
+              onOpenJournal={(journalId) => { openJournalEditor(journalId); }}
+            />
+
+            <Dialog open={!!linkBankTarget} onOpenChange={(open) => !open && setLinkBankTarget(null)}>
+              <DialogContent className="rounded-2xl">
+                <form onSubmit={handleLinkBank}>
+                  <DialogHeader>
+                    <DialogTitle>Link {linkBankTarget?.account_name} to the ledger</DialogTitle>
+                    <DialogDescription>Payments through this bank account will post to the chosen ledger account.</DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4 space-y-2">
+                    <Label>Ledger Account</Label>
+                    <Select name="coa_account_id" required defaultValue={linkBankTarget?.coa_account_id ? String(linkBankTarget.coa_account_id) : undefined}>
+                      <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue placeholder="Choose an asset account" /></SelectTrigger>
+                      <SelectContent>{coa.filter(a => a.type === 'Asset').map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter><Button type="submit" className="w-full bg-[#141414] text-white h-11 font-bold">SAVE LINK</Button></DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         );
 
@@ -1123,6 +1213,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label>Bill Date</Label><Input type="date" name="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
+                          <div className="space-y-2"><Label>Supplier Invoice No.</Label><Input name="reference" placeholder="Optional" className="bg-[#F5F5F5] border-none" /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
                           <div className="space-y-2">
                             <Label>Project Assignment</Label>
@@ -1156,15 +1250,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Supplier</TableHead><TableHead>Category</TableHead><TableHead>Bill Date</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {bills.map((bill, idx) => {
                     const statusLower = bill.status?.toLowerCase();
                     return (
-                      <TableRow key={idx}>
-                        <TableCell className="font-bold text-[#141414]">{bill.supplier_name}</TableCell>
+                      <TableRow key={idx} className={statusLower === 'void' ? 'opacity-50' : ''}>
+                        <TableCell className="font-bold text-[#141414]">{bill.supplier_name}{bill.reference && <p className="text-[10px] text-[#8E9299] font-mono">Inv {bill.reference}</p>}</TableCell>
                         <TableCell className="text-[#8E9299] text-xs font-medium">{bill.category}</TableCell>
-                        <TableCell className="font-mono text-xs">{new Date(bill.due_date).toLocaleDateString()}</TableCell>
+                        <TableCell className="font-mono text-xs">{formatDate(bill.date || bill.created_at)}</TableCell>
+                        <TableCell className="font-mono text-xs">{formatDate(bill.due_date)}</TableCell>
                         <TableCell className="text-right font-black text-red-600">
                           {currSym}{Number(bill.amount).toLocaleString()}
                           {statusLower === 'partially_paid' && bill.balance_due !== undefined && (
@@ -1175,19 +1270,26 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <Badge className={
                             statusLower === 'paid' ? 'bg-green-100 text-green-700 border-none' : 
                             statusLower === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 
+                            statusLower === 'void' ? 'bg-gray-100 text-gray-500 border-none' :
                             'bg-red-50 text-red-600 border-none'
                           }>
-                            {bill.status.toUpperCase()}
+                            {bill.status.replace('_', ' ').toUpperCase()}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex gap-1 justify-end items-center">
                             <Button variant="ghost" size="sm" className="font-bold h-8 text-xs" onClick={() => { setSelectedBill(bill); setIsBillDetailsOpen(true); }}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {statusLower !== 'paid' && (
-                              <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setIsPayBillOpen(true); }}>
+                            <AttachmentsButton entityType="bill" entityId={bill.id} label={`Bill ${bill.id}`} />
+                            {statusLower !== 'paid' && statusLower !== 'void' && (
+                              <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setBillPaymentWhtRate('0'); setIsPayBillOpen(true); }}>
                                 PAY
+                              </Button>
+                            )}
+                            {statusLower === 'unpaid' && Number(bill.paid_amount || 0) === 0 && (
+                              <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-red-600" onClick={() => setVoidTarget({ kind: 'bill', id: String(bill.id), label: `Bill ${bill.id} (${bill.supplier_name})` })}>
+                                VOID
                               </Button>
                             )}
                           </div>
@@ -1207,10 +1309,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Amount to Pay</Label>
+                        <Label>Amount Settled (gross)</Label>
                         <Input 
                           name="amount" 
                           type="number" 
+                          step="0.01"
                           defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} 
                           max={selectedTarget?.balance_due ?? selectedTarget?.amount} 
                           required 
@@ -1218,6 +1321,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label>Payment Date</Label>
+                        <Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Withholding Tax</Label>
+                        <Select name="wht_rate" value={billPaymentWhtRate} onValueChange={setBillPaymentWhtRate}>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">None</SelectItem>
+                            {[...new Set([defaultWhtRate, 3, 5, 7.5, 15, 20])].map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {Number(billPaymentWhtRate) > 0 && <p className="text-[10px] text-[#8E9299]">Withheld amount is credited to Withholding Tax Payable (2102); the bank pays the net.</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Method</Label>
                         <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="Bank Transfer">Bank Transfer</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem><SelectItem value="Cash">Cash</SelectItem></SelectContent>
@@ -1308,27 +1429,96 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         );
 
       case 'accounting-ar':
-      case 'accounting-invoices':
+      case 'accounting-invoices': {
+        const invoiceSubtotal = invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        const invoiceTaxLines = invoiceApplyTax ? taxComponents.map(c => ({ ...c, amount: Math.round(invoiceSubtotal * c.rate) / 100 })) : [];
+        const invoiceTotal = invoiceSubtotal + invoiceTaxLines.reduce((s, c) => s + c.amount, 0);
+        const printInvoice = (inv: any) => {
+          let itemsArr: any[] = [];
+          try {
+            itemsArr = typeof inv.items === 'string' ? JSON.parse(inv.items) : (inv.items || []);
+          } catch {
+            itemsArr = [];
+          }
+          let breakdown: any[] = [];
+          try {
+            breakdown = typeof inv.tax_breakdown === 'string' ? JSON.parse(inv.tax_breakdown) : (inv.tax_breakdown || []);
+          } catch {
+            breakdown = [];
+          }
+          const money = (v: any) => `${escapeHtml(currSym)}${fmtMoney(v)}`;
+          const cell = 'padding: 10px; border-bottom: 1px solid #E4E3E0;';
+          const itemsHtml = itemsArr.length > 0 ? itemsArr.map((it: any) => `
+            <tr>
+              <td style="${cell}">${escapeHtml(it.description || 'Service')}</td>
+              <td style="${cell} text-align: center;">${escapeHtml(it.quantity ?? 1)}</td>
+              <td style="${cell} text-align: right;">${money(it.unitPrice)}</td>
+              <td style="${cell} text-align: right;">${money(Number(it.quantity || 1) * Number(it.unitPrice || 0))}</td>
+            </tr>`).join('') : `<tr><td colspan="4" style="padding: 20px; text-align: center;">Standard Service Charge</td></tr>`;
+          const taxRows = breakdown.length > 0
+            ? breakdown.map((b: any) => `<tr><td colspan="3" style="padding: 6px 10px; text-align: right; color: #8E9299;">${escapeHtml(b.name)} (${escapeHtml(b.rate)}%):</td><td style="padding: 6px 10px; text-align: right;">${money(b.amount)}</td></tr>`).join('')
+            : Number(inv.tax_amount || 0) > 0
+              ? `<tr><td colspan="3" style="padding: 6px 10px; text-align: right; color: #8E9299;">${escapeHtml(inv.tax_name || 'Tax')}:</td><td style="padding: 6px 10px; text-align: right;">${money(inv.tax_amount)}</td></tr>`
+              : '';
+          const content = `
+            <div style="margin-top: 40px;">
+              ${inv.status === 'void' ? '<p style="color: #C62828; font-weight: bold; font-size: 1.2rem;">VOID</p>' : ''}
+              <div style="display: flex; justify-content: space-between; margin-bottom: 40px; gap: 20px; flex-wrap: wrap;">
+                <div>
+                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Bill To:</h4>
+                  <h3 style="margin: 0;">${escapeHtml(inv.client)}</h3>
+                </div>
+                <div style="text-align: right;">
+                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Invoice Details:</h4>
+                  <p style="margin: 0;"><strong>Invoice No:</strong> ${escapeHtml(inv.id)}</p>
+                  <p style="margin: 0;"><strong>Invoice Date:</strong> ${escapeHtml(formatDate(inv.date || inv.created_at))}</p>
+                  <p style="margin: 0;"><strong>Due Date:</strong> ${escapeHtml(formatDate(inv.dueDate))}</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 24px; display: flex; gap: 24px; flex-wrap: wrap;">
+                <div style="min-width: 160px;"><p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Amount Paid</p><p style="margin: 0; font-weight: 700;">${money(inv.paid_amount)}</p></div>
+                ${Number(inv.credited_amount || 0) > 0 ? `<div style="min-width: 160px;"><p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Credited</p><p style="margin: 0; font-weight: 700;">${money(inv.credited_amount)}</p></div>` : ''}
+                <div style="min-width: 160px;"><p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Balance Due</p><p style="margin: 0; font-weight: 700;">${money(inv.balance_due)}</p></div>
+              </div>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #F5F5F5;">
+                  <tr>
+                    <th style="padding: 10px; text-align: left;">Description</th>
+                    <th style="padding: 10px; text-align: center;">Qty</th>
+                    <th style="padding: 10px; text-align: right;">Unit Price</th>
+                    <th style="padding: 10px; text-align: right;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+                <tfoot>
+                  <tr><td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">Subtotal:</td><td style="padding: 10px; text-align: right;">${money(inv.subtotal ?? inv.amount)}</td></tr>
+                  ${taxRows}
+                  <tr style="font-size: 1.2rem; font-weight: bold;"><td colspan="3" style="padding: 20px 10px; text-align: right;">Grand Total:</td><td style="padding: 20px 10px; text-align: right; color: #2563eb;">${money(inv.amount)}</td></tr>
+                </tfoot>
+              </table>
+            </div>`;
+          handlePrintDocument('SALES INVOICE', content, String(inv.id));
+        };
         return (
           <div className="space-y-6">
             <AccountingGuidance 
-              title="Accounts Receivable (AR) Optimization" 
-              message="Track client revenue. Raising an invoice records income and creates a receivable asset. Receiving payment converts receivables into cash." 
+              title="Accounts Receivable" 
+              message="Raising an invoice records income and creates a receivable. Receiving payment converts receivables into cash. Mistakes are corrected with a void (unpaid invoices) or a credit note, so the ledger keeps a full audit trail." 
             />
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold">Accounts Receivable</h2>
-                <p className="text-sm text-[#8E9299]">Client invoicing, statements, and revenue tracking.</p>
+            <div className="flex flex-wrap justify-between items-center gap-3">
+              <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-xl">
+                <Button variant={arView === 'invoices' ? 'default' : 'ghost'} size="sm" className="rounded-lg font-bold" onClick={() => setArView('invoices')}>Invoices</Button>
+                <Button variant={arView === 'aging' ? 'default' : 'ghost'} size="sm" className="rounded-lg font-bold" onClick={() => setArView('aging')}>Aging & Statements</Button>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice ID', 'Customer', 'Due Date', 'Amount', 'Status'], invoices.map(inv => [inv.id, inv.client, inv.dueDate, String(inv.amount), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice No', 'Customer', 'Invoice Date', 'Due Date', 'Amount', 'Paid', 'Credited', 'Balance Due', 'Status'], invoices.map((inv: any) => [inv.id, inv.client, formatDate(inv.date || inv.created_at), formatDate(inv.dueDate), Number(inv.amount).toFixed(2), Number(inv.paid_amount || 0).toFixed(2), Number(inv.credited_amount || 0).toFixed(2), Number(inv.balance_due || 0).toFixed(2), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
                   <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
                   <DialogContent className="max-w-2xl max-h-[90vh] rounded-2xl">
                     <form onSubmit={handleCreateInvoice}>
-                      <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle></DialogHeader>
+                      <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle><DialogDescription>The invoice number is assigned automatically when it is posted.</DialogDescription></DialogHeader>
                       <div className="grid gap-6 py-4 overflow-y-auto max-h-[calc(90vh-180px)] pr-2">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <Label>Project / Client</Label>
                             <Select name="project_id" required>
@@ -1336,6 +1526,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.client})</SelectItem>)}</SelectContent>
                             </Select>
                           </div>
+                          <div className="space-y-2"><Label>Invoice Date</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                           <div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         </div>
 
@@ -1358,12 +1549,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                 <div className="col-span-6 space-y-1">
                                   {services.length > 0 && (
                                     <Select
-                                      value=""
+                                      value={item.service_id ? String(item.service_id) : ''}
                                       onValueChange={(serviceId) => {
                                         const service = services.find(s => String(s.id) === serviceId);
                                         if (!service) return;
                                         const newItems = [...invoiceItems];
-                                        newItems[idx] = { ...newItems[idx], description: service.name, unitPrice: Number(service.default_price) };
+                                        newItems[idx] = { ...newItems[idx], description: service.name, unitPrice: Number(service.default_price), service_id: String(service.id) };
                                         setInvoiceItems(newItems);
                                       }}
                                     >
@@ -1380,7 +1571,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                     value={item.description}
                                     onChange={(e) => {
                                       const newItems = [...invoiceItems];
-                                      newItems[idx].description = e.target.value;
+                                      newItems[idx] = { ...newItems[idx], description: e.target.value };
                                       setInvoiceItems(newItems);
                                     }}
                                     required
@@ -1390,10 +1581,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                 <div className="col-span-2">
                                   <Input
                                     type="number"
+                                    step="any"
                                     value={item.quantity}
                                     onChange={(e) => {
                                       const newItems = [...invoiceItems];
-                                      newItems[idx].quantity = Number(e.target.value);
+                                      newItems[idx] = { ...newItems[idx], quantity: Number(e.target.value) };
                                       setInvoiceItems(newItems);
                                     }}
                                     required
@@ -1403,10 +1595,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                 <div className="col-span-2">
                                   <Input
                                     type="number"
+                                    step="0.01"
                                     value={item.unitPrice}
                                     onChange={(e) => {
                                       const newItems = [...invoiceItems];
-                                      newItems[idx].unitPrice = Number(e.target.value);
+                                      newItems[idx] = { ...newItems[idx], unitPrice: Number(e.target.value) };
                                       setInvoiceItems(newItems);
                                     }}
                                     required
@@ -1439,45 +1632,33 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-blue-600 font-medium">Subtotal</span>
-                            <span className="font-bold">{currSym}{invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()}</span>
+                            <span className="font-bold">{currSym}{fmtMoney(invoiceSubtotal)}</span>
                           </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={invoiceTaxNameOverride !== '' ? invoiceTaxNameOverride : accountingConfig.tax_name}
-                                onChange={(e) => setInvoiceTaxNameOverride(e.target.value)}
-                                placeholder="Tax Name"
-                                className="w-20 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold uppercase"
-                              />
-                              <Input
-                                type="number"
-                                value={invoiceTaxOverride !== '' ? invoiceTaxOverride : accountingConfig.sales_tax_rate}
-                                onChange={(e) => setInvoiceTaxOverride(e.target.value)}
-                                className="w-16 h-7 text-[10px] bg-white border-blue-100 rounded text-center font-bold"
-                              />
-                              <span className="text-blue-600 font-medium">%</span>
+                          <label className="flex items-center gap-2 text-sm text-blue-700 font-medium cursor-pointer">
+                            <input type="checkbox" checked={invoiceApplyTax} onChange={(e) => setInvoiceApplyTax(e.target.checked)} />
+                            Charge taxes ({taxComponents.map(c => `${c.name} ${c.rate}%`).join(' + ') || 'none configured'})
+                          </label>
+                          {invoiceTaxLines.map(c => (
+                            <div key={c.code} className="flex justify-between items-center text-sm">
+                              <span className="text-blue-600 font-medium">{c.name} ({c.rate}%)</span>
+                              <span className="font-bold">{currSym}{fmtMoney(c.amount)}</span>
                             </div>
-                            <span className="font-bold">{currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * ((invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}</span>
-                          </div>
+                          ))}
                           <div className="flex justify-between items-center pt-2 border-t border-blue-100">
                             <div>
                               <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Total Invoice Amount</p>
                               <p className="text-xs text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-black text-blue-700">
-                                {currSym}{(invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (1 + (invoiceTaxOverride !== '' ? Number(invoiceTaxOverride) : Number(accountingConfig.sales_tax_rate)) / 100)).toLocaleString()}
-                              </p>
+                              <p className="text-2xl font-black text-blue-700">{currSym}{fmtMoney(invoiceTotal)}</p>
                             </div>
                           </div>
                         </div>
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">Record initial payment</p>
-                              <p className="text-xs text-slate-500">Optional: capture the first payment when raising the invoice.</p>
-                            </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">Record initial payment</p>
+                            <p className="text-xs text-slate-500">Optional: capture the first payment when raising the invoice.</p>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -1501,17 +1682,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <Label>Destination Bank Account</Label>
-                                <Select name="payment_bank_account_id" required={paymentMethod !== 'Cash'}>
-                                <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Select bank account" /></SelectTrigger>
-                                <SelectContent>
-                                  {bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Reference / Cheque No.</Label>
-                              <Input name="payment_reference" className="bg-white border-slate-200" placeholder={paymentMethod === 'Cash' ? "Optional (e.g., Receipt #)" : "Reference / Cheque No."} />
-                            </div>
+                                <Select name="payment_bank_account_id">
+                                  <SelectTrigger className="bg-white border-slate-200"><SelectValue placeholder="Select bank account" /></SelectTrigger>
+                                  <SelectContent>
+                                    {bankAccounts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.account_name} ({b.bank_name})</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Reference / Cheque No.</Label>
+                                <Input name="payment_reference" className="bg-white border-slate-200" placeholder="Reference / Cheque No." />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1523,107 +1704,56 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
-              <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Invoice ID</TableHead><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {invoices.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-blue-50/20">
-                      <TableCell className="font-bold text-blue-600">{inv.id}</TableCell>
-                      <TableCell className="font-bold text-[#141414]">{inv.client}</TableCell>
-                      <TableCell className="text-[#8E9299] text-xs font-mono">{inv.dueDate}</TableCell>
-                      <TableCell className="text-right font-black">
-                        {currSym}{Number(inv.amount).toLocaleString()}
-                        {inv.status === 'partially_paid' && inv.balance_due !== undefined && (
-                          <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{Number(inv.balance_due).toLocaleString()}</p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : inv.status === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{inv.status.toUpperCase()}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        {inv.status !== 'paid' && (
-                          <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount, balance_due: inv.balance_due ?? inv.amount }); setIsPayInvoiceOpen(true); }}>
-                            RECEIVE
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" onClick={() => {
-                          let itemsArr = [];
-                          try {
-                            itemsArr = typeof inv.items === 'string' ? JSON.parse(inv.items) : (inv.items || []);
-                          } catch (e) {
-                            itemsArr = [];
-                          }
-
-                          const itemsHtml = itemsArr.length > 0 ? itemsArr.map((it: any) => `
-                            <tr>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0;">${it.description || 'Service'}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: center;">${it.quantity || 1}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${Number(it.unitPrice || 0).toLocaleString()}</td>
-                              <td style="padding: 10px; border-bottom: 1px solid #E4E3E0; text-align: right;">${currSym}${(Number(it.quantity || 1) * Number(it.unitPrice || 0)).toLocaleString()}</td>
-                            </tr>
-                          `).join('') : `<tr><td colspan="4" style="padding: 20px; text-align: center;">Standard Service Charge</td></tr>`;
-
-                          const content = `
-                            <div style="margin-top: 40px;">
-                              <div style="display: flex; justify-content: space-between; margin-bottom: 40px; gap: 20px; flex-wrap: wrap;">
-                                <div>
-                                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Bill To:</h4>
-                                  <h3 style="margin: 0;">${inv.client}</h3>
-                                </div>
-                                <div style="text-align: right;">
-                                  <h4 style="color: #8E9299; text-transform: uppercase; font-size: 0.7rem; margin-bottom: 5px;">Invoice Details:</h4>
-                                  <p style="margin: 0;"><strong>Invoice ID:</strong> ${inv.id}</p>
-                                  <p style="margin: 0;"><strong>Due Date:</strong> ${inv.dueDate}</p>
-                                </div>
-                              </div>
-                              <div style="margin-bottom: 24px; display: flex; justify-content: flex-start; gap: 24px; flex-wrap: wrap;">
-                                <div style="min-width: 180px;">
-                                  <p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Amount Paid</p>
-                                  <p style="margin: 0; font-size: 1rem; font-weight: 700;">${currSym}${Number(inv.paid_amount || 0).toLocaleString()}</p>
-                                </div>
-                                <div style="min-width: 180px;">
-                                  <p style="margin: 0 0 8px 0; color: #8E9299; font-size: 0.75rem; text-transform: uppercase;">Balance Due</p>
-                                  <p style="margin: 0; font-size: 1rem; font-weight: 700;">${currSym}${Number(inv.balance_due ?? (Number(inv.amount) - Number(inv.paid_amount || 0))).toLocaleString()}</p>
-                                </div>
-                              </div>
-                              <table style="width: 100%; border-collapse: collapse;">
-                                <thead style="background: #F5F5F5;">
-                                  <tr>
-                                    <th style="padding: 10px; text-align: left;">Description</th>
-                                    <th style="padding: 10px; text-align: center;">Qty</th>
-                                    <th style="padding: 10px; text-align: right;">Unit Price</th>
-                                    <th style="padding: 10px; text-align: right;">Total</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  ${itemsHtml}
-                                </tbody>
-                                <tfoot>
-                                  <tr>
-                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">Subtotal:</td>
-                                    <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.subtotal || inv.amount).toLocaleString()}</td>
-                                  </tr>
-                                  <tr>
-                                    <td colspan="3" style="padding: 10px; text-align: right; color: #8E9299;">${inv.tax_name || accountingConfig.tax_name} (${inv.tax_rate || accountingConfig.sales_tax_rate}%):</td>
-                                    <td style="padding: 10px; text-align: right;">${currSym}${Number(inv.tax_amount || 0).toLocaleString()}</td>
-                                  </tr>
-                                  <tr style="font-size: 1.2rem; font-weight: bold;">
-                                    <td colspan="3" style="padding: 20px 10px; text-align: right;">Grand Total:</td>
-                                    <td style="padding: 20px 10px; text-align: right; color: #2563eb;">${currSym}${Number(inv.amount).toLocaleString()}</td>
-                                  </tr>
-                                </tfoot>
-                              </table>
+            {arView === 'aging' ? (
+              <ArAgingPanel currSym={currSym} branding={branding()} />
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
+                <Table className="bg-white">
+                  <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Invoice No</TableHead><TableHead>Customer</TableHead><TableHead>Invoice Date</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {invoices.map((inv: any) => {
+                      const isVoid = inv.status === 'void';
+                      const hasPayments = Number(inv.paid_amount || 0) > 0 || Number(inv.credited_amount || 0) > 0;
+                      return (
+                        <TableRow key={inv.id} className={isVoid ? 'opacity-50' : 'hover:bg-blue-50/20'}>
+                          <TableCell className="font-bold text-blue-600">{inv.id}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{inv.client}</TableCell>
+                          <TableCell className="text-[#8E9299] text-xs font-mono">{formatDate(inv.date || inv.created_at)}</TableCell>
+                          <TableCell className="text-[#8E9299] text-xs font-mono">{formatDate(inv.dueDate)}</TableCell>
+                          <TableCell className="text-right font-black">
+                            {currSym}{fmtMoney(inv.amount)}
+                            {!isVoid && Number(inv.balance_due) > 0 && Number(inv.balance_due) < Number(inv.amount) && (
+                              <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{fmtMoney(inv.balance_due)}</p>
+                            )}
+                            {Number(inv.credited_amount || 0) > 0 && <p className="text-[10px] text-purple-600">Credited: {currSym}{fmtMoney(inv.credited_amount)}</p>}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : inv.status === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : isVoid ? 'bg-gray-100 text-gray-500 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{String(inv.status).replace('_', ' ').toUpperCase()}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end items-center">
+                              {!isVoid && inv.status !== 'paid' && (
+                                <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount, balance_due: inv.balance_due ?? inv.amount }); setIsPayInvoiceOpen(true); }}>
+                                  RECEIVE
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" title="Print invoice" onClick={() => printInvoice(inv)}><Printer className="w-3 h-3" /></Button>
+                              <AttachmentsButton entityType="invoice" entityId={inv.id} label={`Invoice ${inv.id}`} />
+                              {!isVoid && Number(inv.balance_due) > 0 && (
+                                <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-purple-600" onClick={() => setCreditNoteTarget(inv)}>CREDIT</Button>
+                              )}
+                              {!isVoid && !hasPayments && (
+                                <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-red-600" onClick={() => setVoidTarget({ kind: 'invoice', id: String(inv.id), label: `Invoice ${inv.id}` })}>VOID</Button>
+                              )}
                             </div>
-                          `;
-                          handlePrintDocument(`SALES INVOICE - ${inv.id}`, content);
-                        }}><Printer className="w-3 h-3" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
 
             {/* Receive Payment Modal */}
             <Dialog open={isPayInvoiceOpen} onOpenChange={setIsPayInvoiceOpen}>
@@ -1632,12 +1762,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2"><Label>Amount Received</Label><Input name="amount" type="number" defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
+                      <div className="space-y-2"><Label>Amount Settled (gross)</Label><Input name="amount" type="number" step="0.01" defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} max={selectedTarget?.balance_due ?? selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
+                      <div className="space-y-2"><Label>Date Received</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Deposit Method</Label>
                         <Select name="method" required onValueChange={setPaymentMethod}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="Bank Direct">Bank Direct</SelectItem><SelectItem value="Cheque">Cheque</SelectItem><SelectItem value="Mobile Money">Momo</SelectItem><SelectItem value="Cash">Cash</SelectItem></SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Tax Withheld by Client</Label>
+                        <Select name="wht_rate" defaultValue="0">
+                          <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">None</SelectItem>
+                            {[...new Set([defaultWhtRate, 3, 5, 7.5])].map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </div>
                     </div>
@@ -1656,126 +1799,150 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </form>
               </DialogContent>
             </Dialog>
+
+            {/* Credit Note Modal */}
+            <Dialog open={!!creditNoteTarget} onOpenChange={(open) => !open && setCreditNoteTarget(null)}>
+              <DialogContent className="rounded-2xl">
+                <form onSubmit={handleCreditNote}>
+                  <DialogHeader>
+                    <DialogTitle>Credit Note for {creditNoteTarget?.id}</DialogTitle>
+                    <DialogDescription>Reduces what {creditNoteTarget?.client} owes. Revenue and output taxes are reversed in proportion to the original invoice.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Amount (incl. tax)</Label><Input name="amount" type="number" step="0.01" min="0.01" max={creditNoteTarget?.balance_due} defaultValue={creditNoteTarget?.balance_due} required className="bg-[#F5F5F5] border-none font-bold" /></div>
+                      <div className="space-y-2"><Label>Date</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
+                    </div>
+                    <div className="space-y-2"><Label>Reason</Label><Input name="reason" required className="bg-[#F5F5F5] border-none" placeholder="e.g. Discount agreed, work not delivered" /></div>
+                  </div>
+                  <DialogFooter><Button type="submit" className="w-full bg-purple-600 text-white h-11 font-bold">ISSUE CREDIT NOTE</Button></DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         );
+      }
 
-      case 'accounting-transactions':
+      case 'accounting-transactions': {
+        const pageCount = Math.max(1, Math.ceil(ledgerTotal / JOURNAL_PAGE_SIZE));
+        const openJournalDrillDown = async (tx: any) => {
+          try {
+            const res = await accountingApi.getJournalDetails(tx.id);
+            setSelectedPeriodLabel(`Journal #${tx.id}: ${tx.description || ''}`);
+            setPeriodFilterDates(null);
+            setPeriodFilterAccountId(null);
+            setSelectedCOAId(null);
+            setLedgerEntries(res.data.items.map((i: any) => ({ ...i, journal_id: res.data.id, date: res.data.date, description: res.data.description, reference_type: res.data.reference_type })));
+            setDrillDownMode('ledger');
+            setIsPeriodBankDetailsOpen(true);
+          } catch (error: any) {
+            toast.error(errorText(error, 'Failed to load journal details'));
+          }
+        };
+        const sourceTarget = (referenceType: string) => {
+          const type = String(referenceType || '').toLowerCase();
+          if (type.startsWith('bill')) return 'accounting-ap';
+          if (type.startsWith('invoice') || type === 'credit_note') return 'accounting-ar';
+          if (type === 'payroll') return 'hr-payroll';
+          if (type === 'payment' || type === 'bank_transaction') return 'accounting-bank';
+          return null;
+        };
         return (
           <div className="space-y-6">
             <AccountingGuidance 
               title="Double-Entry General Ledger" 
-              message="The General Ledger is the master record of all financial transactions. Ensure every manual journal entry is balanced (Total Debits = Total Credits) to maintain the integrity of the Trial Balance." 
+              message="The General Ledger is the master record of all financial transactions. Only manual journals can be edited or deleted here; invoices, bills and payments are corrected from their source document so the audit trail stays intact." 
             />
-            {/* GL Implementation kept relatively same, hidden for brevity but completely functional */}
-            <div className="flex justify-between items-center">
-              <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">Live auditing of all fiscal transactions.</p></div>
+            <div className="flex flex-wrap justify-between items-center gap-3">
+              <div><h2 className="text-xl font-bold">General Ledger</h2><p className="text-sm text-[#8E9299]">{ledgerTotal.toLocaleString()} journal entries match the current filters.</p></div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('general_ledger', ['Date', 'Reference', 'Category', 'Amount', 'Type'], transactions.map(tx => [tx.date, tx.description, tx.category, String(tx.amount), tx.type]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
-                <Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm" onClick={() => { setJournalItems([{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }]); setEditingJournalId(null); setIsJournalOpen(true); }}><BookOpen className="w-4 h-4" /> Manual Journal Post</Button>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={handleExportLedger}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Button variant="outline" className="gap-2 border-[#141414] text-[#141414] rounded-xl font-bold shadow-sm" onClick={openNewJournal}><BookOpen className="w-4 h-4" /> Manual Journal Post</Button>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-end bg-white p-4 rounded-2xl border border-[#F5F5F5] shadow-sm">
+              <div className="space-y-1 flex-1 min-w-[200px]">
+                <Label className="text-[10px] font-bold uppercase text-[#8E9299]">Search</Label>
+                <Input value={ledgerSearch} onChange={(e) => setLedgerSearch(e.target.value)} placeholder="Description, reference or journal #" className="bg-[#F5F5F5] border-none h-10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-[#8E9299]">From</Label>
+                <Input type="date" value={ledgerFilters.startDate} onChange={(e) => setLedgerFilters(f => ({ ...f, startDate: e.target.value, page: 1 }))} className="bg-[#F5F5F5] border-none h-10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold uppercase text-[#8E9299]">To</Label>
+                <Input type="date" value={ledgerFilters.endDate} onChange={(e) => setLedgerFilters(f => ({ ...f, endDate: e.target.value, page: 1 }))} className="bg-[#F5F5F5] border-none h-10" />
+              </div>
+              <div className="space-y-1 w-44">
+                <Label className="text-[10px] font-bold uppercase text-[#8E9299]">Type</Label>
+                <Select value={ledgerFilters.type} onValueChange={(v) => setLedgerFilters(f => ({ ...f, type: v, page: 1 }))}>
+                  <SelectTrigger className="bg-[#F5F5F5] border-none h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    {LEDGER_TYPES.map(t => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="ghost" className="h-10 font-bold" onClick={() => { setLedgerSearch(''); setLedgerFilters({ q: '', startDate: '', endDate: '', type: 'all', page: 1 }); }}>Clear</Button>
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-[#F5F5F5] shadow-sm">
               <Table className="bg-white">
-                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>Reference</TableHead><TableHead>Category / Account</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>#</TableHead><TableHead>Description</TableHead><TableHead>Type</TableHead><TableHead>Accounts</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {transactions.map((tx: any) => (
-                    <TableRow 
-                      key={tx.id} 
-                      className="hover:bg-blue-50/20 cursor-pointer"
-                      onClick={async () => {
-                        setSelectedPeriodLabel(`Journal: ${tx.description}`);
-                        setPeriodFilterDates({ start: tx.date, end: tx.date });
-                        setPeriodFilterAccountId(null);
-                        setDrillDownMode('ledger');
-                        setIsPeriodBankDetailsOpen(true);
-                        
-                        try {
-                           const res = await accountingApi.getJournalDetails(tx.id);
-                           setLedgerEntries(res.data.items);
-                        } catch (err) {
-                           toast.error("Failed to load journal details");
-                        }
-                      }}
-                    >
-                      <TableCell className="text-[#8E9299] font-mono text-xs">{new Date(tx.date).toLocaleDateString()}</TableCell>
-                      <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
-                      <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{tx.reference_type}</Badge></TableCell>
-                      <TableCell className="text-right font-black text-[#141414]">{currSym}{Number(tx.total_amount).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            onClick={async () => {
-                              try {
-                                const res = await accountingApi.getJournalDetails(tx.id);
-                                setJournalItems(res.data.items.map((i: any) => ({
-                                  account_id: String(i.account_id),
-                                  debit: Number(i.debit),
-                                  credit: Number(i.credit)
-                                })));
-                                setEditingJournalId(tx.id);
-                                setIsJournalOpen(true);
-                              } catch (err) {
-                                toast.error("Failed to load journal for editing");
-                              }
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          {tx.reference_type && onNavigate && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                              onClick={() => {
-                                const type = String(tx.reference_type).toLowerCase();
-                                let target: any = null;
-                                if (type === 'bill') target = 'accounting-ap';
-                                if (type === 'invoice') target = 'accounting-ar';
-                                if (type === 'payroll') target = 'hr-payroll';
-                                if (type === 'payment') target = 'accounting-bank';
-                                
-                                if (target) {
-                                  onNavigate(target);
-                                } else {
-                                  toast.info(`Source: ${tx.reference_type || 'Internal'}`);
-                                }
-                              }}
-                              title={`View Source: ${tx.reference_type}`}
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={async () => {
-                              if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
-                                try {
-                                  await accountingApi.deleteJournal(tx.id);
-                                  toast.success("Journal entry deleted and balances reversed");
-                                  fetchData();
-                                } catch (error) {
-                                  toast.error("Failed to delete journal");
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {transactions.map((tx: any) => {
+                    const isManual = tx.reference_type === 'manual';
+                    const target = sourceTarget(tx.reference_type);
+                    return (
+                      <TableRow key={tx.id} className="hover:bg-blue-50/20 cursor-pointer" onClick={() => openJournalDrillDown(tx)}>
+                        <TableCell className="text-[#8E9299] font-mono text-xs whitespace-nowrap">{formatDate(tx.date)}</TableCell>
+                        <TableCell className="text-[#8E9299] font-mono text-xs">{tx.id}</TableCell>
+                        <TableCell className="font-bold text-[#141414]">{tx.description}{tx.reference_id && <p className="text-[10px] text-[#8E9299] font-mono">{tx.reference_id}</p>}</TableCell>
+                        <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{String(tx.reference_type || '').replace(/_/g, ' ')}</Badge></TableCell>
+                        <TableCell className="text-xs text-[#8E9299] max-w-[260px] truncate" title={tx.accounts}>{tx.accounts}</TableCell>
+                        <TableCell className="text-right font-black text-[#141414]">{currSym}{fmtMoney(tx.total_amount)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1 items-center" onClick={(e) => e.stopPropagation()}>
+                            <AttachmentsButton entityType="journal" entityId={tx.id} label={`Journal #${tx.id}`} />
+                            {isManual && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Edit journal" onClick={() => openJournalEditor(tx.id)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {target && onNavigate && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" title={`Open source (${tx.reference_type})`} onClick={() => onNavigate(target)}>
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {isManual && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" title="Delete journal" onClick={() => handleDeleteJournal(tx.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!isLedgerLoading && transactions.length === 0 && (
+                    <TableRow><TableCell colSpan={7} className="text-center py-16 text-[#8E9299]">No journal entries match these filters.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-[#8E9299] font-medium">{isLedgerLoading ? 'Loading…' : `Page ${ledgerFilters.page} of ${pageCount}`}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={ledgerFilters.page <= 1 || isLedgerLoading} onClick={() => setLedgerFilters(f => ({ ...f, page: f.page - 1 }))}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={ledgerFilters.page >= pageCount || isLedgerLoading} onClick={() => setLedgerFilters(f => ({ ...f, page: f.page + 1 }))}>Next</Button>
+              </div>
+            </div>
+
+            <RecurringPanel coa={coa} projects={projects} currSym={currSym} onGenerated={() => { fetchLedger(); }} />
           </div>
         );
+      }
 
       case 'accounting-reports':
         return (
@@ -1798,7 +1965,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             </div>
 
             <div className="flex gap-2 border-b border-[#F5F5F5] overflow-x-auto pb-2">
-              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance', 'project-analysis'].map(tab => (
+              {['dashboard', 'income-statement', 'balance-sheet', 'trial-balance', 'cash-flow', 'tax-reports', 'project-analysis'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setReportTab(tab)}
@@ -1808,6 +1975,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </button>
               ))}
             </div>
+
+            {reportTab === 'cash-flow' && <CashFlowPanel startDate={reportStartDate} endDate={reportEndDate} currSym={currSym} branding={branding()} />}
+
+            {reportTab === 'tax-reports' && <TaxReportsPanel startDate={reportStartDate} endDate={reportEndDate} currSym={currSym} branding={branding()} />}
 
             {reportTab === 'dashboard' && managementAccounts && (
               <div className="grid gap-6 md:grid-cols-4">
@@ -1857,10 +2028,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="hover:bg-green-50/50 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find((ba: any) => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                             setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -1887,10 +2055,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find((ba: any) => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                             setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -1942,10 +2107,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="hover:bg-blue-50/50 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find((ba: any) => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -1972,10 +2134,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find((ba: any) => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -2002,10 +2161,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="hover:bg-purple-50/50 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find((ba: any) => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`${a.name} (as of ${reportEndDate})`);
                             setPeriodFilterDates({ start: '1970-01-01', end: reportEndDate });
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -2036,9 +2192,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <div className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-3">
                   {projects.map(p => {
-                    const projectInvoices = invoices.filter(inv => inv.project_id === p.id);
-                    const projectBills = bills.filter(b => b.project_id === p.id);
-                    const projectRevenue = projectInvoices.reduce((s, inv) => s + Number(inv.subtotal || inv.amount), 0);
+                    const projectInvoices = invoices.filter(inv => inv.project_id === p.id && inv.status !== 'void');
+                    const projectBills = bills.filter(b => b.project_id === p.id && String(b.status).toLowerCase() !== 'void');
+                    const projectRevenue = projectInvoices.reduce((s, inv: any) => s + Number(inv.subtotal ?? inv.amount) * (Number(inv.amount) > 0 ? 1 - Number(inv.credited_amount || 0) / Number(inv.amount) : 1), 0);
                     const projectCost = projectBills.reduce((s, b) => s + Number(b.amount), 0);
                     const projectProfit = projectRevenue - projectCost;
 
@@ -2085,18 +2241,21 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Table className="bg-white">
                   <TableHeader>
                     <TableRow className="bg-[#F5F5F5]/50 border-none">
-                      <TableHead colSpan={4}>
+                      <TableHead colSpan={7}>
                         <div className="flex justify-between items-center w-full">
-                          <span>Trial Balance</span>
-                          <Button variant="outline" size="sm" onClick={() => handleExportCSV('trial_balance', ['Code', 'Account Name', 'Type', 'Debit', 'Credit'], trialBalance.map(a => [a.code, a.name, a.type, String(a.total_debit), String(a.total_credit)]))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
+                          <span>Trial Balance {reportStartDate ? `(${reportStartDate} to ${reportEndDate}, opening balances brought forward)` : `(as of ${reportEndDate})`}</span>
+                          <Button variant="outline" size="sm" onClick={() => handleExportCSV('trial_balance', ['Code', 'Account Name', 'Type', 'Opening (Dr+/Cr-)', 'Period Debit', 'Period Credit', 'Closing Debit', 'Closing Credit'], trialBalance.map(a => [a.code, a.name, a.type, Number(a.opening_balance || 0).toFixed(2), Number(a.period_debit || 0).toFixed(2), Number(a.period_credit || 0).toFixed(2), Number(a.total_debit || 0).toFixed(2), Number(a.total_credit || 0).toFixed(2)]))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
                         </div>
                       </TableHead>
                     </TableRow>
                     <TableRow className="bg-[#F5F5F5]/50">
                       <TableHead className="font-bold text-[#141414]">Code</TableHead>
                       <TableHead className="font-bold text-[#141414]">Account Name</TableHead>
-                      <TableHead className="text-right font-bold text-[#141414]">Debit</TableHead>
-                      <TableHead className="text-right font-bold text-[#141414]">Credit</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Opening</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Period Dr</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Period Cr</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Closing Debit</TableHead>
+                      <TableHead className="text-right font-bold text-[#141414]">Closing Credit</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2105,10 +2264,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         key={a.id} 
                         className="hover:bg-[#F5F5F5]/50 cursor-pointer"
                         onClick={async () => {
-                          const matchingBank = bankAccounts.find((ba: any) => 
-                            ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                            a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                          );
+                          const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
                           setSelectedPeriodLabel(`${a.name} (${reportStartDate} to ${reportEndDate})`);
                           setPeriodFilterDates({ start: reportStartDate, end: reportEndDate });
                           setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -2125,12 +2281,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       >
                         <TableCell className="font-mono text-xs font-bold text-[#8E9299]">{a.code}</TableCell>
                         <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
-                        <TableCell className="text-right font-mono text-[#8E9299]">{Number(a.total_debit) > 0 ? `${currSym}${Number(a.total_debit).toLocaleString()}` : '-'}</TableCell>
-                        <TableCell className="text-right font-mono text-[#8E9299]">{Number(a.total_credit) > 0 ? `${currSym}${Number(a.total_credit).toLocaleString()}` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.opening_balance || 0) === 0 ? '-' : `${fmtMoney(Math.abs(a.opening_balance))} ${Number(a.opening_balance) > 0 ? 'Dr' : 'Cr'}`}</TableCell>
+                        <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.period_debit) > 0 ? fmtMoney(a.period_debit) : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.period_credit) > 0 ? fmtMoney(a.period_credit) : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_debit) > 0 ? `${currSym}${fmtMoney(a.total_debit)}` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_credit) > 0 ? `${currSym}${fmtMoney(a.total_credit)}` : '-'}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
-                      <TableCell colSpan={2} className="font-black text-right text-lg">BALANCING TOTAL</TableCell>
+                      <TableCell colSpan={5} className="font-black text-right text-lg">BALANCING TOTAL</TableCell>
                       <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_debit), 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_credit), 0).toLocaleString()}</TableCell>
                     </TableRow>
@@ -2161,7 +2320,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         const totalsByType = groupedByType.map(type => ({
           type,
           count: coa.filter(a => a.type === type).length,
-          balance: coa.filter(a => a.type === type).reduce((s: number, a: any) => s + Number(a.balance || 0), 0)
+          balance: coa.filter(a => a.type === type).reduce((s: number, a: any) => s + Number(a.natural_balance ?? 0), 0)
         }));
 
         return (
@@ -2181,7 +2340,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 >
                   <p className={`text-[10px] font-bold uppercase tracking-widest ${coaFilter === t.type ? 'text-white/60' : 'text-[#8E9299]'}`}>{t.type}</p>
                   <p className={`text-2xl font-black ${coaFilter === t.type ? 'text-white' : 'text-[#141414]'}`}>{t.count}</p>
-                  <p className={`text-xs font-bold mt-1 ${coaFilter === t.type ? 'text-white/70' : 'text-[#8E9299]'}`}>{currSym}{Math.abs(t.balance).toLocaleString()}</p>
+                  <p className={`text-xs font-bold mt-1 ${coaFilter === t.type ? 'text-white/70' : 'text-[#8E9299]'}`}>{t.balance < 0 ? '-' : ''}{currSym}{fmtMoney(Math.abs(t.balance))}</p>
                 </button>
               ))}
             </div>
@@ -2204,7 +2363,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2 rounded-xl font-bold h-11" onClick={() => handleExportCSV('chart_of_accounts', ['Code', 'Name', 'Type', 'Balance'], coa.map(a => [a.code, a.name, a.type, String(a.balance)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
+                <Button variant="outline" className="gap-2 rounded-xl font-bold h-11" onClick={() => handleExportCSV('chart_of_accounts', ['Code', 'Name', 'Type', 'Balance'], coa.map((a: any) => [a.code, a.name, a.type, Number(a.natural_balance ?? 0).toFixed(2)]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg"><Plus className="w-4 h-4" /> New Account</Button></DialogTrigger>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
@@ -2215,14 +2374,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         await accountingApi.createCOA({
                           code: fd.get('code'),
                           name: fd.get('name'),
-                          type: fd.get('type'),
-                          balance: 0
+                          type: fd.get('type')
                         });
                         toast.success('Ledger account created');
                         setIsAddAccountOpen(false);
                         fetchData();
-                      } catch (error) {
-                        toast.error('Failed to create account');
+                      } catch (error: any) {
+                        toast.error(errorText(error, 'Failed to create account'));
                       }
                     }}>
                       <DialogHeader className="p-8 bg-blue-50">
@@ -2293,11 +2451,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-xs uppercase text-[#8E9299]">Adjust Balance</Label>
-                          <Input name="balance" type="number" step="0.01" defaultValue={selectedTarget?.balance} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
-                          <p className="text-[10px] text-blue-600 font-medium">Note: Manual balance adjustments should be done with caution in a ledger-based system.</p>
-                        </div>
+                        <p className="text-xs text-[#8E9299] font-medium">Balances come only from posted journals. To change a balance, post a manual journal or set opening balances under Foundation & Setup.</p>
                       </div>
                       <DialogFooter className="p-8 bg-[#F5F5F5]/30 border-t border-[#F5F5F5]">
                         <Button type="submit" className="bg-blue-600 text-white w-full h-12 rounded-xl font-bold shadow-lg shadow-blue-500/20">SAVE CHANGES</Button>
@@ -2347,10 +2501,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           key={a.id} 
                           className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30 cursor-pointer"
                           onClick={async () => {
-                            const matchingBank = bankAccounts.find(ba => 
-                              ba.account_name.toLowerCase().includes(a.name.toLowerCase()) || 
-                              a.name.toLowerCase().includes(ba.account_name.toLowerCase())
-                            );
+                            const matchingBank = bankAccounts.find(ba => String(ba.coa_account_id) === String(a.id));
                             setSelectedPeriodLabel(`Drill-down: ${a.name}`);
                             setPeriodFilterDates(null);
                             setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
@@ -2370,7 +2521,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <TableCell className="font-mono font-bold text-blue-600">{a.code}</TableCell>
                           <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
                           <TableCell><Badge className={`${typeColors[a.type] || 'bg-gray-100 text-gray-700'} border-none font-bold text-[10px]`}>{a.type.toUpperCase()}</Badge></TableCell>
-                          <TableCell className={`text-right font-black ${Number(a.balance) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{currSym}{Number(a.balance).toLocaleString()}</TableCell>
+                          <TableCell className={`text-right font-black ${Number(a.natural_balance ?? 0) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{Number(a.natural_balance ?? 0) < 0 ? '-' : ''}{currSym}{fmtMoney(Math.abs(Number(a.natural_balance ?? 0)))}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button 
@@ -2534,6 +2685,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </CardContent>
               </Card>
 
+              <TaxSettingsCard coa={coa} />
+
+              <PeriodLockCard isAdmin={user?.role === 'admin'} />
+
               {/* Opening Balances Tool */}
               <Card className="col-span-1 md:col-span-2 border-none shadow-sm rounded-2xl overflow-hidden">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
@@ -2577,13 +2732,27 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     </div>
                   </div>
                   <CardDescription className="mt-2">
-                    Enter the current balance for each account. The system will auto-generate a balanced journal entry with Opening Balance Equity as the offset.
+                    Enter each account's balance as at the cut-over date, as a positive number on its normal side (assets as debits; liabilities and equity as credits). A balanced journal is posted on that date with Opening Balance Equity (3900) as the offset.
                   </CardDescription>
+                  <div className="mt-4 flex flex-wrap items-end gap-4">
+                    <div className="space-y-1">
+                      <Label className="font-bold text-xs uppercase text-[#8E9299]">Balances as at</Label>
+                      <Input type="date" value={obDate} onChange={async (e) => { setObDate(e.target.value); if (e.target.value) { try { await loadOpeningBalances(e.target.value); } catch { /* keep previous info */ } } }} className="h-10 w-48 bg-white border-[#E4E3E0] rounded-xl font-bold" />
+                    </div>
+                    {obInfo?.journal && <p className="text-xs text-[#8E9299] font-medium">Currently posted: journal #{obInfo.journal.id} dated {formatDate(obInfo.journal.date)}.</p>}
+                  </div>
+                  {obDate && obInfo && obInfo.entries_on_or_before > 0 && (
+                    <div className="mt-3 p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-xs font-medium text-yellow-800 flex gap-2 items-start">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{obInfo.entries_on_or_before} ledger lines are already dated on or before {formatDate(obDate)}. Their effect is already in the books, so opening balances entered here must exclude them or those amounts will be counted twice.</span>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   {['Asset', 'Liability', 'Equity', 'Income', 'Expense'].map(type => {
                     const accounts = coa.filter(a => {
                       if (a.type !== type) return false;
+                      if (a.code === '3900') return false;
                       if (obSearch && !(
                         a.name.toLowerCase().includes(obSearch.toLowerCase()) || 
                         a.code.toLowerCase().includes(obSearch.toLowerCase())
@@ -2628,31 +2797,30 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </CardContent>
                 <div className="p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] flex items-center justify-between">
                   <p className="text-xs text-[#8E9299] font-medium">
-                    Previous opening balance entries will be replaced when you post.
+                    The previous opening balance journal is replaced when you post.
                   </p>
                   <Button
                     className="bg-blue-600 text-white rounded-xl px-10 h-12 font-black shadow-lg shadow-blue-500/20 gap-2"
                     disabled={isSaving}
                     onClick={async () => {
+                      if (!obDate) {
+                        toast.error('Choose the date the opening balances apply to');
+                        return;
+                      }
+                      const balances = Object.entries(openingBalances)
+                        .filter(([, bal]) => Number(bal) !== 0)
+                        .map(([account_id, amount]) => ({ account_id: Number(account_id), amount: Number(amount) }));
+                      if (balances.length === 0) {
+                        toast.error('Enter at least one non-zero balance');
+                        return;
+                      }
                       setIsSaving(true);
                       try {
-                        const balances = Object.entries(openingBalances)
-                          .filter(([_, bal]) => bal !== 0)
-                          .map(([account_id, balance]) => ({ account_id: Number(account_id), balance }));
-                        
-                        if (balances.length === 0) {
-                          toast.error('Enter at least one non-zero balance');
-                          return;
-                        }
-                        
-                        await accountingApi.postOpeningBalances({ 
-                          balances,
-                          date: new Date().toISOString().split('T')[0]
-                        });
-                        toast.success('Opening balances posted to ledger successfully');
+                        await accountingApi.postOpeningBalances({ balances, date: obDate });
+                        toast.success(`Opening balances posted as at ${formatDate(obDate)}`);
                         fetchData();
                       } catch (error: any) {
-                        toast.error(error.response?.data?.message || 'Failed to post opening balances');
+                        toast.error(errorText(error, 'Failed to post opening balances'));
                       } finally {
                         setIsSaving(false);
                       }
@@ -2679,6 +2847,23 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         <p className="text-[#8E9299] text-lg mt-1 font-medium">Enterprise Treasury, AP/AR, and Ledger Configuration.</p>
       </div>
       {renderContent()}
+
+      {/* Void Invoice / Bill Modal */}
+      <Dialog open={!!voidTarget} onOpenChange={(open) => !open && setVoidTarget(null)}>
+        <DialogContent className="rounded-2xl">
+          <form onSubmit={handleVoid}>
+            <DialogHeader>
+              <DialogTitle>Void {voidTarget?.label}</DialogTitle>
+              <DialogDescription>A reversing journal is posted on the date below and the document is marked VOID. The original stays on record for audit.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2"><Label>Void Date</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
+              <div className="space-y-2"><Label>Reason</Label><Input name="reason" required className="bg-[#F5F5F5] border-none" placeholder="e.g. Raised in error, duplicate" /></div>
+            </div>
+            <DialogFooter><Button type="submit" variant="destructive" className="w-full h-11 font-bold">VOID DOCUMENT</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Drill-down Modal */}
       <Dialog open={isPeriodBankDetailsOpen} onOpenChange={setIsPeriodBankDetailsOpen}>
@@ -2771,19 +2956,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                   className="h-8 w-8 text-blue-600 hover:text-blue-700"
                                   onClick={async () => {
                                     if (tx.status === 'Reconciled' && tx.matched_ledger_id) {
-                                      try {
-                                        const journalDetails = await accountingApi.getJournalDetails(tx.matched_ledger_id);
-                                        setJournalItems(journalDetails.data.items.map((i: any) => ({
-                                          account_id: String(i.account_id),
-                                          debit: Number(i.debit),
-                                          credit: Number(i.credit)
-                                        })));
-                                        setEditingJournalId(journalDetails.data.id);
-                                        setIsJournalOpen(true);
-                                        setIsPeriodBankDetailsOpen(false);
-                                      } catch (err) {
-                                        toast.error("Failed to load linked journal");
-                                      }
+                                      if (await openJournalEditor(tx.matched_ledger_id)) setIsPeriodBankDetailsOpen(false);
                                     } else {
                                       setSelectedBankTx(tx);
                                       setIsEditBankTxOpen(true);
@@ -2798,14 +2971,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                   size="icon" 
                                   className="h-8 w-8 text-red-500 hover:text-red-700"
                                   onClick={async () => {
-                                    if (window.confirm("Delete this bank transaction from the feed?")) {
+                                    if (window.confirm("Delete this bank statement line?")) {
                                       try {
                                         await accountingApi.deleteBankTransaction(tx.id);
-                                        toast.success("Bank transaction removed");
-                                        // Refresh the specific list if needed, or just fetchData
+                                        toast.success("Bank statement line removed");
                                         fetchData();
-                                      } catch (err) {
-                                        toast.error("Failed to delete transaction");
+                                      } catch (err: any) {
+                                        toast.error(errorText(err, "Failed to delete statement line"));
                                       }
                                     }
                                   }}
@@ -2835,7 +3007,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <TableHeader>
                       <TableRow className="bg-[#F5F5F5]/50 border-none">
                         <TableHead className="font-bold text-[#141414]">Date</TableHead>
-                        <TableHead className="font-bold text-[#141414]">Description</TableHead>
+                        <TableHead className="font-bold text-[#141414]">{ledgerEntries.some((le: any) => le.account_name) ? 'Account' : 'Description'}</TableHead>
                         <TableHead className="font-bold text-[#141414]">Type</TableHead>
                         <TableHead className="text-right font-bold text-[#141414]">Debit</TableHead>
                         <TableHead className="text-right font-bold text-[#141414]">Credit</TableHead>
@@ -2845,35 +3017,26 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <TableBody>
                       {ledgerEntries.map((le, idx) => (
                         <TableRow key={idx} className="hover:bg-blue-50/20">
-                          <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{new Date(le.date).toLocaleDateString()}</TableCell>
-                          <TableCell className="font-bold text-[#141414]">{le.description}</TableCell>
-                          <TableCell className="text-[10px] uppercase font-black text-blue-600 tracking-widest">{le.reference_type}</TableCell>
-                          <TableCell className="text-right font-mono text-green-600 font-bold">{le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '-'}</TableCell>
-                          <TableCell className="text-right font-mono text-red-600 font-bold">{le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '-'}</TableCell>
+                          <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{formatDate(le.date)}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{le.account_name ? `${le.account_code} - ${le.account_name}` : le.description}</TableCell>
+                          <TableCell className="text-[10px] uppercase font-black text-blue-600 tracking-widest">{String(le.reference_type || '').replace(/_/g, ' ')}</TableCell>
+                          <TableCell className="text-right font-mono text-green-600 font-bold">{Number(le.debit) > 0 ? `${currSym}${fmtMoney(le.debit)}` : '-'}</TableCell>
+                          <TableCell className="text-right font-mono text-red-600 font-bold">{Number(le.credit) > 0 ? `${currSym}${fmtMoney(le.credit)}` : '-'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={async () => {
-                                  try {
-                                    const res = await accountingApi.getJournalDetails(le.journal_id);
-                                    setJournalItems(res.data.items.map((i: any) => ({
-                                      account_id: String(i.account_id),
-                                      debit: Number(i.debit),
-                                      credit: Number(i.credit)
-                                    })));
-                                    setEditingJournalId(le.journal_id);
-                                    setIsJournalOpen(true);
-                                    setIsPeriodBankDetailsOpen(false);
-                                  } catch (err) {
-                                    toast.error("Failed to load journal for editing");
-                                  }
-                                }}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
+                              {le.reference_type === 'manual' && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Edit journal"
+                                  onClick={async () => {
+                                    if (await openJournalEditor(le.journal_id)) setIsPeriodBankDetailsOpen(false);
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
                               {le.reference_type && onNavigate && (
                                 <Button 
                                   variant="ghost" 
@@ -2899,29 +3062,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                   <ExternalLink className="w-4 h-4" />
                                 </Button>
                               )}
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                onClick={async () => {
-                                  if (window.confirm("Are you sure you want to delete this journal entry? This will reverse all associated ledger balances.")) {
-                                    try {
-                                      await accountingApi.deleteJournal(le.journal_id);
-                                      toast.success("Journal entry deleted and balances reversed");
-                                      // Refresh the list
-                                      if (selectedCOAId) {
-                                        const res = await accountingApi.getLedgerEntries(selectedCOAId);
-                                        setLedgerEntries(res.data);
-                                      }
-                                      fetchData(); // Update COA balances in the main view
-                                    } catch (error) {
-                                      toast.error("Failed to delete journal");
+                              {le.reference_type === 'manual' && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  title="Delete journal"
+                                  onClick={async () => {
+                                    if (!(await handleDeleteJournal(le.journal_id))) return;
+                                    if (selectedCOAId) {
+                                      const res = await accountingApi.getLedgerEntries(selectedCOAId);
+                                      setLedgerEntries(res.data);
+                                    } else {
+                                      setIsPeriodBankDetailsOpen(false);
                                     }
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -2967,23 +3126,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             return dm && am;
                           })
                           .map((tx: any) => [
-                            new Date(tx.date).toLocaleDateString(),
+                            String(tx.date).slice(0, 10),
                             tx.description,
                             tx.bank_name,
-                            String(tx.amount),
+                            Number(tx.amount || 0).toFixed(2),
                             tx.type,
                             tx.status,
                           ]);
                         handleExportCSV('bank_drilldown', ['Date', 'Description', 'Bank', 'Amount', 'Type', 'Status'], rows);
                       } else {
                         const rows = ledgerEntries.map((le: any) => [
-                          new Date(le.date).toLocaleDateString(),
+                          String(le.date).slice(0, 10),
+                          String(le.journal_id ?? ''),
                           le.description,
-                          le.type,
-                          le.debit > 0 ? `${currSym}${Number(le.debit).toLocaleString()}` : '',
-                          le.credit > 0 ? `${currSym}${Number(le.credit).toLocaleString()}` : '',
+                          le.account_name ? `${le.account_code} - ${le.account_name}` : '',
+                          le.reference_type,
+                          Number(le.debit || 0).toFixed(2),
+                          Number(le.credit || 0).toFixed(2),
                         ]);
-                        handleExportCSV('ledger_drilldown', ['Date', 'Description', 'Type', 'Debit', 'Credit'], rows);
+                        handleExportCSV('ledger_drilldown', ['Date', 'Journal #', 'Description', 'Account', 'Type', 'Debit', 'Credit'], rows);
                       }
                     }}
                   >
@@ -3056,20 +3217,30 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       {/* Global Journal Entry Modal */}
       <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen} modal={false}>
         <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl">
-          <form onSubmit={handlePostJournal}>
+          <form onSubmit={handlePostJournal} key={journalFormKey}>
             <DialogHeader className="bg-[#F5F5F5]/30 p-6 border-b border-[#F5F5F5]">
-              <DialogTitle className="text-2xl font-black text-[#141414]">Double-Entry Journal Post</DialogTitle>
+              <DialogTitle className="text-2xl font-black text-[#141414]">{editingJournalId ? `Edit Journal #${editingJournalId}` : 'Double-Entry Journal Post'}</DialogTitle>
               <DialogDescription className="font-bold text-[#8E9299]">Maintain ledger integrity with balanced debits and credits.</DialogDescription>
             </DialogHeader>
             <div className="p-8 space-y-8">
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Post Date</Label>
-                  <Input type="date" name="date" required defaultValue={new Date().toISOString().split('T')[0]} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                  <Input type="date" name="date" required defaultValue={editingJournal?.date || todayIso()} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
                 </div>
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Reference / Description</Label>
-                  <Input name="description" placeholder="e.g. Opening Balance Migration" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                  <Input name="description" placeholder="e.g. Accrued site rent" required defaultValue={editingJournal?.description || ''} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Project (optional)</Label>
+                  <Select name="project_id" defaultValue={editingJournal?.project_id ? String(editingJournal.project_id) : 'none'}>
+                    <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No project</SelectItem>
+                      {projects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

@@ -159,7 +159,8 @@ export const procurementApi = {
 };
 
 export const accountingApi = {
-  getTransactions: () => api.get('/accounting/transactions'),
+  getTransactions: (params?: LedgerQuery) => api.get('/accounting/transactions', { params }),
+  exportTransactions: (params?: LedgerQuery) => api.get('/accounting/transactions/export', { params }),
   addTransaction: (data: any) => api.post('/accounting/transactions', data),
   getInvoices: () => api.get('/accounting/invoices'),
   createInvoice: (data: any) => api.post('/accounting/invoices', data),
@@ -194,7 +195,54 @@ export const accountingApi = {
   getFiscalYear: () => api.get('/accounting/settings/fiscal-year'),
   updateFiscalYear: (data: any) => api.post('/accounting/settings/fiscal-year', data),
   postOpeningBalances: (data: any) => api.post('/accounting/opening-balances', data),
+  getOpeningBalances: (date?: string) => api.get('/accounting/opening-balances', { params: { date } }),
+  updateJournal: (id: number | string, data: any) => api.put(`/accounting/journal/${id}`, data),
+  voidInvoice: (id: string, data: { date?: string; reason?: string }) => api.post(`/accounting/invoices/${id}/void`, data),
+  getCreditNotes: (invoiceId: string) => api.get(`/accounting/invoices/${invoiceId}/credit-notes`),
+  createCreditNote: (invoiceId: string, data: { date?: string; amount: number; reason?: string }) => api.post(`/accounting/invoices/${invoiceId}/credit-notes`, data),
+  voidBill: (id: number | string, data: { date?: string; reason?: string }) => api.post(`/accounting/bills/${id}/void`, data),
+  getPayments: (params?: { target_type?: string; target_id?: string }) => api.get('/accounting/payments', { params }),
+  updateBankAccount: (id: number | string, data: any) => api.patch(`/accounting/bank-accounts/${id}`, data),
+  importBankStatement: (data: { bank_account_id: number; rows: any[] }) => api.post('/accounting/bank-transactions/import', data),
+  getBankMatchCandidates: (id: number | string) => api.get(`/accounting/bank-transactions/${id}/candidates`),
+  autoMatchBank: (bank_account_id?: number | string) => api.post('/accounting/bank-transactions/auto-match', { bank_account_id }),
+  unreconcileBankTransaction: (id: number | string) => api.post(`/accounting/bank-transactions/${id}/unreconcile`),
+  postBankTransaction: (id: number | string, data: { account_id: number; description?: string }) => api.post(`/accounting/bank-transactions/${id}/post`, data),
+  getArAging: (asOfDate?: string) => api.get('/accounting/reports/ar-aging', { params: { asOfDate } }),
+  getClients: () => api.get('/accounting/clients'),
+  getClientStatement: (client: string, startDate?: string, endDate?: string) => api.get('/accounting/clients/statement', { params: { client, startDate, endDate } }),
+  getVatReport: (startDate?: string, endDate?: string) => api.get('/accounting/reports/vat', { params: { startDate, endDate } }),
+  getWhtReport: (startDate?: string, endDate?: string) => api.get('/accounting/reports/wht', { params: { startDate, endDate } }),
+  getTaxSettings: () => api.get('/accounting/settings/tax'),
+  updateTaxSettings: (data: any) => api.put('/accounting/settings/tax', data),
+  getPeriodLock: () => api.get('/accounting/settings/period-lock'),
+  updatePeriodLock: (closed_through: string | null) => api.put('/accounting/settings/period-lock', { closed_through }),
+  getRecurring: () => api.get('/accounting/recurring'),
+  createRecurring: (data: any) => api.post('/accounting/recurring', data),
+  updateRecurring: (id: number, data: any) => api.put(`/accounting/recurring/${id}`, data),
+  deleteRecurring: (id: number) => api.delete(`/accounting/recurring/${id}`),
+  generateRecurring: () => api.post('/accounting/recurring/generate'),
+  getAttachments: (entity_type: AttachmentEntity, entity_id: string | number) => api.get('/accounting/attachments', { params: { entity_type, entity_id } }),
+  uploadAttachment: (entity_type: AttachmentEntity, entity_id: string | number, file: File) =>
+    api.post('/accounting/attachments', file, {
+      params: { entity_type, entity_id, file_name: file.name },
+      headers: { 'Content-Type': file.type && file.type !== 'application/json' ? file.type : 'application/octet-stream' },
+    }),
+  downloadAttachment: (id: number) => api.get(`/accounting/attachments/${id}/download`, { responseType: 'blob' }),
+  deleteAttachment: (id: number) => api.delete(`/accounting/attachments/${id}`),
 };
+
+export type AttachmentEntity = 'invoice' | 'bill' | 'journal';
+
+export interface LedgerQuery {
+  q?: string;
+  startDate?: string;
+  endDate?: string;
+  type?: string;
+  accountId?: string | number;
+  page?: number;
+  pageSize?: number;
+}
 
 export const projectsApi = {
   getProjects: () => api.get('/projects'),
