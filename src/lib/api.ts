@@ -310,7 +310,7 @@ export const assetsApi = {
 };
 
 export const dashboardApi = {
-  getSummary: () => api.get('/dashboard'),
+  getSummary: (period?: string) => api.get('/dashboard', { params: period ? { period } : undefined }),
 };
 
 export type CategoryType = 'expense' | 'supplier' | 'inventory' | 'asset' | 'service';
