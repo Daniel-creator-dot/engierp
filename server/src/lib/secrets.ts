@@ -4,6 +4,9 @@ import db from '../db';
 const WEAK_SECRETS = new Set(['your-secret-key', 'secret', 'changeme', 'jwt_secret']);
 
 let jwtSecret: string | null = null;
+let jwtSecretSource: 'env' | 'database' | 'temporary' = 'temporary';
+
+export const getJwtSecretSource = () => jwtSecretSource;
 
 // Resolution order: JWT_SECRET env var, then the random secret generated into app_secrets by
 // migration, then (last resort, logged loudly) a per-process random secret.
@@ -12,6 +15,7 @@ export async function initJwtSecret(): Promise<void> {
   if (fromEnv && !WEAK_SECRETS.has(fromEnv)) {
     if (fromEnv.length < 32) console.warn('⚠️  JWT_SECRET is shorter than 32 characters; use a longer random value.');
     jwtSecret = fromEnv;
+    jwtSecretSource = 'env';
     return;
   }
   if (fromEnv) console.error('❌ JWT_SECRET is set to a known placeholder value and will be ignored.');
@@ -21,6 +25,7 @@ export async function initJwtSecret(): Promise<void> {
     if (row?.value) {
       console.warn('⚠️  JWT_SECRET env var not set; using the secret stored in the database. Set JWT_SECRET on the host.');
       jwtSecret = row.value;
+      jwtSecretSource = 'database';
       return;
     }
   } catch (error) {
@@ -29,6 +34,7 @@ export async function initJwtSecret(): Promise<void> {
 
   console.error('❌ No JWT secret available. Using a temporary random secret; all sessions will end on restart. Set JWT_SECRET.');
   jwtSecret = crypto.randomBytes(48).toString('hex');
+  jwtSecretSource = 'temporary';
 }
 
 export function getJwtSecret(): string {

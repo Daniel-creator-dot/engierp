@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import db from '../db';
 import { authenticateToken, authorizeRole, invalidateUserCache, AuthRequest } from '../middleware/auth';
 import { generateTempPassword } from '../lib/passwords';
+import { getJwtSecretSource } from '../lib/secrets';
 import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { sendSMS, isSmsConfigured, normalizePhone } from '../utils/sms';
@@ -267,7 +268,8 @@ router.get('/security-summary', authenticateToken, authorizeRole(['admin']), asy
       dormant_30_days: users.filter(u => u.last_login_at && now - new Date(u.last_login_at).getTime() > thirtyDays && u.is_active !== false).map(u => u.email),
       admins: users.filter(u => u.role === 'admin' && u.is_active !== false).map(u => u.email),
       sms_configured: await isSmsConfigured(),
-      jwt_secret_from_env: !!process.env.JWT_SECRET?.trim(),
+      jwt_secret_from_env: getJwtSecretSource() === 'env',
+      jwt_secret_source: getJwtSecretSource(),
       sms_key_from_env: !!process.env.SMS_API_KEY?.trim(),
     });
   } catch (error) {

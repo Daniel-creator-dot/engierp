@@ -79,7 +79,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         locked_until: lock ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000) : user.locked_until,
       });
       if (lock) {
-        await logAudit(null, 'account_locked', 'user', user.id, undefined, { email: user.email, reason: 'failed_logins' });
+        await logAudit(req as AuthRequest, 'account_locked', 'user', user.id, undefined, { email: user.email, reason: 'failed_logins' });
         return res.status(429).json({ message: `Too many failed attempts. This account is locked for ${LOCKOUT_MINUTES} minutes.` });
       }
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -91,6 +91,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const lastLogin = new Date();
     await db('users').where({ id: user.id }).update({ failed_login_attempts: 0, locked_until: null, last_login_at: lastLogin });
+    (req as AuthRequest).user = { id: user.id, email: user.email, role: user.role };
+    await logAudit(req as AuthRequest, 'login', 'user', user.id);
     const employee = user.employee_id ? await db('employees').where({ id: user.employee_id }).first('name') : null;
 
     res.json({ token: signToken(user), user: publicUser({ ...user, last_login_at: lastLogin }, employee) });
@@ -234,7 +236,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
       console.error(`forgot-password: SMS to user ${user.id} failed:`, sms.error);
       return res.status(502).json({ message: 'We could not send the SMS. Try again shortly or ask an administrator to reset your password.' });
     }
-    await logAudit(null, 'password_reset_requested', 'user', user.id);
+    await logAudit(req as AuthRequest, 'password_reset_requested', 'user', user.id);
     res.json(genericReply);
   } catch (error) {
     console.error('POST /auth/forgot-password failed:', error);
@@ -279,7 +281,7 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
       updated_at: db.fn.now(),
     });
     invalidateUserCache(user.id);
-    await logAudit(null, 'password_reset_completed', 'user', user.id, undefined, { via: 'sms_code' });
+    await logAudit(req as AuthRequest, 'password_reset_completed', 'user', user.id, undefined, { via: 'sms_code' });
     await notify({ userId: user.id }, 'Password reset', 'Your password was reset using an SMS code. If this wasn\'t you, contact an administrator.', { type: 'security' });
 
     res.json({ message: 'Password reset successful' });
