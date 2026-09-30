@@ -566,7 +566,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                   <DialogTrigger asChild><Button className="bg-[#141414] text-white rounded-xl gap-2 font-bold px-6"><Plus className="w-4 h-4" /> Register contract</Button></DialogTrigger>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
                     <form onSubmit={handleRegisterContract}>
-                      <DialogHeader className="p-8 bg-blue-50"><DialogTitle>New Service Contract</DialogTitle></DialogHeader>
+                      <DialogHeader className="p-8 pr-14 bg-blue-50"><DialogTitle>New Service Contract</DialogTitle></DialogHeader>
                       <div className="p-8 space-y-4">
                         <div className="grid gap-2"><Label className="font-bold text-xs uppercase text-[#8E9299]">Contract Heading</Label><Input name="name" required className="h-12 bg-[#F5F5F5] border-none rounded-xl" /></div>
                         <div className="grid gap-2">
@@ -591,14 +591,14 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader><TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none"><TableHead className="font-bold">Contract Ref</TableHead><TableHead className="font-bold">Project</TableHead><TableHead className="font-bold">Value</TableHead><TableHead className="font-bold">Retention ({currSym})</TableHead><TableHead className="font-bold">Status</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none"><TableHead className="font-bold">Contract Ref</TableHead><TableHead className="font-bold">Project</TableHead><TableHead className="font-bold text-right">Value</TableHead><TableHead className="font-bold text-right">Retention ({currSym})</TableHead><TableHead className="font-bold">Status</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {paginated.map(c => (
                         <TableRow key={c.id} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
                           <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
                           <TableCell className="font-medium">{c.project_name}</TableCell>
-                          <TableCell className="font-bold text-[#141414]">{money(Number(c.value))}</TableCell>
-                          <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{money(Number(c.retention_amount))}</TableCell>
+                          <TableCell className="font-bold text-[#141414] text-right">{money(Number(c.value))}</TableCell>
+                          <TableCell className="text-[#8E9299] underline decoration-dotted font-medium text-right">{money(Number(c.retention_amount))}</TableCell>
                           <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
                         </TableRow>
                       ))}
@@ -630,10 +630,10 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50 border-none">
                         <TableHead className="font-bold">Project</TableHead>
                         <TableHead className="font-bold">Completion %</TableHead>
-                        <TableHead className="font-bold">Cost to Date</TableHead>
-                        <TableHead className="font-bold">Earned Revenue</TableHead>
-                        <TableHead className="font-bold">Billed Revenue</TableHead>
-                        <TableHead className="font-bold">Received</TableHead>
+                        <TableHead className="font-bold text-right">Cost to Date</TableHead>
+                        <TableHead className="font-bold text-right">Earned Revenue</TableHead>
+                        <TableHead className="font-bold text-right">Billed Revenue</TableHead>
+                        <TableHead className="font-bold text-right">Received</TableHead>
                         <TableHead className="text-right font-bold">Net Position</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -652,10 +652,10 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                             </div>
                             <p className="text-[10px] text-[#8E9299] mt-1">{w.poc_basis === 'reported' ? 'Reported' : 'Cost-based'}</p>
                           </TableCell>
-                          <TableCell className="font-medium text-[#141414]">{money(Number(w.actual_cost))}</TableCell>
-                          <TableCell className="font-medium text-[#141414]">{money(Number(w.earned_revenue))}</TableCell>
-                          <TableCell className="font-medium text-[#141414]">{money(Number(w.billed_revenue))}</TableCell>
-                          <TableCell className="font-medium text-green-600">{money(Number(w.paid_revenue || 0))}</TableCell>
+                          <TableCell className="font-medium text-[#141414] text-right">{money(Number(w.actual_cost))}</TableCell>
+                          <TableCell className="font-medium text-[#141414] text-right">{money(Number(w.earned_revenue))}</TableCell>
+                          <TableCell className="font-medium text-[#141414] text-right">{money(Number(w.billed_revenue))}</TableCell>
+                          <TableCell className="font-medium text-green-600 text-right">{money(Number(w.paid_revenue || 0))}</TableCell>
                           <TableCell className="text-right">
                             <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
                               {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
@@ -695,7 +695,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
             </DialogTrigger>
             <DialogContent className="max-w-2xl bg-white border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
               <form onSubmit={handleCreateProject}>
-                <DialogHeader className="p-8 bg-blue-50">
+                <DialogHeader className="p-8 pr-14 bg-blue-50">
                   <DialogTitle className="text-2xl font-bold text-blue-900 leading-none">New Project Charter</DialogTitle>
                   <DialogDescription className="text-blue-700 mt-2">Establish baseline constraints and fiscal budget.</DialogDescription>
                 </DialogHeader>

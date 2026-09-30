@@ -3,6 +3,7 @@ import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
+import { AmountInput } from '../../ui/amount-input';
 import { Label } from '../../ui/label';
 import { Textarea } from '../../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../ui/dialog';
@@ -92,10 +93,10 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
   const field = 'bg-[#F5F5F5] border-none';
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl max-w-2xl">
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Correct {label}</DialogTitle>
+            <DialogTitle className="break-words">Correct {label}</DialogTitle>
             <DialogDescription>
               Change what is wrong and say why. An admin reviews the change; once approved, the original posting is reversed and the corrected one is posted. Until then nothing changes.
             </DialogDescription>
@@ -103,7 +104,7 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
 
           {isBill ? (
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Supplier</Label>
                   <Select value={form.supplier_id} onValueChange={(v) => set({ supplier_id: v })}>
@@ -121,16 +122,16 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <div className="space-y-2"><Label>Quantity</Label><Input type="number" min="0.01" step="any" required value={form.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value })} className={field} /></div>
-                <div className="space-y-2"><Label>Unit price</Label><Input type="number" min="0" step="0.01" required value={form.unit_price ?? ''} onChange={(e) => set({ unit_price: e.target.value })} className={field} /></div>
-                <div className="space-y-2"><Label>Total ({currSym})</Label><Input readOnly value={billTotal.toFixed(2)} className="bg-blue-50 border-none font-bold" /></div>
+                <div className="space-y-2"><Label>Unit price</Label><AmountInput value={form.unit_price} onValueChange={(v) => set({ unit_price: v })} className={`${field} text-right`} /></div>
+                <div className="space-y-2 col-span-2 sm:col-span-1"><Label>Total</Label><Input readOnly value={money(billTotal)} className="bg-blue-50 border-none font-bold text-right tabular-nums" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label>Bill date</Label><Input type="date" required value={form.date || ''} onChange={(e) => set({ date: e.target.value })} className={field} /></div>
                 <div className="space-y-2"><Label>Due date</Label><Input type="date" value={form.due_date || ''} onChange={(e) => set({ due_date: e.target.value })} className={field} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label>Category</Label><Input value={form.category || ''} onChange={(e) => set({ category: e.target.value })} className={field} /></div>
                 <div className="space-y-2"><Label>Supplier invoice no.</Label><Input value={form.reference || ''} onChange={(e) => set({ reference: e.target.value })} className={field} /></div>
               </div>
@@ -144,11 +145,11 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2"><Label>Description</Label><Input value={form.description || ''} onChange={(e) => set({ description: e.target.value })} className={field} /></div>
+              <div className="space-y-2"><Label>Description</Label><Textarea rows={2} value={form.description || ''} onChange={(e) => set({ description: e.target.value })} className={`${field} min-h-[44px]`} /></div>
             </div>
           ) : (
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label>Client</Label><Input required value={form.client || ''} onChange={(e) => set({ client: e.target.value })} className={field} /></div>
                 <div className="space-y-2">
                   <Label>Project</Label>
@@ -161,24 +162,26 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label>Invoice date</Label><Input type="date" required value={form.date || ''} onChange={(e) => set({ date: e.target.value })} className={field} /></div>
                 <div className="space-y-2"><Label>Due date</Label><Input type="date" value={form.dueDate || ''} onChange={(e) => set({ dueDate: e.target.value })} className={field} /></div>
               </div>
               <div className="space-y-2">
                 <Label>Line items</Label>
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-1 text-[10px] font-bold uppercase tracking-wider text-[#8E9299]">
+                  <div className="col-span-6">Description</div>
+                  <div className="col-span-2 text-right">Qty</div>
+                  <div className="col-span-3 text-right">Unit price</div>
+                </div>
                 {items.map((it, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2">
-                    <Input className={`col-span-6 ${field}`} placeholder="Description" value={it.description} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, description: e.target.value } : x)))} />
-                    <Input className={`col-span-2 ${field}`} type="number" step="any" min="0" placeholder="Qty" value={it.quantity} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))} />
-                    <Input className={`col-span-3 ${field}`} type="number" step="0.01" min="0" placeholder="Unit price" value={it.unitPrice} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, unitPrice: Number(e.target.value) } : x)))} />
-                    <Button type="button" variant="ghost" size="icon" className="col-span-1 text-red-500" disabled={items.length <= 1} onClick={() => setItems(items.filter((_, i) => i !== idx))}><Trash2 className="w-4 h-4" /></Button>
+                  <div key={idx} className="grid grid-cols-6 sm:grid-cols-12 gap-2">
+                    <Input className={`col-span-6 ${field}`} placeholder="Description" title={it.description} value={it.description} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, description: e.target.value } : x)))} />
+                    <Input className={`col-span-2 text-right ${field}`} type="number" step="any" min="0" placeholder="Qty" aria-label={`Line ${idx + 1} quantity`} value={it.quantity} onChange={(e) => setItems(items.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))} />
+                    <AmountInput className={`col-span-3 text-right ${field}`} placeholder="Unit price" aria-label={`Line ${idx + 1} unit price`} value={it.unitPrice} onValueChange={(v) => setItems(items.map((x, i) => (i === idx ? { ...x, unitPrice: v } : x)))} />
+                    <Button type="button" variant="ghost" size="icon" className="col-span-1 w-full text-red-500" aria-label={`Remove line ${idx + 1}`} title="Remove line" disabled={items.length <= 1} onClick={() => setItems(items.filter((_, i) => i !== idx))}><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 ))}
-                <div className="flex justify-between items-center">
-                  <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={() => setItems([...items, { description: '', quantity: 1, unitPrice: 0 }])}><Plus className="w-4 h-4" /> Add line</Button>
-                  <span className="text-xs font-bold text-[#8E9299]">Subtotal {money(invoiceSubtotal)}</span>
-                </div>
+                <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={() => setItems([...items, { description: '', quantity: 1, unitPrice: 0 }])}><Plus className="w-4 h-4" /> Add line</Button>
               </div>
               <label className="flex items-center gap-2 text-sm font-medium">
                 <input type="checkbox" checked={!!form.apply_tax} onChange={(e) => set({ apply_tax: e.target.checked })} />
@@ -191,8 +194,12 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
             <Label>Reason for the correction <span className="text-red-500">*</span></Label>
             <Textarea required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong supplier selected; amount keyed as 12,000 instead of 1,200" className={field} />
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={saving} className="w-full bg-[#141414] text-white h-11 font-bold">
+          <DialogFooter className="-mx-6 -mb-6 px-6 py-4 border-t border-slate-100 sm:items-center sm:justify-between">
+            <div className="text-sm">
+              <span className="text-[#8E9299] font-medium">{isBill ? 'Bill total' : 'Subtotal before tax'} </span>
+              <span className="font-black text-[#141414] whitespace-nowrap tabular-nums">{money(isBill ? billTotal : invoiceSubtotal)}</span>
+            </div>
+            <Button type="submit" disabled={saving} className="w-full sm:w-auto sm:px-8 bg-[#141414] text-white h-11 font-bold">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SEND FOR APPROVAL'}
             </Button>
           </DialogFooter>

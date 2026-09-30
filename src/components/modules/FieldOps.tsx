@@ -491,7 +491,7 @@ export default function FieldOps() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-none shadow-2xl rounded-2xl p-0">
               <form onSubmit={handleSubmitReport}>
-                <DialogHeader className="p-8 bg-blue-50/50">
+                <DialogHeader className="p-8 pr-14 bg-blue-50/50">
                   <DialogTitle className="text-2xl font-bold">Daily Site Log</DialogTitle>
                   <DialogDescription>
                     Record progress and site conditions. Location and photos are optional.

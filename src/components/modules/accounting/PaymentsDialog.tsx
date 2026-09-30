@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
+import { AmountInput } from '../../ui/amount-input';
 import { Label } from '../../ui/label';
 import { Badge } from '../../ui/badge';
 import { Textarea } from '../../ui/textarea';
@@ -90,7 +91,7 @@ export default function PaymentsDialog({ target, bankAccounts, currSym, onClose,
 
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="rounded-2xl max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl max-w-3xl">
         <DialogHeader>
           <DialogTitle>Payments on {target.label}</DialogTitle>
           <DialogDescription>
@@ -111,17 +112,17 @@ export default function PaymentsDialog({ target, bankAccounts, currSym, onClose,
               return (
                 <div key={p.id} className={`rounded-xl border border-[#F5F5F5] p-4 ${isVoid ? 'opacity-60' : ''}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-[#141414]">
+                    <div className="min-w-0">
+                      <p className="font-bold text-[#141414] break-words">
                         {p.payment_id} <span className="text-[#8E9299] font-medium">· {formatDate(p.date)} · {p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
                       </p>
-                      <p className="text-sm font-black">
-                        {money(p.amount)}
+                      <p className="text-sm font-black tabular-nums">
+                        <span className="whitespace-nowrap">{money(p.amount)}</span>
                         {Number(p.wht_amount || 0) > 0 && <span className="ml-2 text-xs font-medium text-[#8E9299]">incl. WHT {money(p.wht_amount)} ({Number(p.wht_rate)}%)</span>}
                       </p>
                       {isVoid && p.void_reason && <p className="text-xs text-[#8E9299]">Voided: {p.void_reason}</p>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {isVoid && <Badge className="bg-gray-100 text-gray-600 border-none font-bold">VOIDED</Badge>}
                       {isCredit && <Badge className="bg-purple-100 text-purple-700 border-none font-bold">CREDIT NOTE</Badge>}
                       {p.pending_request && <Badge className="bg-yellow-100 text-yellow-700 border-none font-bold">{p.pending_request.action === 'void' ? 'VOID PENDING' : 'CORRECTION PENDING'}</Badge>}
@@ -138,12 +139,12 @@ export default function PaymentsDialog({ target, bankAccounts, currSym, onClose,
                     <div className="mt-4 space-y-3 border-t border-[#F5F5F5] pt-4">
                       {editing!.mode === 'correct' && (
                         <>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="space-y-1"><Label className="text-xs">Amount (gross)</Label><Input type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => set({ amount: e.target.value })} className={field} /></div>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1"><Label className="text-xs">Amount (gross)</Label><AmountInput value={form.amount} onValueChange={(v) => set({ amount: v })} className={`${field} text-right`} /></div>
                             <div className="space-y-1"><Label className="text-xs">Date</Label><Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} className={field} /></div>
                             <div className="space-y-1"><Label className="text-xs">WHT %</Label><Input type="number" step="0.01" min="0" value={form.wht_rate} onChange={(e) => set({ wht_rate: e.target.value })} className={field} /></div>
                           </div>
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid gap-3 sm:grid-cols-3">
                             <div className="space-y-1">
                               <Label className="text-xs">Method</Label>
                               <Select value={form.method} onValueChange={(v) => set({ method: v })}>
@@ -167,7 +168,7 @@ export default function PaymentsDialog({ target, bankAccounts, currSym, onClose,
                         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} className={field}
                           placeholder={editing!.mode === 'void' ? 'e.g. Payment recorded against the wrong bill' : 'e.g. Amount keyed wrongly; bank statement shows 4,500'} />
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col-reverse gap-2 sm:flex-row">
                         <Button className={`flex-1 h-10 font-bold text-white ${editing!.mode === 'void' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#141414]'}`} disabled={saving} onClick={() => submit(p)}>
                           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editing!.mode === 'void' ? 'REQUEST VOID' : 'SEND CORRECTION FOR APPROVAL'}
                         </Button>

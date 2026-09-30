@@ -40,6 +40,8 @@ import {
 } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
+import { AmountInput } from '../ui/amount-input';
 import {
   Table,
   TableBody,
@@ -120,19 +122,22 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full justify-between bg-[#F5F5F5] border-none h-12 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80 text-[#141414] transition-all"
-        >
-          <span className="truncate">
-            {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
-          </span>
-          <ChevronsUpDown className={`ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            title={selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : undefined}
+            className="w-full min-w-0 justify-between bg-[#F5F5F5] border-none h-11 rounded-xl font-bold text-left px-4 hover:bg-[#F5F5F5]/80 text-[#141414] transition-all"
+          />
+        }
+      >
+        <span className="truncate">
+          {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
+        </span>
+        <ChevronsUpDown className={`ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#F5F5F5] z-[1000] overflow-hidden" align="start">
+      <PopoverContent className="p-0 gap-0 w-[max(var(--anchor-width),18rem)] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#F5F5F5] z-[1000] overflow-hidden" align="start">
         <div className="flex items-center border-b border-[#F5F5F5] px-3 sticky top-0 bg-white z-10">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-[#8E9299]" />
           <input
@@ -1155,7 +1160,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                      <div className="grid gap-4 py-4">
                        <div className="space-y-2"><Label>Bank Name</Label><Input name="bank_name" required className="bg-[#F5F5F5] border-none h-11" placeholder="e.g. Standard Chartered"/></div>
                        <div className="space-y-2"><Label>Account Name</Label><Input name="account_name" required className="bg-[#F5F5F5] border-none h-11" /></div>
-                       <div className="grid grid-cols-2 gap-4">
+                       <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Account Number</Label><Input name="account_number" required className="bg-[#F5F5F5] border-none h-11" /></div>
                           <div className="space-y-2">
                             <Label>Account Type</Label>
@@ -1309,16 +1314,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             triggerClassName="bg-[#F5F5F5] border-none"
                           />
                         </div>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-3">
                           <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
-                          <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
-                          <div className="space-y-2"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
+                          <div className="space-y-2"><Label>Unit Price</Label><AmountInput required value={billUnitPrice} onValueChange={setBillUnitPrice} className="bg-[#F5F5F5] border-none text-right" /><input type="hidden" name="unit_price" value={billUnitPrice} /></div>
+                          <div className="space-y-2 col-span-full sm:col-span-1"><Label>Total Amount ({currSym})</Label><Input type="number" name="amount" required readOnly value={(billQuantity * billUnitPrice).toFixed(2)} className="bg-blue-50 border-none font-bold text-lg text-blue-900" /></div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Bill Date</Label><Input type="date" name="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
                           <div className="space-y-2"><Label>Supplier Invoice No.</Label><Input name="reference" placeholder="Optional" className="bg-[#F5F5F5] border-none" /></div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Due Date</Label><Input type="date" name="due_date" required className="bg-[#F5F5F5] border-none" /></div>
                           <div className="space-y-2">
                             <Label>Project Assignment</Label>
@@ -1423,7 +1428,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <form onSubmit={handleRecordPayment}>
                   <DialogHeader><DialogTitle>Process Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Amount Settled (gross)</Label>
                         <Input 
@@ -1441,7 +1446,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Withholding Tax</Label>
                         <Select name="wht_rate" value={billPaymentWhtRate} onValueChange={setBillPaymentWhtRate}>
@@ -1496,7 +1501,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 </DialogHeader>
                 {selectedBill && (
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-[#8E9299]">Supplier</Label>
                         <div className="p-3 bg-[#F5F5F5] rounded-xl font-bold">{selectedBill.supplier_name}</div>
@@ -1506,7 +1511,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <div className="p-3 bg-[#F5F5F5] rounded-xl font-medium">{selectedBill.category}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-[#8E9299]">Amount</Label>
                         <div className="p-3 bg-red-50 rounded-xl font-black text-red-600">{money(Number(selectedBill.amount))}</div>
@@ -1516,7 +1521,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <div className="p-3 bg-[#F5F5F5] rounded-xl font-mono">{new Date(selectedBill.due_date).toLocaleDateString()}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-[#8E9299]">Status</Label>
                         <Badge className={
@@ -1629,11 +1634,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Button variant="outline" className="gap-2 rounded-xl font-bold" onClick={() => handleExportCSV('accounts_receivable', ['Invoice No', 'Customer', 'Invoice Date', 'Due Date', 'Amount', 'Paid', 'Credited', 'Balance Due', 'Status'], invoices.map((inv: any) => [inv.id, inv.client, formatDate(inv.date || inv.created_at), formatDate(inv.dueDate), Number(inv.amount).toFixed(2), Number(inv.paid_amount || 0).toFixed(2), Number(inv.credited_amount || 0).toFixed(2), Number(inv.balance_due || 0).toFixed(2), inv.status]))}><FileSpreadsheet className="w-4 h-4" /> Export CSV</Button>
                 <Dialog open={isCreateInvoiceOpen} onOpenChange={setIsCreateInvoiceOpen}>
                   <DialogTrigger asChild><Button className="bg-blue-600 text-white gap-2 font-bold h-11 px-6 rounded-xl shadow-lg shadow-blue-500/20"><Plus className="w-4 h-4" /> Raise Sales Invoice</Button></DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] rounded-2xl">
+                  <DialogContent className="max-w-2xl rounded-2xl">
                     <form onSubmit={handleCreateInvoice}>
                       <DialogHeader><DialogTitle>New Sales Invoice</DialogTitle><DialogDescription>The invoice number is assigned automatically when it is posted.</DialogDescription></DialogHeader>
-                      <div className="grid gap-6 py-4 overflow-y-auto max-h-[calc(90vh-180px)] pr-2">
-                        <div className="grid grid-cols-3 gap-4">
+                      <div className="grid gap-6 py-4">
+                        <div className="grid gap-4 sm:grid-cols-3">
                           <div className="space-y-2">
                             <Label>Project / Client</Label>
                             <Select name="project_id" required>
@@ -1652,16 +1657,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               <Plus className="w-3 h-3 mr-1" /> Add New Row
                             </Button>
                           </div>
-                          <div className="grid grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase text-[#8E9299]">
-                            <div className="col-span-6">Description</div>
+                          <div className="hidden sm:grid grid-cols-12 gap-2 px-3 text-[10px] font-black uppercase text-[#8E9299]">
+                            <div className="col-span-5">Description</div>
                             <div className="col-span-2 text-center">Qty</div>
                             <div className="col-span-2 text-right">Price</div>
                             <div className="col-span-2 text-right">Total</div>
                           </div>
-                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                          <div className="space-y-2">
                             {invoiceItems.map((item, idx) => (
                               <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#F5F5F5]/50 p-2 rounded-xl border border-[#F5F5F5]">
-                                <div className="col-span-6 space-y-1">
+                                <div className="col-span-12 sm:col-span-5 min-w-0 space-y-1">
                                   {services.length > 0 && (
                                     <Select
                                       value={item.service_id ? String(item.service_id) : ''}
@@ -1693,10 +1698,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                     className="bg-white border-none h-9 rounded-lg text-xs"
                                   />
                                 </div>
-                                <div className="col-span-2">
+                                <div className="col-span-3 sm:col-span-2">
                                   <Input
                                     type="number"
                                     step="any"
+                                    aria-label={`Line ${idx + 1} quantity`}
                                     value={item.quantity}
                                     onChange={(e) => {
                                       const newItems = [...invoiceItems];
@@ -1707,21 +1713,19 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                     className="bg-white border-none h-9 rounded-lg text-xs text-center"
                                   />
                                 </div>
-                                <div className="col-span-2">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
+                                <div className="col-span-4 sm:col-span-2">
+                                  <AmountInput
+                                    aria-label={`Line ${idx + 1} unit price`}
                                     value={item.unitPrice}
-                                    onChange={(e) => {
+                                    onValueChange={(v) => {
                                       const newItems = [...invoiceItems];
-                                      newItems[idx] = { ...newItems[idx], unitPrice: Number(e.target.value) };
+                                      newItems[idx] = { ...newItems[idx], unitPrice: v };
                                       setInvoiceItems(newItems);
                                     }}
-                                    required
                                     className="bg-white border-none h-9 rounded-lg text-xs text-right"
                                   />
                                 </div>
-                                <div className="col-span-1 text-right font-bold text-xs text-[#141414]">
+                                <div className="col-span-4 sm:col-span-2 text-right font-bold text-xs text-[#141414] whitespace-nowrap tabular-nums">
                                   {fmtMoney(item.quantity * item.unitPrice)}
                                 </div>
                                 <div className="col-span-1 flex justify-end">
@@ -1730,6 +1734,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
+                                    aria-label={`Remove line ${idx + 1}`}
+                                    title="Remove line"
                                     onClick={() => {
                                       if (invoiceItems.length > 1) {
                                         setInvoiceItems(invoiceItems.filter((_, i) => i !== idx));
@@ -1775,7 +1781,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             <p className="text-sm font-bold text-slate-800">Record initial payment</p>
                             <p className="text-xs text-slate-500">Optional: capture the first payment when raising the invoice.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                               <Label>Amount Received</Label>
                               <Input name="initial_payment" type="number" min="0" step="0.01" defaultValue={0} className="bg-white border-slate-200" />
@@ -1794,7 +1800,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             </div>
                           </div>
                           {paymentMethod !== 'Cash' && (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
                               <div className="space-y-2">
                                 <Label>Destination Bank Account</Label>
                                 <Select name="payment_bank_account_id">
@@ -1889,11 +1895,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <form onSubmit={handleRecordPayment}>
                   <DialogHeader><DialogTitle>Receive Payment</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2"><Label>Amount Settled (gross)</Label><Input name="amount" type="number" step="0.01" defaultValue={selectedTarget?.balance_due ?? selectedTarget?.amount} max={selectedTarget?.balance_due ?? selectedTarget?.amount} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2"><Label>Date Received</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Deposit Method</Label>
                         <Select name="method" required onValueChange={setPaymentMethod}>
@@ -1937,7 +1943,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <DialogDescription>Reduces what {creditNoteTarget?.client} owes. Revenue and output taxes are reversed in proportion to the original invoice. An admin must approve it before it posts.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2"><Label>Amount (incl. tax)</Label><Input name="amount" type="number" step="0.01" min="0.01" max={creditNoteTarget?.balance_due} defaultValue={creditNoteTarget?.balance_due} required className="bg-[#F5F5F5] border-none font-bold" /></div>
                       <div className="space-y-2"><Label>Date</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
                     </div>
@@ -2506,12 +2512,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             </div>
 
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h2 className="text-xl font-bold">Chart of Accounts</h2>
                 <p className="text-sm text-[#8E9299]">{filteredCOA.length} accounts {coaFilter !== 'All' ? `(${coaFilter})` : ''}</p>
               </div>
-              <div className="flex gap-2 flex-1 max-w-md ml-8">
+              <div className="flex gap-2 flex-1 basis-full md:basis-auto max-w-full md:max-w-md md:ml-8 order-last md:order-none">
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E9299]" />
                   <Input 
@@ -2543,12 +2549,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         toast.error(errorText(error, 'Failed to create account'));
                       }
                     }}>
-                      <DialogHeader className="p-8 bg-blue-50">
+                      <DialogHeader className="p-8 pr-14 bg-blue-50">
                         <DialogTitle className="text-2xl font-bold text-blue-900">Register Ledger Account</DialogTitle>
                         <DialogDescription className="text-blue-700">Add a new account to your Chart of Accounts.</DialogDescription>
                       </DialogHeader>
                       <div className="p-8 space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-3">
                           <div className="space-y-2">
                             <Label className="font-bold text-xs uppercase text-[#8E9299]">Code</Label>
                             <Input name="code" placeholder="e.g. 5200" required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-mono font-bold text-lg" />
@@ -2583,12 +2589,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Dialog open={isEditAccountOpen} onOpenChange={setIsEditAccountOpen}>
                   <DialogContent className="rounded-3xl border-none shadow-2xl overflow-hidden p-0">
                     <form onSubmit={handleUpdateAccount}>
-                      <DialogHeader className="p-8 bg-blue-50">
+                      <DialogHeader className="p-8 pr-14 bg-blue-50">
                         <DialogTitle className="text-2xl font-bold text-blue-900">Edit Ledger Account</DialogTitle>
                         <DialogDescription className="text-blue-700">Update account details.</DialogDescription>
                       </DialogHeader>
                       <div className="p-8 space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-3">
                           <div className="space-y-2">
                             <Label className="font-bold text-xs uppercase text-[#8E9299]">Code</Label>
                             <Input name="code" defaultValue={selectedTarget?.code} required className="h-12 bg-[#F5F5F5] border-none rounded-xl font-mono font-bold text-lg" />
@@ -2759,7 +2765,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label className="font-bold text-xs uppercase text-[#8E9299]">Tax ID / TIN</Label>
                       <Input 
@@ -2853,12 +2859,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               {/* Opening Balances Tool */}
               <Card className="col-span-1 md:col-span-2 border-none shadow-sm rounded-2xl overflow-hidden">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2">
                       <Calculator className="w-5 h-5 text-blue-600" /> Opening Balances
                     </CardTitle>
-                    <div className="flex items-center gap-4">
-                      <div className="flex gap-6 text-sm">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm whitespace-nowrap tabular-nums">
                         <div className="text-center">
                           <p className="text-[10px] font-black uppercase text-[#8E9299]">Assets</p>
                           <p className="font-black text-green-600">{money(Object.entries(openingBalances).reduce((sum, [id, bal]) => {
@@ -2881,7 +2887,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }, 0))}</p>
                         </div>
                       </div>
-                      <div className="relative ml-4">
+                      <div className="relative sm:ml-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8E9299]" />
                         <Input 
                           placeholder="Find account..." 
@@ -2926,27 +2932,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     };
                     return (
                       <div key={type}>
-                        <div className={`${typeColor[type]} text-white px-8 py-3 flex items-center justify-between`}>
+                        <div className={`${typeColor[type]} text-white px-4 sm:px-8 py-3 flex items-center justify-between`}>
                           <span className="text-xs font-black uppercase tracking-widest">{type} Accounts</span>
                           <span className="text-xs font-bold opacity-80">{accounts.length} accounts</span>
                         </div>
                         <div className="divide-y divide-[#F5F5F5]">
                           {accounts.map(a => (
-                            <div key={a.id} className="flex items-center gap-4 px-8 py-3 hover:bg-[#F5F5F5]/30 transition-colors">
-                              <span className="font-mono text-xs font-bold text-blue-600 w-16">{a.code}</span>
-                              <span className="flex-1 font-bold text-[#141414] text-sm">{a.name}</span>
-                              <div className="flex items-center gap-2">
+                            <div key={a.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 sm:px-8 py-3 hover:bg-[#F5F5F5]/30 transition-colors">
+                              <span className="font-mono text-xs font-bold text-blue-600 w-12 sm:w-16 shrink-0">{a.code}</span>
+                              <span className="flex-1 min-w-0 truncate font-bold text-[#141414] text-sm" title={a.name}>{a.name}</span>
+                              <div className="flex items-center gap-2 ml-auto">
                                 <span className="text-xs text-[#8E9299] font-bold">{currSym}</span>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={openingBalances[String(a.id)] || ''}
-                                  onChange={(e) => setOpeningBalances({
+                                <AmountInput
+                                  aria-label={`Opening balance for ${a.code} ${a.name}`}
+                                  value={openingBalances[String(a.id)]}
+                                  onValueChange={(v) => setOpeningBalances({
                                     ...openingBalances,
-                                    [String(a.id)]: Number(e.target.value)
+                                    [String(a.id)]: v
                                   })}
-                                  className="w-40 h-10 bg-[#F5F5F5] border-none rounded-xl font-bold text-right text-sm"
-                                  placeholder="0.00"
+                                  className="w-36 sm:w-40 h-10 bg-[#F5F5F5] border-none rounded-xl font-bold text-right text-sm"
                                 />
                               </div>
                             </div>
@@ -2956,12 +2960,12 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     );
                   })}
                 </CardContent>
-                <div className="p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] flex items-center justify-between">
+                <div className="p-4 sm:p-6 bg-[#F5F5F5]/30 border-t border-[#F5F5F5] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <p className="text-xs text-[#8E9299] font-medium">
                     The previous opening balance journal is replaced when you post.
                   </p>
                   <Button
-                    className="bg-blue-600 text-white rounded-xl px-10 h-12 font-black shadow-lg shadow-blue-500/20 gap-2"
+                    className="w-full sm:w-auto bg-blue-600 text-white rounded-xl px-10 h-12 font-black shadow-lg shadow-blue-500/20 gap-2"
                     disabled={isSaving}
                     onClick={async () => {
                       if (!obDate) {
@@ -3057,7 +3061,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       {/* Drill-down Modal */}
       <Dialog open={isPeriodBankDetailsOpen} onOpenChange={setIsPeriodBankDetailsOpen}>
         <DialogContent className="max-w-4xl rounded-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl">
-          <DialogHeader className="p-8 bg-blue-600 text-white rounded-t-2xl">
+          <DialogHeader className="p-8 pr-14 bg-blue-600 text-white rounded-t-2xl">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-white/10 rounded-2xl">
@@ -3379,7 +3383,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Label>Description</Label>
                 <Input name="description" defaultValue={selectedBankTx?.description} required className="bg-[#F5F5F5] border-none" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Amount</Label>
                   <Input name="amount" type="number" step="0.01" defaultValue={selectedBankTx?.amount} required className="bg-[#F5F5F5] border-none" />
@@ -3405,126 +3409,137 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
       {/* Global Journal Entry Modal */}
       <Dialog open={isJournalOpen} onOpenChange={setIsJournalOpen} modal={false}>
-        <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl">
+        <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl p-0 gap-0">
           <form onSubmit={handlePostJournal} key={journalFormKey}>
-            <DialogHeader className="bg-[#F5F5F5]/30 p-6 border-b border-[#F5F5F5]">
-              <DialogTitle className="text-2xl font-black text-[#141414]">{editingJournalId ? `Correct Journal #${editingJournalId}` : 'Double-Entry Journal Post'}</DialogTitle>
-              <DialogDescription className="font-bold text-[#8E9299]">
+            <DialogHeader className="bg-[#F5F5F5]/60 px-6 py-5 pr-14 border-b border-[#F0F0F0]">
+              <DialogTitle className="text-xl sm:text-2xl font-black text-[#141414]">{editingJournalId ? `Correct Journal #${editingJournalId}` : 'Double-Entry Journal Post'}</DialogTitle>
+              <DialogDescription className="font-medium text-[#8E9299]">
                 {editingJournalId
                   ? 'Your correction goes to an admin. Once approved, the original entry is reversed and the corrected one is posted.'
                   : 'Maintain ledger integrity with balanced debits and credits.'}
               </DialogDescription>
             </DialogHeader>
-            <div className="p-8 space-y-8">
+            <div className="px-4 sm:px-6 py-6 space-y-6">
               {editingJournalId && (
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Reason for the correction <span className="text-red-500">*</span></Label>
-                  <Input name="correction_reason" required minLength={3} placeholder="e.g. Posted to the wrong expense account" className="h-12 bg-amber-50 border-none rounded-xl font-bold" />
+                  <Input name="correction_reason" required minLength={3} placeholder="e.g. Posted to the wrong expense account" className="h-11 bg-amber-50 border-none rounded-xl font-bold" />
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Post Date</Label>
-                  <Input type="date" name="date" required defaultValue={editingJournal?.date || todayIso()} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Reference / Description</Label>
-                  <Input name="description" placeholder="e.g. Accrued site rent" required defaultValue={editingJournal?.description || ''} className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                  <Input type="date" name="date" required defaultValue={editingJournal?.date || todayIso()} className="h-11 bg-[#F5F5F5] border-none rounded-xl font-bold" />
                 </div>
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Project (optional)</Label>
                   <Select name="project_id" defaultValue={editingJournal?.project_id ? String(editingJournal.project_id) : 'none'}>
-                    <SelectTrigger className="h-12 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 bg-[#F5F5F5] border-none rounded-xl font-bold"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No project</SelectItem>
                       {projects.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Reference / Description</Label>
+                  <Textarea name="description" placeholder="e.g. Accrued site rent" required rows={2} defaultValue={editingJournal?.description || ''} className="min-h-[44px] resize-y bg-[#F5F5F5] border-none rounded-xl font-bold" />
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-12 gap-4 px-2 text-[10px] font-black uppercase text-[#8E9299] tracking-widest">
-                  <div className="col-span-6">Target Account</div>
-                  <div className="col-span-3 text-right">Debit (+)</div>
-                  <div className="col-span-3 text-right">Credit (-)</div>
-                </div>
-                
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {journalItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-4 items-center animate-in fade-in slide-in-from-top-1">
-                      <div className="col-span-6">
-                        <AccountSelect
-                          value={String(item.account_id)}
-                          onValueChange={(val: string) => {
-                            const n = [...journalItems];
-                            n[idx].account_id = val;
-                            setJournalItems(n);
-                          }}
-                          accounts={coa}
-                          placeholder="Search account..."
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          value={item.debit || ''} 
-                          onChange={(e) => { const n = [...journalItems]; n[idx].debit = Number(e.target.value); setJournalItems(n); }} 
-                          className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-green-600 focus:ring-green-500" 
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          value={item.credit || ''} 
-                          onChange={(e) => { const n = [...journalItems]; n[idx].credit = Number(e.target.value); setJournalItems(n); }} 
-                          className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-red-600 focus:ring-red-500" 
-                        />
-                      </div>
-                    </div>
-                  ))}
+              <div className="space-y-3">
+                <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_140px_140px_36px] gap-3 px-1 text-[10px] font-black uppercase text-[#8E9299] tracking-widest">
+                  <div>Target Account</div>
+                  <div className="text-right">Debit (+)</div>
+                  <div className="text-right">Credit (-)</div>
+                  <div />
                 </div>
 
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])} 
-                  className="w-full border-2 border-dashed border-[#E4E3E0] text-[#8E9299] font-bold hover:bg-[#F5F5F5] hover:text-[#141414] rounded-2xl h-12 transition-all"
+                {journalItems.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_140px_140px_36px] gap-2 md:gap-3 items-center rounded-2xl md:rounded-none bg-[#FAFAFA] md:bg-transparent p-2 md:p-0">
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                      <AccountSelect
+                        value={String(item.account_id)}
+                        onValueChange={(val: string) => {
+                          const n = [...journalItems];
+                          n[idx].account_id = val;
+                          setJournalItems(n);
+                        }}
+                        accounts={coa}
+                        placeholder="Search account..."
+                      />
+                    </div>
+                    <AmountInput
+                      aria-label={`Line ${idx + 1} debit`}
+                      placeholder="Debit"
+                      value={item.debit}
+                      onValueChange={(v) => { const n = [...journalItems]; n[idx].debit = v; setJournalItems(n); }}
+                      className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-green-600 focus-visible:ring-green-500"
+                    />
+                    <AmountInput
+                      aria-label={`Line ${idx + 1} credit`}
+                      placeholder="Credit"
+                      value={item.credit}
+                      onValueChange={(v) => { const n = [...journalItems]; n[idx].credit = v; setJournalItems(n); }}
+                      className="h-11 bg-[#F5F5F5] border-none rounded-xl font-black text-right text-red-600 focus-visible:ring-red-500"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove line ${idx + 1}`}
+                      title="Remove line"
+                      disabled={journalItems.length <= 2}
+                      onClick={() => setJournalItems(journalItems.filter((_, i) => i !== idx))}
+                      className="col-span-2 md:col-span-1 h-9 w-full md:w-9 text-[#8E9299] hover:text-red-600 hover:bg-red-50 rounded-xl"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setJournalItems([...journalItems, { account_id: '', debit: 0, credit: 0 }])}
+                  className="w-full border-2 border-dashed border-[#E4E3E0] text-[#8E9299] font-bold hover:bg-[#F5F5F5] hover:text-[#141414] rounded-2xl h-11 transition-all"
                 >
                   + ADD LEDGER ENTRY LINE
                 </Button>
               </div>
             </div>
 
-            <DialogFooter className="bg-[#141414] p-8 -mx-0 rounded-b-2xl flex-col sm:flex-row gap-6 items-center">
-              <div className="flex-1 flex gap-8">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Debits</p>
-                  <p className="text-xl font-black text-green-400 font-mono">{money(journalItems.reduce((s, i) => s + i.debit, 0))}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Credits</p>
-                  <p className="text-xl font-black text-red-400 font-mono">{money(journalItems.reduce((s, i) => s + i.credit, 0))}</p>
-                </div>
-              </div>
-              <Button 
-                type="submit" 
-                className={`h-14 px-10 rounded-2xl font-black text-white shadow-xl transition-all ${
-                  Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) < 0.01
-                  ? 'bg-blue-600 hover:bg-blue-500 hover:scale-105'
-                  : 'bg-red-900/50 cursor-not-allowed opacity-50'
-                }`}
-                disabled={Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) > 0.01}
-              >
-                {Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) < 0.01 
-                  ? (editingJournalId ? 'SEND FOR APPROVAL' : 'AUTHORIZE & POST')
-                  : 'LEDGER UNBALANCED'}
-              </Button>
-            </DialogFooter>
+            {(() => {
+              const totalDebit = journalItems.reduce((s, i) => s + (Number(i.debit) || 0), 0);
+              const totalCredit = journalItems.reduce((s, i) => s + (Number(i.credit) || 0), 0);
+              const difference = totalDebit - totalCredit;
+              const balanced = Math.abs(difference) < 0.01;
+              const empty = totalDebit === 0 && totalCredit === 0;
+              return (
+                <DialogFooter className="bg-[#141414] px-4 sm:px-6 py-4 flex-col sm:flex-row gap-4 sm:items-center">
+                  <div className="flex-1 flex flex-wrap items-end gap-x-6 gap-y-2">
+                    <div>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Debits</p>
+                      <p className="text-lg font-black text-green-400 font-mono whitespace-nowrap">{money(totalDebit)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Credits</p>
+                      <p className="text-lg font-black text-red-400 font-mono whitespace-nowrap">{money(totalCredit)}</p>
+                    </div>
+                    <span role="status" className={`mb-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap ${empty ? 'bg-white/10 text-white/60' : balanced ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
+                      {empty ? 'Enter amounts' : balanced ? <><Check className="w-3.5 h-3.5" /> Balanced</> : `Out by ${money(Math.abs(difference))}`}
+                    </span>
+                  </div>
+                  <Button
+                    type="submit"
+                    className={`h-12 px-8 w-full sm:w-auto rounded-2xl font-black text-white shadow-xl transition-all ${balanced ? 'bg-blue-600 hover:bg-blue-500' : 'bg-white/10 cursor-not-allowed'}`}
+                    disabled={!balanced}
+                  >
+                    {balanced ? (editingJournalId ? 'SEND FOR APPROVAL' : 'AUTHORIZE & POST') : 'LEDGER UNBALANCED'}
+                  </Button>
+                </DialogFooter>
+              );
+            })()}
           </form>
         </DialogContent>
       </Dialog>

@@ -3,6 +3,7 @@ import { Edit, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
+import { AmountInput } from '../../ui/amount-input';
 import { Label } from '../../ui/label';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
@@ -161,15 +162,15 @@ export default function RecurringPanel({ coa, projects, currSym, onGenerated }: 
       </CardContent>
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-2xl max-w-2xl">
           <form onSubmit={save} key={formKey}>
             <DialogHeader>
               <DialogTitle>{editing?.id ? 'Edit recurring template' : 'New recurring template'}</DialogTitle>
               <DialogDescription>Items are created when you click "Generate due items"; missed periods are caught up.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1 col-span-2"><Label>Name</Label><Input name="name" required defaultValue={editing?.name || ''} placeholder="e.g. Office rent" className="bg-[#F5F5F5] border-none" /></div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1 sm:col-span-2"><Label>Name</Label><Input name="name" required defaultValue={editing?.name || ''} placeholder="e.g. Office rent" className="bg-[#F5F5F5] border-none" /></div>
                 <div className="space-y-1">
                   <Label>Type</Label>
                   <Select value={kind} onValueChange={(v) => setKind(v as 'journal' | 'bill')} disabled={!!editing?.id}>
@@ -178,7 +179,7 @@ export default function RecurringPanel({ coa, projects, currSym, onGenerated }: 
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label>Frequency</Label>
                   <Select name="frequency" defaultValue={editing?.frequency || 'monthly'}>
@@ -189,7 +190,7 @@ export default function RecurringPanel({ coa, projects, currSym, onGenerated }: 
                 <div className="space-y-1"><Label>Next date</Label><Input name="next_run_date" type="date" required defaultValue={editing?.next_run_date || todayIso()} className="bg-[#F5F5F5] border-none" /></div>
                 <div className="space-y-1"><Label>End date (optional)</Label><Input name="end_date" type="date" defaultValue={editing?.end_date || ''} className="bg-[#F5F5F5] border-none" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1"><Label>Description</Label><Input name="description" required={kind === 'journal'} defaultValue={editing?.payload?.description || ''} className="bg-[#F5F5F5] border-none" /></div>
                 <div className="space-y-1">
                   <Label>Project (optional)</Label>
@@ -202,26 +203,28 @@ export default function RecurringPanel({ coa, projects, currSym, onGenerated }: 
 
               {kind === 'journal' ? (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-12 gap-2 text-[10px] font-black uppercase text-[#8E9299]"><div className="col-span-6">Account</div><div className="col-span-3 text-right">Debit</div><div className="col-span-3 text-right">Credit</div></div>
+                  <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] font-black uppercase text-[#8E9299]"><div className="col-span-6">Account</div><div className="col-span-3 text-right">Debit</div><div className="col-span-3 text-right">Credit</div></div>
                   {lines.map((l, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2">
-                      <div className="col-span-6">
+                    <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2">
+                      <div className="col-span-2 sm:col-span-6 min-w-0">
                         <Select value={l.account_id} onValueChange={(v) => setLines(lines.map((x, i) => (i === idx ? { ...x, account_id: v } : x)))}>
                           <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="Account" /></SelectTrigger>
                           <SelectContent>{accountOptions()}</SelectContent>
                         </Select>
                       </div>
-                      <Input className="col-span-3 bg-[#F5F5F5] border-none text-right" type="number" step="0.01" value={l.debit || ''} onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, debit: Number(e.target.value) } : x)))} />
-                      <Input className="col-span-3 bg-[#F5F5F5] border-none text-right" type="number" step="0.01" value={l.credit || ''} onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, credit: Number(e.target.value) } : x)))} />
+                      <AmountInput className="sm:col-span-3 bg-[#F5F5F5] border-none text-right" placeholder="Debit" aria-label={`Line ${idx + 1} debit`} value={l.debit} onValueChange={(v) => setLines(lines.map((x, i) => (i === idx ? { ...x, debit: v } : x)))} />
+                      <AmountInput className="sm:col-span-3 bg-[#F5F5F5] border-none text-right" placeholder="Credit" aria-label={`Line ${idx + 1} credit`} value={l.credit} onValueChange={(v) => setLines(lines.map((x, i) => (i === idx ? { ...x, credit: v } : x)))} />
                     </div>
                   ))}
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-wrap justify-between items-center gap-2">
                     <Button type="button" variant="ghost" size="sm" onClick={() => setLines([...lines, { account_id: '', debit: 0, credit: 0 }])}>+ Add line</Button>
-                    <span className={`text-xs font-bold ${Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0 ? 'text-green-600' : 'text-red-600'}`}>Debits {fmtMoney(totalDebit)} / Credits {fmtMoney(totalCredit)}</span>
+                    <span role="status" className={`text-xs font-bold tabular-nums ${Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      Debits {fmtMoney(totalDebit)} / Credits {fmtMoney(totalCredit)} · {Math.abs(totalDebit - totalCredit) < 0.01 ? (totalDebit > 0 ? 'Balanced ✓' : 'Enter amounts') : `Out by ${fmtMoney(Math.abs(totalDebit - totalCredit))}`}
+                    </span>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label>Supplier</Label>
                     <Select name="supplier_id" required defaultValue={editing?.payload?.supplier_id ? String(editing.payload.supplier_id) : undefined}>
