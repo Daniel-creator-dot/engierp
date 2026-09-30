@@ -1,9 +1,11 @@
 import axios from 'axios';
 import db from '../db';
 
-function normalizePhone(phone: string): string {
+const DEFAULT_SMS_URL = 'https://sms.smsnotifygh.com/smsapi?key={key}&to={to}&msg={msg}&sender_id={sender}';
+
+export function normalizePhone(phone: string): string {
   // Remove all non-numeric characters
-  let clean = phone.replace(/\D/g, '');
+  let clean = String(phone || '').replace(/\D/g, '');
   
   // If it starts with 0 and has 10 digits (GH local format), replace 0 with 233
   if (clean.startsWith('0') && clean.length === 10) {
@@ -18,23 +20,45 @@ function normalizePhone(phone: string): string {
   return clean;
 }
 
-export async function sendSMS(to: string, message: string) {
+export interface SMSResult {
+  success: boolean;
+  disabled?: boolean;
+  error?: string;
+}
+
+// The API key comes from SMS_API_KEY on the host; a key saved by an admin in Settings is used
+// only when the env var is not set. Provider, URL and sender still come from Settings.
+async function resolveConfig() {
+  const row = await db('sms_configurations').first().catch(() => null);
+  const envKey = process.env.SMS_API_KEY?.trim();
+  const api_key = envKey || row?.api_key?.trim() || '';
+  return {
+    provider: row?.provider || 'Custom',
+    api_key,
+    api_secret: process.env.SMS_API_SECRET?.trim() || row?.api_secret?.trim() || '',
+    sender_id: process.env.SMS_SENDER_ID?.trim() || row?.sender_id?.trim() || '',
+    api_url: row?.api_url || process.env.SMS_API_URL || DEFAULT_SMS_URL,
+  };
+}
+
+export async function isSmsConfigured(): Promise<boolean> {
+  const config = await resolveConfig();
+  return !!config.api_key;
+}
+
+export async function sendSMS(to: string, message: string): Promise<SMSResult> {
   const normalizedTo = normalizePhone(to);
-  console.log(`[SMS Service] Sending to: ${normalizedTo} (Original: ${to})`);
 
   try {
-    const config = await db('sms_configurations').first();
+    const config = await resolveConfig();
 
-    if (!config || !config.api_key) {
-      console.warn('SMS not configured. Mocking output:');
-      console.log(`[SMS MOCK] To: ${normalizedTo}, Message: ${message}`);
-      return { success: true, mocked: true };
+    if (!config.api_key) {
+      console.warn(`[SMS Service] SMS disabled (no SMS_API_KEY and no key in Settings); message to ${normalizedTo} not sent.`);
+      return { success: false, disabled: true, error: 'SMS is not configured' };
     }
+    console.log(`[SMS Service] Sending to: ${normalizedTo}`);
 
-    const { provider, api_key: rawKey, api_secret: rawSecret, sender_id: rawSender } = config;
-    const api_key = rawKey?.trim() || '';
-    const api_secret = rawSecret?.trim() || '';
-    const sender_id = rawSender?.trim() || '';
+    const { provider, api_key, api_secret, sender_id } = config;
 
     if (provider === 'Hubtel') {
       // Hubtel modern API using POST for reliability
@@ -69,17 +93,17 @@ export async function sendSMS(to: string, message: string) {
       
       if (!hasPlaceholders && finalUrl.includes('smsnotifygh.com')) {
         const separator = finalUrl.includes('?') ? '&' : '?';
-        finalUrl = `${finalUrl}${separator}key=${api_key}&to=${normalizedTo}&msg=${encodeURIComponent(message)}&sender_id=${sender_id || ''}`;
+        finalUrl = `${finalUrl}${separator}key=${encodeURIComponent(api_key)}&to=${normalizedTo}&msg=${encodeURIComponent(message)}&sender_id=${encodeURIComponent(sender_id || '')}`;
       } else {
         // Standard placeholder replacement
         finalUrl = finalUrl
-          .replace('{key}', api_key)
+          .replace('{key}', encodeURIComponent(api_key))
           .replace('{to}', normalizedTo)
           .replace('{msg}', encodeURIComponent(message))
           .replace('{message}', encodeURIComponent(message))
-          .replace('{sender}', sender_id || '')
-          .replace('{sender_id}', sender_id || '')
-          .replace('{secret}', api_secret || '');
+          .replace('{sender}', encodeURIComponent(sender_id || ''))
+          .replace('{sender_id}', encodeURIComponent(sender_id || ''))
+          .replace('{secret}', encodeURIComponent(api_secret || ''));
       }
       
       console.log(`[SMS Service] Dispatching to custom URL: ${finalUrl.split('?')[0]}...`);
@@ -89,7 +113,7 @@ export async function sendSMS(to: string, message: string) {
       return { success: false, error: 'Unknown provider' };
     }
 
-    return { success: true, mocked: false };
+    return { success: true };
   } catch (error: any) {
     console.error('Error sending SMS:', error.response?.data || error.message);
     return { success: false, error: error.message };

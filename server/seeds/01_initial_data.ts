@@ -22,8 +22,8 @@ export async function seed(knex: Knex): Promise<void> {
 
   // Seed Users
   await knex("users").insert([
-    { email: 'admin@engierp.com', password: '$2b$10$/gjDIB.MDV4xYW1nM5NT2u3bp8kOoq6y6yNn.qLCjXXo2Q118kk4q', role: 'admin' },
-    { email: 'acc@engierp.com', password: '$2b$10$/gjDIB.MDV4xYW1nM5NT2u3bp8kOoq6y6yNn.qLCjXXo2Q118kk4q', role: 'accountant' },
+    { email: 'admin@engierp.com', password: '$2b$10$/gjDIB.MDV4xYW1nM5NT2u3bp8kOoq6y6yNn.qLCjXXo2Q118kk4q', role: 'admin', must_change_password: true },
+    { email: 'acc@engierp.com', password: '$2b$10$/gjDIB.MDV4xYW1nM5NT2u3bp8kOoq6y6yNn.qLCjXXo2Q118kk4q', role: 'accountant', must_change_password: true },
   ]);
 
   // Seed Projects

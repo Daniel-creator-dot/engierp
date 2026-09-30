@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
+import { logAudit } from '../lib/audit';
 
 const router = Router();
 
@@ -30,98 +30,51 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr', 'accountant'])
     } else {
       await db('settings').insert({ key, value });
     }
+    await logAudit(req, 'setting_updated', 'setting', key, existing ? { value: existing.value } : undefined, { value });
     res.json({ message: 'Setting updated' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating setting' });
   }
 });
 
-// User Management
-router.get('/users', authenticateToken, authorizeRole(['admin', 'hr']), async (req, res) => {
-  try {
-    const users = await db('users').select('id', 'email', 'role', 'phone', 'employee_id');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching users' });
-  }
-});
+// User management lives in routes/users.ts (mounted at /api/settings/users).
 
-router.post('/users', authenticateToken, authorizeRole(['admin', 'hr']), async (req, res) => {
-  try {
-    const { email, role, phone, name, department } = req.body;
-    const defaultPassword = 'zxcv123$$';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
-    // 1. Create Employee first
-    const staffId = `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    await db('employees').insert({
-      id: staffId,
-      name: name || email.split('@')[0], // Fallback if name not provided
-      role: role.toUpperCase(),
-      department: department || 'General',
-      salary: 0, // Default to 0, update later in HR
-      joinDate: new Date().toISOString().split('T')[0],
-      status: 'active',
-      phone: phone
-    });
-
-    // 2. Create User and link to Employee
-    const [inserted] = await db('users').insert({
-      email,
-      role,
-      phone,
-      password: hashedPassword,
-      employee_id: staffId
-    }).returning('id');
-    const id = typeof inserted === 'object' ? inserted.id : inserted;
-
-    res.status(201).json({ 
-      id, 
-      email, 
-      role, 
-      phone, 
-      employee_id: staffId,
-      message: 'User created and linked to Employee Directory with default password' 
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error creating user and employee profile' });
-  }
-});
-
-// SMS Configuration
+// SMS Configuration. Keys are write-only: the API never returns them.
 router.get('/sms', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const config = await db('sms_configurations').select('*').first();
-    res.json(config || {});
+    const { api_key, api_secret, ...rest } = config || {};
+    res.json({
+      ...rest,
+      api_key: '',
+      api_secret: '',
+      api_key_set: !!api_key,
+      api_secret_set: !!api_secret,
+      env_key_set: !!process.env.SMS_API_KEY?.trim(),
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching SMS config' });
   }
 });
 
-router.post('/sms', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.post('/sms', authenticateToken, authorizeRole(['admin']), async (req: AuthRequest, res) => {
   try {
-    const { provider, api_key, api_secret, sender_id, api_url } = req.body;
+    const { provider, api_key, api_secret, sender_id, api_url, clear_api_key } = req.body;
     const existing = await db('sms_configurations').first();
 
+    const updates: Record<string, any> = { provider: provider || 'Custom', sender_id, api_url };
+    if (typeof api_key === 'string' && api_key.trim()) updates.api_key = api_key.trim();
+    else if (clear_api_key) updates.api_key = '';
+    if (typeof api_secret === 'string' && api_secret.trim()) updates.api_secret = api_secret.trim();
+
     if (existing) {
-      await db('sms_configurations').where({ id: existing.id }).update({
-        provider,
-        api_key,
-        api_secret,
-        sender_id,
-        api_url,
-        updated_at: db.fn.now()
-      });
+      await db('sms_configurations').where({ id: existing.id }).update({ ...updates, updated_at: db.fn.now() });
     } else {
-      await db('sms_configurations').insert({
-        provider,
-        api_key,
-        api_secret,
-        sender_id,
-        api_url
-      });
+      await db('sms_configurations').insert({ api_key: '', ...updates });
     }
+    await logAudit(req, 'sms_config_updated', 'setting', 'sms_configurations',
+      existing ? { provider: existing.provider, sender_id: existing.sender_id, api_url: existing.api_url } : undefined,
+      { provider: updates.provider, sender_id, api_url, api_key_changed: 'api_key' in updates, api_secret_changed: 'api_secret' in updates });
     res.json({ message: 'SMS configuration updated' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating SMS config' });
