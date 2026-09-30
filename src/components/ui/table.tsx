@@ -5,7 +5,7 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+  <div className="relative w-full max-w-full overflow-x-auto overscroll-x-contain">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
@@ -72,7 +72,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-left align-middle font-medium text-slate-500 [&:has([role=checkbox])]:pr-0 dark:text-slate-400",
+      "h-12 px-4 text-left align-middle font-medium whitespace-nowrap text-slate-500 [&:has([role=checkbox])]:pr-0 dark:text-slate-400",
       className
     )}
     {...props}
@@ -86,7 +86,12 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn(
+      "p-4 align-middle [&:has([role=checkbox])]:pr-0",
+      // Right-aligned cells hold amounts and actions: never wrap "GH₵" away from its figure or push icons onto a new line.
+      /(^|\s)text-right(\s|$)/.test(className || "") && "whitespace-nowrap tabular-nums",
+      className
+    )}
     {...props}
   />
 ))
