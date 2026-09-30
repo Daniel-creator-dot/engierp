@@ -191,7 +191,7 @@ export default function App() {
   };
 
   const renderModule = () => {
-    if (activeModule === 'dashboard') return <Dashboard />;
+    if (activeModule === 'dashboard') return <Dashboard onNavigate={setActiveModule} />;
     if (activeModule.startsWith('accounting')) return <Accounting activeSub={activeModule} user={user} onNavigate={setActiveModule} />;
     if (activeModule.startsWith('hr')) return <HR activeSub={activeModule} />;
     if (activeModule.startsWith('projects')) return <Projects activeSub={activeModule} />;
@@ -200,7 +200,7 @@ export default function App() {
     if (activeModule === 'assets') return <Assets />;
     if (activeModule === 'settings') return <SettingsView />;
     if (activeModule === 'profile') return <Profile />;
-    return <Dashboard />;
+    return <Dashboard onNavigate={setActiveModule} />;
   };
 
   const isChildActive = (parent: NavItem) => {

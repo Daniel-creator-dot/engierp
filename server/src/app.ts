@@ -12,6 +12,7 @@ import fieldOpsRoutes from './routes/field-ops';
 import contractRoutes from './routes/contracts';
 import assetRoutes from './routes/assets';
 import catalogRoutes from './routes/catalog';
+import dashboardRoutes from './routes/dashboard';
 import { syncSchema } from './utils/schemaSync';
 
 dotenv.config();
@@ -34,6 +35,7 @@ app.use('/api/field-ops', fieldOpsRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

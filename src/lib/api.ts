@@ -126,6 +126,10 @@ export const assetsApi = {
   dispose: (id: string, data: any) => api.post(`/assets/dispose/${id}`, data),
 };
 
+export const dashboardApi = {
+  getSummary: () => api.get('/dashboard'),
+};
+
 export type CategoryType = 'expense' | 'supplier' | 'inventory' | 'asset' | 'service';
 
 export const catalogApi = {
