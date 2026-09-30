@@ -19,6 +19,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// The backend runs on Render, which briefly drops requests while a deploy swaps instances or a
+// sleeping free instance starts. Retry idempotent GETs once instead of failing the whole screen.
+api.interceptors.response.use(undefined, async (error) => {
+  const config = error?.config;
+  const status = error?.response?.status;
+  const transient = !error?.response || status === 502 || status === 503 || status === 504;
+  if (config && transient && (config.method || 'get').toLowerCase() === 'get' && !config.__retried) {
+    config.__retried = true;
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return api.request(config);
+  }
+  return Promise.reject(error);
+});
+
+export const apiErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  if (data?.message || data?.error) return data.message || data.error;
+  return error?.response ? fallback : 'Could not reach the server. Check your connection and try again.';
+};
+
 export default api;
 
 export const authApi = {

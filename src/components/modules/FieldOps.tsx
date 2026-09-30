@@ -48,7 +48,7 @@ import {
 } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
-import { fieldOpsApi, projectsApi } from '../../lib/api';
+import { fieldOpsApi, projectsApi, apiErrorMessage } from '../../lib/api';
 
 export default function FieldOps() {
   const [reports, setReports] = useState<any[]>([]);
@@ -65,20 +65,20 @@ export default function FieldOps() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    try {
-      const [reportsRes, tasksRes, projectsRes] = await Promise.all([
-        fieldOpsApi.getReports(),
-        fieldOpsApi.getTasks(),
-        projectsApi.getProjects()
-      ]);
-      setReports(reportsRes.data);
-      setTasks(tasksRes.data);
-      setProjects(projectsRes.data);
-    } catch (error) {
-      toast.error('Failed to load field operations data');
-    } finally {
-      setIsLoading(false);
-    }
+    const loaders: [string, () => Promise<any>, (data: any) => void][] = [
+      ['site reports', fieldOpsApi.getReports, setReports],
+      ['tasks', fieldOpsApi.getTasks, setTasks],
+      ['projects', projectsApi.getProjects, setProjects],
+    ];
+    const results = await Promise.allSettled(loaders.map(([, load]) => load()));
+    const failures: string[] = [];
+    results.forEach((result, i) => {
+      const [label, , apply] = loaders[i];
+      if (result.status === 'fulfilled') apply(result.value.data);
+      else failures.push(`${label}: ${apiErrorMessage(result.reason, 'request failed')}`);
+    });
+    if (failures.length) toast.error(`Some field operations data could not be loaded (${failures.join('; ')})`);
+    setIsLoading(false);
   };
 
   const handleSubmitReport = async (e: React.FormEvent) => {

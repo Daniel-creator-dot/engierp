@@ -8,49 +8,52 @@ const router = Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const projects = await db('projects').select('*');
-    
-    // Enrich projects with dynamic financial data
-    const enrichedProjects = await Promise.all(projects.map(async (p) => {
-      // 1. Sum actual costs from ledger
-      const actualsRes = await db('ledger_entries')
-        .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
-        .join('chart_of_accounts', 'ledger_entries.account_id', 'chart_of_accounts.id')
-        .where('journal_entries.project_id', p.id)
-        .where('chart_of_accounts.type', 'Expense')
-        .select(db.raw('SUM(debit - credit) as total'))
-        .first() as any;
-      
-      const actualCosts = Number(actualsRes?.total || 0);
 
-      // 2. Sum committed costs from Approved POs
-      const committedRes = await db('purchase_orders')
-        .where({ project_id: p.id })
-        .whereIn('status', ['Approved', 'Paid', 'Partially Received'])
-        .select(db.raw('SUM(total_amount) as total'))
-        .first() as any;
-      
-      const committedCosts = Number(committedRes?.total || 0);
+    // Financial figures are an enrichment: if they can't be computed, still return the project list.
+    const totalsByProject = (rows: any[]) => new Map(rows.map(r => [String(r.project_id), Number(r.total || 0)]));
+    let actuals = new Map<string, number>();
+    let committed = new Map<string, number>();
+    let revenue = new Map<string, number>();
+    try {
+      const [actualRows, committedRows, revenueRows] = await Promise.all([
+        db('ledger_entries')
+          .join('journal_entries', 'ledger_entries.journal_id', 'journal_entries.id')
+          .join('chart_of_accounts', 'ledger_entries.account_id', 'chart_of_accounts.id')
+          .whereNotNull('journal_entries.project_id')
+          .where('chart_of_accounts.type', 'Expense')
+          .groupBy('journal_entries.project_id')
+          .select('journal_entries.project_id', db.raw('SUM(debit - credit) as total')),
+        db('purchase_orders')
+          .whereNotNull('project_id')
+          .whereIn('status', ['Approved', 'Paid', 'Partially Received'])
+          .groupBy('project_id')
+          .select('project_id', db.raw('SUM(total_amount) as total')),
+        db('invoices')
+          .whereNotNull('project_id')
+          .whereIn('status', ['paid', 'Paid'])
+          .groupBy('project_id')
+          .select('project_id', db.raw('SUM(amount) as total')),
+      ]);
+      actuals = totalsByProject(actualRows);
+      committed = totalsByProject(committedRows);
+      revenue = totalsByProject(revenueRows);
+    } catch (error) {
+      console.error('GET /projects: failed to compute project financials:', error);
+    }
 
-      // 3. Sum Billed Revenue (from invoices)
-      const revenueRes = await db('invoices')
-        .where({ project_id: p.id })
-        .whereIn('status', ['paid', 'Paid'])
-        .select(db.raw('SUM(amount) as total'))
-        .first() as any;
-      
-      const revenue = Number(revenueRes?.total || 0);
-
+    res.json(projects.map(p => {
+      const spent = actuals.get(String(p.id)) || 0;
+      const committedCosts = committed.get(String(p.id)) || 0;
       return {
         ...p,
-        spent: actualCosts,
+        spent,
         committed: committedCosts,
-        revenue: revenue,
-        budget_remaining: Number(p.revised_budget || p.budget || 0) - (actualCosts + committedCosts)
+        revenue: revenue.get(String(p.id)) || 0,
+        budget_remaining: Number(p.revised_budget || p.budget || 0) - (spent + committedCosts)
       };
     }));
-
-    res.json(enrichedProjects);
   } catch (error) {
+    console.error('GET /projects failed:', error);
     res.status(500).json({ message: 'Error fetching projects' });
   }
 });

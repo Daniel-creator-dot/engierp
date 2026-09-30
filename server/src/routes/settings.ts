@@ -10,6 +10,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const settings = await db('settings').select('*');
     res.json(settings);
   } catch (error) {
+    console.error('GET /settings failed:', error);
     res.status(500).json({ message: 'Error fetching settings' });
   }
 });

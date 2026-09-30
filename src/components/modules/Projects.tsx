@@ -61,7 +61,7 @@ import {
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { toast } from 'sonner';
-import { projectsApi, contractsApi, settingsApi } from '../../lib/api';
+import { projectsApi, contractsApi, settingsApi, apiErrorMessage } from '../../lib/api';
 
 interface ProjectsProps {
   activeSub?: string;
@@ -96,10 +96,10 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
 
   const fetchData = async () => {
     setIsLoading(true);
+    settingsApi.getSettings()
+      .then(res => setSettings(res.data))
+      .catch(error => toast.error(apiErrorMessage(error, 'Failed to load company settings')));
     try {
-      const settingsRes = await settingsApi.getSettings();
-      setSettings(settingsRes.data);
-
       if (activeSub === 'projects-active') {
         const res = await projectsApi.getProjects();
         setProjects(res.data);
@@ -114,7 +114,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
         setWipReport(res.data);
       }
     } catch (error) {
-      toast.error('Failed to load project data');
+      toast.error(apiErrorMessage(error, 'Failed to load project data'));
     } finally {
       setIsLoading(false);
     }

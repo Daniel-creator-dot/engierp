@@ -14,6 +14,7 @@ router.get('/reports', authenticateToken, authorizeRole(['pm', 'admin']), async 
       .orderBy('site_reports.created_at', 'desc');
     res.json(reports);
   } catch (error) {
+    console.error('GET /field-ops/reports failed:', error);
     res.status(500).json({ message: 'Error fetching site reports' });
   }
 });
@@ -67,6 +68,7 @@ router.get('/tasks', authenticateToken, async (req, res) => {
       .orderBy('site_tasks.created_at', 'desc');
     res.json(tasks);
   } catch (error) {
+    console.error('GET /field-ops/tasks failed:', error);
     res.status(500).json({ message: 'Error fetching site tasks' });
   }
 });

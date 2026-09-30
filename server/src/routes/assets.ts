@@ -10,6 +10,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const equipment = await db('equipment').select('*');
     res.json(equipment);
   } catch (error) {
+    console.error('GET /assets failed:', error);
     res.status(500).json({ message: 'Error fetching equipment' });
   }
 });
@@ -46,6 +47,7 @@ router.get('/allocations', authenticateToken, async (req, res) => {
       .join('projects', 'equipment_allocations.project_id', 'projects.id');
     res.json(allocations);
   } catch (error) {
+    console.error('GET /assets/allocations failed:', error);
     res.status(500).json({ message: 'Error fetching allocations' });
   }
 });

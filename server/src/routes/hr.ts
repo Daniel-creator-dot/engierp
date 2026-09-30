@@ -47,6 +47,7 @@ router.get('/employees', authenticateToken, authorizeRole(['hr', 'accountant', '
     const employees = await db('employees').select('*');
     res.json(employees);
   } catch (error) {
+    console.error('GET /hr/employees failed:', error);
     res.status(500).json({ message: 'Error fetching employees' });
   }
 });
@@ -95,6 +96,7 @@ router.get('/leave-requests', authenticateToken, async (req: AuthRequest, res) =
     const requests = await query;
     res.json(requests);
   } catch (error) {
+    console.error('GET /hr/leave-requests failed:', error);
     res.status(500).json({ message: 'Error fetching leave requests' });
   }
 });
@@ -192,6 +194,7 @@ router.get('/payroll', authenticateToken, async (req: AuthRequest, res) => {
     const payroll = await query.orderBy('year', 'desc').orderBy('month', 'desc');
     res.json(payroll);
   } catch (error) {
+    console.error('GET /hr/payroll failed:', error);
     res.status(500).json({ message: 'Error fetching payroll' });
   }
 });
@@ -448,6 +451,7 @@ router.get('/appraisals', authenticateToken, async (req, res) => {
       .join('employees', 'appraisals.employee_id', 'employees.id');
     res.json(data);
   } catch (error) {
+    console.error('GET /hr/appraisals failed:', error);
     res.status(500).json({ message: 'Error fetching appraisals' });
   }
 });

@@ -48,7 +48,7 @@ import {
 } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
-import { assetsApi, projectsApi } from '../../lib/api';
+import { assetsApi, projectsApi, apiErrorMessage } from '../../lib/api';
 import { categoryOptions, useCategories } from '../../lib/catalog';
 
 export default function Assets() {
@@ -73,20 +73,20 @@ export default function Assets() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    try {
-      const [equipRes, allocRes, projectsRes] = await Promise.all([
-        assetsApi.getEquipment(),
-        assetsApi.getAllocations(),
-        projectsApi.getProjects()
-      ]);
-      setEquipment(equipRes.data);
-      setAllocations(allocRes.data);
-      setProjects(projectsRes.data);
-    } catch (error) {
-      toast.error('Failed to load asset data');
-    } finally {
-      setIsLoading(false);
-    }
+    const loaders: [string, () => Promise<any>, (data: any) => void][] = [
+      ['equipment', assetsApi.getEquipment, setEquipment],
+      ['allocations', assetsApi.getAllocations, setAllocations],
+      ['projects', projectsApi.getProjects, setProjects],
+    ];
+    const results = await Promise.allSettled(loaders.map(([, load]) => load()));
+    const failures: string[] = [];
+    results.forEach((result, i) => {
+      const [label, , apply] = loaders[i];
+      if (result.status === 'fulfilled') apply(result.value.data);
+      else failures.push(`${label}: ${apiErrorMessage(result.reason, 'request failed')}`);
+    });
+    if (failures.length) toast.error(`Some asset data could not be loaded (${failures.join('; ')})`);
+    setIsLoading(false);
   };
 
   const handleAddEquipment = async (e: React.FormEvent) => {

@@ -60,7 +60,7 @@ import {
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
-import { hrApi, settingsApi, projectsApi } from '../../lib/api';
+import { hrApi, settingsApi, projectsApi, apiErrorMessage } from '../../lib/api';
 import { Employee, LeaveRequest, PayrollRecord } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { GHANA_BANKS } from '../../lib/constants';
@@ -163,39 +163,30 @@ export default function HR({ activeSub = 'hr-directory' }: HRProps) {
     fetchData();
   }, [activeSub]);
 
+  const canViewDirectory = ['admin', 'hr', 'accountant'].includes(user?.role || '');
+
   const fetchData = async () => {
     setIsLoading(true);
-    try {
-      const settingsRes = await settingsApi.getSettings();
-      setCompanySettings(settingsRes.data);
-
-      if (activeSub === 'hr-directory') {
-        const res = await hrApi.getEmployees();
-        setEmployees(res.data);
-      } else if (activeSub === 'hr-leave') {
-        const res = await hrApi.getLeaveRequests();
-        setLeaveRequests(res.data);
-      } else if (activeSub === 'hr-payroll') {
-        const res = await hrApi.getPayroll();
-        setPayrollEntries(res.data);
-        const empRes = await hrApi.getEmployees();
-        setEmployees(empRes.data);
-      } else if (activeSub === 'hr-performance') {
-        const [appRes, empRes] = await Promise.all([
-          hrApi.getAppraisals(),
-          hrApi.getEmployees()
-        ]);
-        setAppraisals(appRes.data);
-        setEmployees(empRes.data);
-      }
-
-      const projRes = await projectsApi.getProjects();
-      setProjects(projRes.data);
-    } catch (error) {
-      toast.error('Failed to load HR data');
-    } finally {
-      setIsLoading(false);
+    const loaders: [string, () => Promise<any>, (data: any) => void][] = [
+      ['settings', settingsApi.getSettings, setCompanySettings],
+      ['projects', projectsApi.getProjects, setProjects],
+    ];
+    if (activeSub === 'hr-leave') loaders.push(['leave requests', hrApi.getLeaveRequests, setLeaveRequests]);
+    if (activeSub === 'hr-payroll') loaders.push(['payroll', hrApi.getPayroll, setPayrollEntries]);
+    if (activeSub === 'hr-performance') loaders.push(['appraisals', hrApi.getAppraisals, setAppraisals]);
+    if (canViewDirectory && ['hr-directory', 'hr-payroll', 'hr-performance'].includes(activeSub)) {
+      loaders.push(['employees', hrApi.getEmployees, setEmployees]);
     }
+
+    const results = await Promise.allSettled(loaders.map(([, load]) => load()));
+    const failures: string[] = [];
+    results.forEach((result, i) => {
+      const [label, , apply] = loaders[i];
+      if (result.status === 'fulfilled') apply(result.value.data);
+      else failures.push(`${label}: ${apiErrorMessage(result.reason, 'request failed')}`);
+    });
+    if (failures.length) toast.error(`Some HR data could not be loaded (${failures.join('; ')})`);
+    setIsLoading(false);
   };
 
   const handleAddEmployee = async (e: React.FormEvent) => {
