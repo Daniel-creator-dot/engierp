@@ -80,6 +80,7 @@ async function financeSection(today: Date) {
     .leftJoin('payments as p', function () {
       this.on('p.target_id', 'i.id').andOn('p.target_type', db.raw('?', ['Invoice']));
     })
+    .where(function () { this.whereNull('i.status').orWhereNot('i.status', 'void'); })
     .select('i.id', 'i.amount', 'i.dueDate', db.raw('COALESCE(SUM(p.amount), 0) as paid'))
     .groupBy('i.id');
   const receivables = { outstanding: 0, open: 0, overdue: 0, overdueAmount: 0 };
@@ -98,6 +99,7 @@ async function financeSection(today: Date) {
     .leftJoin('payments as p', function () {
       this.on('p.target_id', db.raw('CAST(b.id AS VARCHAR)')).andOn('p.target_type', db.raw('?', ['Bill']));
     })
+    .where(function () { this.whereNull('b.status').orWhereNot('b.status', 'void'); })
     .select('b.id', 'b.amount', 'b.due_date', db.raw('COALESCE(SUM(p.amount), 0) as paid'))
     .groupBy('b.id');
   const payables = { outstanding: 0, open: 0, overdue: 0, overdueAmount: 0 };

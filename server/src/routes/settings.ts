@@ -19,9 +19,10 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr', 'accountant'])
   try {
     const { key, value } = req.body;
     
-    // Security: HR and Accountant can only update payroll settings
-    if ((req.user?.role === 'hr' || req.user?.role === 'accountant') && key !== 'payroll_config') {
-      return res.status(403).json({ message: 'HR and Accountants can only update payroll settings' });
+    // Security: HR can only update payroll settings; accountants also manage the company profile
+    const accountantKey = req.user?.role === 'accountant' && /^company_[a-z_]+$/.test(String(key));
+    if ((req.user?.role === 'hr' || req.user?.role === 'accountant') && key !== 'payroll_config' && !accountantKey) {
+      return res.status(403).json({ message: 'You can only update payroll and company profile settings' });
     }
 
     const existing = await db('settings').where({ key }).first();
