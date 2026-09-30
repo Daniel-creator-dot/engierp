@@ -20,8 +20,11 @@ export const getSetting = (settings: Setting[], key: string) => settings.find(s 
 
 export const currencySymbol = (settings: Setting[]) => (getSetting(settings, 'currency') === 'USD' ? '$' : 'GH₵');
 
-export const money = (value: unknown, symbol = 'GH₵') =>
-  `${symbol}${(Number(value) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const money = (value: unknown, symbol = 'GH₵') => {
+  const n = Number(value) || 0;
+  const digits = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n < 0 && Math.abs(n) >= 0.005 ? '-' : ''}${symbol}${symbol === '$' ? '' : ' '}${digits}`;
+};
 
 export const parseItems = (value: unknown): PayItem[] => {
   if (Array.isArray(value)) return value as PayItem[];

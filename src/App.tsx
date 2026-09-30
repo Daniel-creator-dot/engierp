@@ -62,12 +62,14 @@ import Login from './components/Login';
 import ChangePasswordForm from './components/ChangePasswordForm';
 import GlobalSearch from './components/GlobalSearch';
 import NotificationBell from './components/NotificationBell';
+import { useVersionCheck } from './lib/useVersionCheck';
 
 export default function App() {
   const { user, loading, logout } = useAuth();
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  useVersionCheck();
 
   if (loading) {
     return (
