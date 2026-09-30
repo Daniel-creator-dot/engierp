@@ -121,6 +121,9 @@ export const projectsApi = {
   updateProject: (id: string, data: any) => api.patch(`/projects/${id}`, data),
   getJobCosting: (id: string) => api.get(`/projects/${id}/job-costing`),
   getWIPReport: () => api.get('/projects/reports/wip'),
+  getCostAccounts: () => api.get('/projects/cost-accounts'),
+  saveBudgetLines: (id: string, lines: Array<{ account_id: number; amount: number; notes?: string }>) =>
+    api.put(`/projects/${id}/budget-lines`, { lines }),
 };
 
 export const contractsApi = {
