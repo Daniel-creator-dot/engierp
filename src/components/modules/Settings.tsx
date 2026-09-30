@@ -21,7 +21,8 @@ import {
   Signature,
   FileSpreadsheet,
   Calculator,
-  Eye
+  Eye,
+  Tags
 } from 'lucide-react';
 import { 
   Card, 
@@ -60,9 +61,11 @@ import {
 import { toast } from 'sonner';
 import { settingsApi } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import CatalogManager from './CatalogManager';
 
 export default function Settings() {
   const { user: currentUser } = useAuth();
+  const canManageCatalog = currentUser?.role === 'admin' || currentUser?.role === 'accountant';
   const [currency, setCurrency] = useState('GHS');
   const [users, setUsers] = useState<any[]>([]);
   const [smsConfig, setSmsConfig] = useState<any>({
@@ -291,6 +294,11 @@ export default function Settings() {
           {(currentUser?.role === 'admin' || currentUser?.role === 'hr' || currentUser?.role === 'accountant') && (
             <TabsTrigger value="payroll" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
               <Calculator className="w-4 h-4 mr-2" /> Payroll & Tax
+            </TabsTrigger>
+          )}
+          {canManageCatalog && (
+            <TabsTrigger value="catalog" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
+              <Tags className="w-4 h-4 mr-2" /> Categories & Services
             </TabsTrigger>
           )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
@@ -582,6 +590,12 @@ export default function Settings() {
             </CardFooter>
           </Card>
         </TabsContent>
+
+        {canManageCatalog && (
+          <TabsContent value="catalog">
+            <CatalogManager currency={currency} />
+          </TabsContent>
+        )}
 
         <TabsContent value="users" className="space-y-6">
           <Card className="border-none shadow-sm">

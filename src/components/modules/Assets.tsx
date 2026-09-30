@@ -49,8 +49,10 @@ import {
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { assetsApi, projectsApi } from '../../lib/api';
+import { categoryOptions, useCategories } from '../../lib/catalog';
 
 export default function Assets() {
+  const assetCategories = useCategories('asset');
   const [equipment, setEquipment] = useState<any[]>([]);
   const [allocations, setAllocations] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -262,10 +264,7 @@ export default function Assets() {
                     <Select name="category" required>
                       <SelectTrigger className="bg-[#F5F5F5] border-none h-11"><SelectValue placeholder="Select category..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Earthmoving">Earthmoving</SelectItem>
-                        <SelectItem value="Lifting">Lifting & Cranes</SelectItem>
-                        <SelectItem value="Vehicles">Heavy Vehicles</SelectItem>
-                        <SelectItem value="Tools">Power Tools</SelectItem>
+                        {assetCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -359,10 +358,7 @@ export default function Assets() {
                   <Select name="category" defaultValue={selectedEquipment.category}>
                     <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Earthmoving">Earthmoving</SelectItem>
-                      <SelectItem value="Lifting">Lifting & Cranes</SelectItem>
-                      <SelectItem value="Vehicles">Heavy Vehicles</SelectItem>
-                      <SelectItem value="Tools">Power Tools</SelectItem>
+                      {categoryOptions(assetCategories, selectedEquipment.category).map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

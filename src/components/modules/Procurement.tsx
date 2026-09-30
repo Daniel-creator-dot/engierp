@@ -62,6 +62,7 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { procurementApi, projectsApi, settingsApi } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { categoryOptions, useCategories } from '../../lib/catalog';
 
 interface ProcurementProps {
   activeSub?: string;
@@ -86,6 +87,8 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const [currency, setCurrency] = useState('GHS');
   const [isLoading, setIsLoading] = useState(true);
   const [companySettings, setCompanySettings] = useState<any[]>([]);
+  const supplierCategories = useCategories('supplier');
+  const inventoryCategories = useCategories('inventory');
 
   // PO Calculation State
   const [poQty, setPoQty] = useState(1);
@@ -205,7 +208,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
       id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
       name: formData.get('name'),
       project_id: formData.get('project_id') || null,
-      category: 'Materials',
+      category: formData.get('category') || 'Materials',
       quantity: Number(formData.get('quantity')),
       unit: formData.get('unit'),
       reorder_level: Number(formData.get('reorder'))
@@ -444,6 +447,13 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     <DialogHeader><DialogTitle>Initialize Site Stock</DialogTitle></DialogHeader>
                     <div className="grid gap-6 py-6">
                       <div className="space-y-2"><Label>Item Name</Label><Input name="name" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Select name="category" defaultValue={inventoryCategories.some(c => c.name === 'Materials') ? 'Materials' : undefined}>
+                          <SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Select category..." /></SelectTrigger>
+                          <SelectContent className="rounded-xl">{inventoryCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Quantity</Label><Input name="quantity" type="number" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         <div className="space-y-2"><Label>Unit (e.g. Bags, m3)</Label><Input name="unit" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
@@ -471,7 +481,10 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                   <TableBody>
                     {inventory.map((inv) => (
                       <TableRow key={inv.id} className="hover:bg-blue-50/20">
-                        <TableCell className="font-bold text-[#141414]">{inv.name}</TableCell>
+                        <TableCell>
+                          <p className="font-bold text-[#141414]">{inv.name}</p>
+                          {inv.category && <p className="text-[10px] font-bold uppercase text-blue-600">{inv.category}</p>}
+                        </TableCell>
                         <TableCell className="text-xs text-[#8E9299] font-medium">{inv.project_name || 'Common Storage'}</TableCell>
                         <TableCell className="font-black">{inv.quantity} {inv.unit}</TableCell>
                         <TableCell className="text-right"><Badge className={inv.quantity > inv.reorder_level ? 'bg-green-100 text-green-700 font-bold px-3 border-none' : 'bg-red-100 text-red-700 font-bold px-3 border-none'}>{inv.quantity > inv.reorder_level ? 'SUFFICIENT' : 'REORDER'}</Badge></TableCell>
@@ -496,7 +509,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     <DialogHeader><DialogTitle>Supplier Qualification</DialogTitle><DialogDescription>Register a new vetted vendor into the system.</DialogDescription></DialogHeader>
                     <div className="grid gap-6 py-6">
 <div className="space-y-2"><Label>Enterprise Name</Label><Input name="name" required className="bg-[#F5F5F5] border-none rounded-xl h-11 font-bold" /></div>
-                      <div className="space-y-2"><Label>Service Category</Label><Select name="category" required><SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Specialty..." /></SelectTrigger><SelectContent className="rounded-xl"><SelectItem value="Heavy Materials">Heavy Materials (Stone/Sand)</SelectItem><SelectItem value="Finishing">Finishing & Fixtures</SelectItem><SelectItem value="Plant Hire">Plant & Equipment Hire</SelectItem><SelectItem value="Safety">Safety & PPE</SelectItem><SelectItem value="Vehicles">Vehicles (Motor/Transport)</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Category</Label><Select name="category" required><SelectTrigger className="bg-[#F5F5F5] border-none rounded-xl h-11"><SelectValue placeholder="Specialty..." /></SelectTrigger><SelectContent className="rounded-xl">{supplierCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select></div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Primary Contact</Label><Input name="contact" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
                         <div className="space-y-2"><Label>Email / Billing</Label><Input name="email" type="email" required className="bg-[#F5F5F5] border-none rounded-xl h-11" /></div>
@@ -547,11 +560,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                         <Select name="category" defaultValue={selectedSupplier.category}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                             <SelectItem value="Heavy Materials">Heavy Materials (Stone/Sand)</SelectItem>
-                             <SelectItem value="Finishing">Finishing & Fixtures</SelectItem>
-                             <SelectItem value="Plant Hire">Plant & Equipment Hire</SelectItem>
-                             <SelectItem value="Safety">Safety & PPE</SelectItem>
-                             <SelectItem value="Vehicles">Vehicles (Motor/Transport)</SelectItem>
+                            {categoryOptions(supplierCategories, selectedSupplier.category).map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>

@@ -126,6 +126,21 @@ export const assetsApi = {
   dispose: (id: string, data: any) => api.post(`/assets/dispose/${id}`, data),
 };
 
+export type CategoryType = 'expense' | 'supplier' | 'inventory' | 'asset' | 'service';
+
+export const catalogApi = {
+  getCategories: (params?: { type?: CategoryType; active?: boolean }) =>
+    api.get('/catalog/categories', { params: { type: params?.type, active: params?.active ? 'true' : undefined } }),
+  createCategory: (data: any) => api.post('/catalog/categories', data),
+  updateCategory: (id: number, data: any) => api.patch(`/catalog/categories/${id}`, data),
+  deleteCategory: (id: number) => api.delete(`/catalog/categories/${id}`),
+  getServices: (params?: { active?: boolean }) =>
+    api.get('/catalog/services', { params: { active: params?.active ? 'true' : undefined } }),
+  createService: (data: any) => api.post('/catalog/services', data),
+  updateService: (id: number, data: any) => api.patch(`/catalog/services/${id}`, data),
+  deleteService: (id: number) => api.delete(`/catalog/services/${id}`),
+};
+
 export const settingsApi = {
   getSettings: () => api.get('/settings'),
   updateSetting: (key: string, value: string) => api.post('/settings', { key, value }),

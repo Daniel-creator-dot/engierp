@@ -63,7 +63,8 @@ import { Badge } from '../ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
-import { accountingApi, settingsApi, projectsApi, procurementApi } from '../../lib/api';
+import { accountingApi, settingsApi, projectsApi, procurementApi, catalogApi } from '../../lib/api';
+import { Service, useCategories } from '../../lib/catalog';
 import { Transaction, Invoice } from '../../types';
 import { getCurrencySymbol } from '../../lib/currency';
 
@@ -210,6 +211,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [invoiceItems, setInvoiceItems] = useState<{ description: string, quantity: number, unitPrice: number }[]>([{ description: '', quantity: 1, unitPrice: 0 }]);
   const [billQuantity, setBillQuantity] = useState<number>(1);
   const [billUnitPrice, setBillUnitPrice] = useState<number>(0);
+  const [billCategory, setBillCategory] = useState('');
+  const [billAccountId, setBillAccountId] = useState('');
+  const expenseCategories = useCategories('expense');
+  const [services, setServices] = useState<Service[]>([]);
   const [invoiceTaxOverride, setInvoiceTaxOverride] = useState<string>('');
   const [invoiceTaxNameOverride, setInvoiceTaxNameOverride] = useState<string>('');
 
@@ -258,14 +263,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setBankAccounts(accRes.data);
         setBankTx(txRes.data);
       } else if (activeSub === 'accounting-ar' || activeSub === 'accounting-invoices') {
-        const [invRes, projRes, accRes] = await Promise.all([
+        const [invRes, projRes, accRes, svcRes] = await Promise.all([
           accountingApi.getInvoices(),
           projectsApi.getProjects(),
-          accountingApi.getBankAccounts()
+          accountingApi.getBankAccounts(),
+          catalogApi.getServices({ active: true }).catch(() => ({ data: [] as Service[] }))
         ]);
         setInvoices(invRes.data);
         setProjects(projRes.data);
         setBankAccounts(accRes.data);
+        setServices(svcRes.data);
       } else if (activeSub === 'accounting-ap') {
         const [billsRes, supRes, accRes, coaRes, projRes] = await Promise.all([
           accountingApi.getBills(),
@@ -487,20 +494,26 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const handleRecordBill = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
+    if (!billAccountId) {
+      toast.error('Select the expense or asset account for this bill');
+      return;
+    }
     const data = {
       supplier_id: formData.get('supplier_id'),
       quantity: Number(formData.get('quantity')),
       unit_price: Number(formData.get('unit_price')),
       amount: Number(formData.get('amount')),
       due_date: formData.get('due_date'),
-      category: coa.find(a => String(a.id) === formData.get('account_id'))?.name,
-      account_id: Number(formData.get('account_id')),
+      category: billCategory || coa.find(a => String(a.id) === billAccountId)?.name,
+      account_id: Number(billAccountId),
       project_id: formData.get('project_id')
     };
     try {
       await accountingApi.recordBill(data);
       toast.success('Vendor bill recorded');
       setIsRecordBillOpen(false);
+      setBillCategory('');
+      setBillAccountId('');
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to record bill');
@@ -1089,6 +1102,20 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-2">
+                          <Label>Expense Category</Label>
+                          <Select
+                            value={billCategory}
+                            onValueChange={(name) => {
+                              setBillCategory(name);
+                              const linkedAccount = expenseCategories.find(c => c.name === name)?.account_id;
+                              if (linkedAccount && coa.some(a => a.id === linkedAccount)) setBillAccountId(String(linkedAccount));
+                            }}
+                          >
+                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue placeholder="e.g. Food, Fuel, Transport..." /></SelectTrigger>
+                            <SelectContent>{expenseCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-2"><Label>Quantity</Label><Input type="number" name="quantity" required min="1" value={billQuantity} onChange={e => setBillQuantity(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
                           <div className="space-y-2"><Label>Unit Price</Label><Input type="number" name="unit_price" required min="0" step="0.01" value={billUnitPrice || ''} onChange={e => setBillUnitPrice(Number(e.target.value))} className="bg-[#F5F5F5] border-none" /></div>
@@ -1109,7 +1136,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         </div>
                         <div className="space-y-2">
 <Label>Expense / Asset Account (Job Cost Category)</Label>
-                          <Select name="account_id" required>
+                          <Select name="account_id" required value={billAccountId} onValueChange={setBillAccountId}>
                             <SelectTrigger className="bg-[#F5F5F5] border-none font-bold"><SelectValue placeholder="Select Account" /></SelectTrigger>
                             <SelectContent>
                               {coa.filter(a => a.type === 'Expense' || (a.type === 'Asset' && a.code.startsWith('12'))).map(a => (
@@ -1327,7 +1354,26 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                             {invoiceItems.map((item, idx) => (
                               <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#F5F5F5]/50 p-2 rounded-xl border border-[#F5F5F5]">
-                                <div className="col-span-6">
+                                <div className="col-span-6 space-y-1">
+                                  {services.length > 0 && (
+                                    <Select
+                                      value=""
+                                      onValueChange={(serviceId) => {
+                                        const service = services.find(s => String(s.id) === serviceId);
+                                        if (!service) return;
+                                        const newItems = [...invoiceItems];
+                                        newItems[idx] = { ...newItems[idx], description: service.name, unitPrice: Number(service.default_price) };
+                                        setInvoiceItems(newItems);
+                                      }}
+                                    >
+                                      <SelectTrigger className="bg-white border-none h-8 rounded-lg text-xs text-[#8E9299]"><SelectValue placeholder="Pick a saved service..." /></SelectTrigger>
+                                      <SelectContent>
+                                        {services.map(s => (
+                                          <SelectItem key={s.id} value={String(s.id)}>{s.name} ({currSym}{Number(s.default_price).toLocaleString()} / {s.unit})</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
                                   <Input
                                     placeholder="Item/Service name"
                                     value={item.description}
