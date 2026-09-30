@@ -3,7 +3,7 @@ import db from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { LedgerError, assertBalanced, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
 import { pick } from '../lib/accounting';
-import { createBill } from '../lib/accountingDocs';
+import { createBillWithApprovalLimit, notifyAdminsOfRequest } from '../lib/approvals';
 
 // Mounted inside routes/accounting.ts, which already enforces admin/accountant access.
 const router = Router();
@@ -119,16 +119,18 @@ router.delete('/recurring/:id', async (req, res) => {
 });
 
 // Creates every journal/bill that has fallen due up to today, catching up missed periods.
-router.post('/recurring/generate', async (req, res) => {
+router.post('/recurring/generate', async (req: AuthRequest, res) => {
   try {
     const today = toIsoDate();
     const templates = await db('recurring_templates').where({ is_active: true }).where('next_run_date', '<=', today);
     const created: any[] = [];
     const failed: any[] = [];
+    const approvalRequests: any[] = [];
     for (const t of templates) {
       const payload = parsePayload(t.payload);
       let next = toIsoDate(t.next_run_date);
       const end = t.end_date ? toIsoDate(t.end_date) : null;
+      const templateRequests: any[] = [];
       try {
         await db.transaction(async (trx) => {
           let guard = 0;
@@ -138,8 +140,9 @@ router.post('/recurring/generate', async (req, res) => {
               created.push({ template: t.name, kind: 'journal', id, date: next });
             } else {
               const due = new Date(Date.parse(next) + (Number(payload.due_days) || 0) * 86400000).toISOString().slice(0, 10);
-              const bill = await createBill(trx, { supplier_id: payload.supplier_id, account_id: payload.account_id, amount: payload.amount, quantity: 1, unit_price: payload.amount, category: payload.category, project_id: payload.project_id, date: next, due_date: due, description: payload.description, reference: `${t.name} ${next}` });
-              created.push({ template: t.name, kind: 'bill', id: bill.id, date: next });
+              const bill = await createBillWithApprovalLimit(trx, { supplier_id: payload.supplier_id, account_id: payload.account_id, amount: payload.amount, quantity: 1, unit_price: payload.amount, category: payload.category, project_id: payload.project_id, date: next, due_date: due, description: payload.description, reference: `${t.name} ${next}` }, req);
+              if (bill.request) templateRequests.push(bill.request);
+              created.push({ template: t.name, kind: 'bill', id: bill.id, date: next, pending_approval: !!bill.request });
             }
             next = advanceDate(next, t.frequency);
           }
@@ -150,11 +153,14 @@ router.post('/recurring/generate', async (req, res) => {
             updated_at: trx.fn.now(),
           });
         });
+        approvalRequests.push(...templateRequests);
       } catch (e: any) {
         failed.push({ template: t.name, message: e.message });
       }
     }
-    res.json({ message: `Generated ${created.length} item(s)${failed.length ? `, ${failed.length} template(s) failed` : ''}`, created, failed });
+    for (const request of approvalRequests) await notifyAdminsOfRequest(request);
+    const waiting = approvalRequests.length ? `; ${approvalRequests.length} bill(s) are waiting for admin approval` : '';
+    res.json({ message: `Generated ${created.length} item(s)${waiting}${failed.length ? `, ${failed.length} template(s) failed` : ''}`, created, failed });
   } catch (error) {
     sendError(res, error, 'Error generating recurring items');
   }

@@ -165,7 +165,8 @@ export async function paidOn(conn: Conn, targetType: 'Invoice' | 'Bill', targetI
 }
 
 export function statusFor(amount: number, settled: number, current?: string | null) {
-  if (String(current || '').toLowerCase() === 'void') return 'void';
+  const cur = String(current || '').toLowerCase();
+  if (cur === 'void' || cur === 'pending_approval') return cur;
   if (amount > 0 && settled >= amount - 0.005) return 'paid';
   if (settled > 0) return 'partially_paid';
   return 'unpaid';

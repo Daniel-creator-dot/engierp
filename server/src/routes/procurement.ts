@@ -4,6 +4,7 @@ import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 import { pick, orNull } from '../utils/pick';
 import { LedgerError, findAccountByCode, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
+import { afterBillCreated, billNeedsApproval, notifyAdminsOfRequest } from '../lib/approvals';
 
 const router = Router();
 
@@ -124,21 +125,24 @@ router.get('/suppliers/:id/history', authenticateToken, async (req, res) => {
     const bills = rawBills.map((bill: any) => {
       const amount = Number(bill.amount || 0);
       const paidAmount = paidByBill.get(String(bill.id)) || 0;
+      const current = String(bill.status || '').toLowerCase();
       let status = 'unpaid';
-      if (paidAmount >= amount && amount > 0) status = 'paid';
+      if (current === 'void' || current === 'pending_approval') status = current;
+      else if (paidAmount >= amount && amount > 0) status = 'paid';
       else if (paidAmount > 0) status = 'partially_paid';
       return {
         ...bill,
-        date: bill.created_at,
+        date: bill.date || bill.created_at,
         total_amount: amount,
         paid_amount: paidAmount,
-        balance_due: Math.max(0, amount - paidAmount),
+        balance_due: ['void', 'pending_approval'].includes(status) ? 0 : Math.max(0, amount - paidAmount),
         status,
       };
     });
 
-    const totalBilled = bills.reduce((sum: number, b: any) => sum + b.total_amount, 0);
-    const totalPaid = bills.reduce((sum: number, b: any) => sum + b.paid_amount, 0);
+    const postedBills = bills.filter((b: any) => !['void', 'pending_approval'].includes(b.status));
+    const totalBilled = postedBills.reduce((sum: number, b: any) => sum + b.total_amount, 0);
+    const totalPaid = postedBills.reduce((sum: number, b: any) => sum + b.paid_amount, 0);
     const totalOrdered = purchaseOrders
       .filter((po: any) => ![PO_STATUS.rejected, PO_STATUS.cancelled].includes(po.status))
       .reduce((sum: number, po: any) => sum + Number(po.total_amount || 0), 0);
@@ -701,36 +705,50 @@ router.post('/purchase-orders/:id/convert-to-bill', authenticateToken, authorize
       const dueDate = toIsoDate(req.body?.due_date || defaultDue);
       if (dueDate < billDate) throw httpError('Due date cannot be before the bill date');
 
+      const pending = await billNeedsApproval(trx, amount, req.user);
       const [insertedBill] = await trx('bills').insert({
         supplier_id: po.supplier_id,
         quantity: 1,
         unit_price: amount,
         amount,
+        date: billDate,
         due_date: dueDate,
         category: supplier?.category || 'Purchase Order',
         project_id: po.project_id || null,
         account_id: account.id,
         po_id: po.id,
-        status: 'Unpaid',
+        reference: po.id,
+        status: pending ? 'pending_approval' : 'Unpaid',
       }).returning('id');
       const billId = typeof insertedBill === 'object' ? insertedBill.id : insertedBill;
 
-      await postJournal(trx, {
-        date: billDate,
-        description: `Vendor Bill: ${supplier?.name || po.supplier_id} for ${po.id} (Bill ID: ${billId})`,
-        reference_type: 'bill',
-        reference_id: billId,
-        project_id: po.project_id,
-        lines: [
-          { account_id: account.id, debit: amount, credit: 0 },
-          { account_id: ap.id, debit: 0, credit: amount },
-        ],
-      });
+      if (!pending) {
+        await postJournal(trx, {
+          date: billDate,
+          description: `Vendor Bill: ${supplier?.name || po.supplier_id} for ${po.id} (Bill ID: ${billId})`,
+          reference_type: 'bill',
+          reference_id: billId,
+          project_id: po.project_id,
+          lines: [
+            { account_id: account.id, debit: amount, credit: 0 },
+            { account_id: ap.id, debit: 0, credit: amount },
+          ],
+        });
+      }
+      const request = await afterBillCreated(trx, billId, amount, pending, req.user || null, req);
 
       await trx('purchase_orders').where({ id: po.id }).update({ status: PO_STATUS.billed, bill_id: billId, updated_at: trx.fn.now() });
-      return { billId, amount };
+      return { billId, amount, request };
     });
-    res.status(201).json({ message: `Bill ${result.billId} created and posted to Accounts Payable`, bill_id: result.billId, amount: result.amount });
+    if (result.request) await notifyAdminsOfRequest(result.request);
+    res.status(201).json({
+      message: result.request
+        ? `Bill ${result.billId} created and sent for admin approval; it posts to Accounts Payable once approved`
+        : `Bill ${result.billId} created and posted to Accounts Payable`,
+      bill_id: result.billId,
+      amount: result.amount,
+      pending_approval: !!result.request,
+    });
   } catch (error) {
     sendError(res, error, 'Error converting purchase order to bill');
   }

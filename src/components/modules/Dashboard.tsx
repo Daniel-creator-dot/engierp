@@ -105,6 +105,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const { finance, workforce, projects, operations, procurement, assets } = summary;
 
   const attention: AttentionItem[] = [];
+  if (summary.role === 'admin' && finance?.pendingApprovals) attention.push({ label: `${finance.pendingApprovals} accounting request(s) awaiting your approval`, detail: 'Corrections, voids and large bills stay off the ledger until approved', tone: 'amber', target: 'accounting-approvals' });
   if (finance?.receivables.overdue) attention.push({ label: `${finance.receivables.overdue} overdue invoice(s)`, detail: `${money(finance.receivables.overdueAmount)} past due from clients`, tone: 'red', target: 'accounting-ar' });
   if (finance?.payables.overdue) attention.push({ label: `${finance.payables.overdue} overdue supplier bill(s)`, detail: `${money(finance.payables.overdueAmount)} past due to suppliers`, tone: 'red', target: 'accounting-ap' });
   if (projects?.overBudget) attention.push({ label: `${projects.overBudget} project(s) over budget`, detail: 'Actual spend is higher than the budget', tone: 'red', target: 'projects-active' });

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { pendingCount } from '../lib/approvals';
 
 const router = Router();
 
@@ -114,7 +115,7 @@ async function financeSection(today: Date) {
     .leftJoin('payments as p', function () {
       this.on('p.target_id', db.raw('CAST(b.id AS VARCHAR)')).andOn('p.target_type', db.raw('?', ['Bill']));
     })
-    .where(function () { this.whereNull('b.status').orWhereNot('b.status', 'void'); })
+    .where(function () { this.whereNull('b.status').orWhereNotIn('b.status', ['void', 'pending_approval']); })
     .select('b.id', 'b.amount', 'b.due_date', db.raw('COALESCE(SUM(p.amount), 0) as paid'))
     .groupBy('b.id');
   const payables = { outstanding: 0, open: 0, overdue: 0, overdueAmount: 0 };
@@ -285,7 +286,9 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   const can = (section: keyof typeof SECTION_ROLES) => SECTION_ROLES[section].includes(role);
 
   const loaders: [string, () => Promise<any>][] = [];
-  if (can('finance')) loaders.push(['finance', () => financeSection(today)]);
+  if (can('finance')) {
+    loaders.push(['finance', async () => ({ ...(await financeSection(today)), pendingApprovals: await pendingCount(req.user as any) })]);
+  }
   if (can('workforce')) loaders.push(['workforce', () => workforceSection(today)]);
   if (can('projects')) loaders.push(['projects', projectsSection]);
   if (can('operations')) loaders.push(['operations', operationsSection]);

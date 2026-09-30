@@ -119,6 +119,7 @@ export default function App() {
         { id: 'accounting-transactions', label: 'General Ledger' },
         { id: 'accounting-coa', label: 'Chart of Accounts' },
         { id: 'accounting-reports', label: 'Financial Reports' },
+        { id: 'accounting-approvals', label: 'Approvals' },
         { id: 'accounting-foundation', label: 'Foundation & Setup' },
       ]
     },

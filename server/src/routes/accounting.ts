@@ -12,14 +12,15 @@ import {
   round2,
   sendError,
   toIsoDate,
-  updateJournal,
   PERIOD_LOCK_KEY,
 } from '../lib/ledger';
 import { CREDIT_NOTE_METHOD, getAccountingConfig, getSettingValue, pick, saveSettingValue, statusFor } from '../lib/accounting';
-import { createBill, createCreditNote, createInvoice, recordPayment, voidBill, voidInvoice } from '../lib/accountingDocs';
+import { createInvoice, recordPayment } from '../lib/accountingDocs';
+import { createBillWithApprovalLimit, createRequest, notifyAdminsOfRequest, pendingRequestMap } from '../lib/approvals';
 import reportsRouter from './accounting-reports';
 import bankingRouter from './accounting-banking';
 import extrasRouter from './accounting-extras';
+import approvalsRouter from './accounting-approvals';
 
 const router = Router();
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Income', 'Expense'];
@@ -31,6 +32,16 @@ router.use(authenticateToken, authorizeRole(['admin', 'accountant']));
 router.use(reportsRouter);
 router.use(bankingRouter);
 router.use(extrasRouter);
+router.use(approvalsRouter);
+
+/** Corrections, voids and credit notes go to an admin for approval instead of posting directly. */
+async function submitRequest(req: AuthRequest, res: any, entity_type: string, entity_id: string, action: string, proposed: any = {}) {
+  const out = await createRequest(req, { entity_type, entity_id, action, reason: req.body?.reason ?? req.query?.reason, proposed });
+  res.status(out.applied ? 200 : 202).json({ ...out, pending: !out.applied });
+}
+
+const withPending = (rows: any[], map: Map<string, { id: number; action: string }>, key = 'id') =>
+  rows.map((r) => ({ ...r, pending_request: map.get(String(r[key])) || null }));
 
 // --- General ledger ---
 
@@ -64,14 +75,14 @@ router.get('/transactions', async (req, res) => {
     const [{ count }] = await base.clone().count({ count: 'j.id' });
     const rows = await base.clone()
       .select(
-        'j.id', 'j.date', 'j.description', 'j.reference_type', 'j.reference_id', 'j.project_id',
+        'j.id', 'j.date', 'j.description', 'j.reference_type', 'j.reference_id', 'j.project_id', 'j.status', 'j.reversed_by_journal_id', 'j.approval_request_id',
         db.raw('(SELECT COALESCE(SUM(le.debit), 0) FROM ledger_entries le WHERE le.journal_id = j.id) AS total_amount'),
         db.raw(`(SELECT string_agg(DISTINCT c.code || ' ' || c.name, ', ') FROM ledger_entries le JOIN chart_of_accounts c ON c.id = le.account_id WHERE le.journal_id = j.id) AS accounts`)
       )
       .orderBy([{ column: 'j.date', order: 'desc' }, { column: 'j.id', order: 'desc' }])
       .limit(pageSize)
       .offset((page - 1) * pageSize);
-    res.json({ rows, total: Number(count), page, pageSize });
+    res.json({ rows: withPending(rows, await pendingRequestMap(db, 'journal')), total: Number(count), page, pageSize });
   } catch (error) {
     sendError(res, error, 'Error fetching transactions');
   }
@@ -110,6 +121,7 @@ router.get('/invoices', async (req, res) => {
       .groupBy('i.id')
       .orderBy('i.created_at', 'desc');
 
+    const pending = await pendingRequestMap(db, 'invoice');
     res.json(invoices.map((inv: any) => {
       const amount = Number(inv.amount || 0);
       const paid = Number(inv.paid_amount || 0);
@@ -121,6 +133,7 @@ router.get('/invoices', async (req, res) => {
         credited_amount: credited,
         balance_due: isVoid ? 0 : Math.max(0, round2(amount - paid - credited)),
         status: statusFor(amount, paid + credited, inv.status),
+        pending_request: pending.get(String(inv.id)) || null,
       };
     }));
   } catch (error) {
@@ -142,13 +155,11 @@ router.post('/invoices', async (req, res) => {
   }
 });
 
-router.post('/invoices/:id/void', async (req, res) => {
+router.post('/invoices/:id/void', async (req: AuthRequest, res) => {
   try {
-    const { date, reason } = pick(req.body, ['date', 'reason'] as const);
-    const result = await db.transaction((trx) => voidInvoice(trx, req.params.id, { date, reason }));
-    res.json({ message: 'Invoice voided and reversed in the ledger', ...result });
+    await submitRequest(req, res, 'invoice', req.params.id, 'void', { date: req.body?.date });
   } catch (error) {
-    sendError(res, error, 'Error voiding invoice');
+    sendError(res, error, 'Error requesting invoice void');
   }
 });
 
@@ -160,13 +171,12 @@ router.get('/invoices/:id/credit-notes', async (req, res) => {
   }
 });
 
-router.post('/invoices/:id/credit-notes', async (req, res) => {
+router.post('/invoices/:id/credit-notes', async (req: AuthRequest, res) => {
   try {
-    const { date, amount, reason } = pick(req.body, ['date', 'amount', 'reason'] as const);
-    const result = await db.transaction((trx) => createCreditNote(trx, req.params.id, { date, amount, reason }));
-    res.status(201).json({ message: 'Credit note issued', ...result });
+    const { date, amount } = pick(req.body, ['date', 'amount'] as const);
+    await submitRequest(req, res, 'invoice', req.params.id, 'credit_note', { date, amount });
   } catch (error) {
-    sendError(res, error, 'Error issuing credit note');
+    sendError(res, error, 'Error requesting credit note');
   }
 });
 
@@ -297,47 +307,36 @@ router.get('/journal/:id', async (req, res) => {
       .where('le.journal_id', req.params.id)
       .select('le.*', 'c.code as account_code', 'c.name as account_name', 'c.type as account_type')
       .orderBy('le.id');
-    res.json({ ...header, items, editable: EDITABLE_JOURNAL_TYPES.includes(header.reference_type) });
+    const pending = await db('approval_requests').where({ entity_type: 'journal', entity_id: String(header.id), status: 'pending' }).first('id', 'action');
+    res.json({
+      ...header,
+      items,
+      editable: EDITABLE_JOURNAL_TYPES.includes(header.reference_type) && header.status !== 'reversed',
+      pending_request: pending || null,
+    });
   } catch (error) {
     sendError(res, error, 'Error fetching journal details');
   }
 });
 
-async function assertEditable(id: string) {
-  const header = await db('journal_entries').where({ id }).first();
-  if (!header) throw new LedgerError('Journal entry not found', 404);
-  if (!EDITABLE_JOURNAL_TYPES.includes(header.reference_type)) {
-    throw new LedgerError(`This entry was created by a ${header.reference_type || 'system'} document and can only be changed from that document (void or credit it instead).`);
-  }
-  return header;
-}
-
-router.put('/journal/:id', async (req, res) => {
+// Changing or removing a posted journal is a correction/void request that an admin approves.
+router.put('/journal/:id', async (req: AuthRequest, res) => {
   try {
-    await assertEditable(req.params.id);
     const description = String(req.body?.description || '').trim();
     if (!description) throw new LedgerError('Description is required');
     const lines = journalLinesFrom(req.body);
-    await db.transaction((trx) =>
-      updateJournal(trx, req.params.id, { date: req.body?.date, description, project_id: req.body?.project_id || null, lines })
-    );
-    res.json({ message: 'Journal entry updated' });
+    assertBalanced(lines);
+    await submitRequest(req, res, 'journal', req.params.id, 'correct', { date: req.body?.date, description, project_id: req.body?.project_id || null, lines });
   } catch (error) {
-    sendError(res, error, 'Error updating journal entry');
+    sendError(res, error, 'Error requesting journal correction');
   }
 });
 
-router.delete('/journal/:id', async (req, res) => {
+router.delete('/journal/:id', async (req: AuthRequest, res) => {
   try {
-    await assertEditable(req.params.id);
-    await db.transaction(async (trx) => {
-      await trx('bank_transactions').where({ matched_ledger_id: req.params.id }).update({ status: 'Unreconciled', matched_ledger_id: null });
-      await trx('attachments').where({ entity_type: 'journal', entity_id: String(req.params.id) }).del();
-      await deleteJournal(trx, req.params.id);
-    });
-    res.json({ message: 'Journal entry deleted and balances reversed' });
+    await submitRequest(req, res, 'journal', req.params.id, 'void');
   } catch (error) {
-    sendError(res, error, 'Error deleting journal');
+    sendError(res, error, 'Error requesting journal void');
   }
 });
 
@@ -384,16 +383,18 @@ router.get('/bills', async (req, res) => {
       .groupBy('b.id', 'suppliers.name')
       .orderBy('b.due_date', 'asc');
 
+    const pending = await pendingRequestMap(db, 'bill');
     res.json(bills.map((bill: any) => {
       const amount = Number(bill.amount || 0);
       const paid = Number(bill.paid_amount || 0);
-      const isVoid = String(bill.status || '').toLowerCase() === 'void';
+      const status = statusFor(amount, paid, bill.status);
       return {
         ...bill,
         paid_amount: paid,
         wht_amount: Number(bill.wht_amount || 0),
-        balance_due: isVoid ? 0 : Math.max(0, round2(amount - paid)),
-        status: statusFor(amount, paid, bill.status),
+        balance_due: status === 'void' || status === 'pending_approval' ? 0 : Math.max(0, round2(amount - paid)),
+        status,
+        pending_request: pending.get(String(bill.id)) || null,
       };
     }));
   } catch (error) {
@@ -401,24 +402,28 @@ router.get('/bills', async (req, res) => {
   }
 });
 
-router.post('/bills', async (req, res) => {
+router.post('/bills', async (req: AuthRequest, res) => {
   try {
     const body = pick(req.body, ['supplier_id', 'quantity', 'unit_price', 'amount', 'date', 'due_date', 'category', 'project_id', 'account_id', 'reference', 'description'] as const);
     if (!body.supplier_id || !body.account_id) throw new LedgerError('Supplier and account are required');
-    const result = await db.transaction((trx) => createBill(trx, body as any));
-    res.status(201).json({ message: 'Bill recorded and posted to ledger', ...result });
+    const result = await db.transaction((trx) => createBillWithApprovalLimit(trx, body as any, req));
+    if (result.request) await notifyAdminsOfRequest(result.request);
+    res.status(201).json({
+      message: result.request
+        ? 'Bill saved and sent for admin approval. It will post to the ledger once approved.'
+        : 'Bill recorded and posted to ledger',
+      ...result,
+    });
   } catch (error) {
     sendError(res, error, 'Error recording bill');
   }
 });
 
-router.post('/bills/:id/void', async (req, res) => {
+router.post('/bills/:id/void', async (req: AuthRequest, res) => {
   try {
-    const { date, reason } = pick(req.body, ['date', 'reason'] as const);
-    const result = await db.transaction((trx) => voidBill(trx, Number(req.params.id), { date, reason }));
-    res.json({ message: 'Bill voided and reversed in the ledger', ...result });
+    await submitRequest(req, res, 'bill', req.params.id, 'void', { date: req.body?.date });
   } catch (error) {
-    sendError(res, error, 'Error voiding bill');
+    sendError(res, error, 'Error requesting bill void');
   }
 });
 
@@ -427,9 +432,14 @@ router.post('/bills/:id/void', async (req, res) => {
 router.get('/payments', async (req, res) => {
   try {
     const q = db('payments').orderBy([{ column: 'date', order: 'desc' }, { column: 'id', order: 'desc' }]);
-    if (req.query.target_type) q.where('target_type', String(req.query.target_type));
+    const targetType = req.query.target_type ? String(req.query.target_type) : '';
+    if (targetType && req.query.include_void) {
+      q.where((w) => w.where('target_type', targetType).orWhere((v) => v.where('target_type', 'Void').where('original_target_type', targetType)));
+    } else if (targetType) {
+      q.where('target_type', targetType);
+    }
     if (req.query.target_id) q.where('target_id', String(req.query.target_id));
-    res.json(await q.limit(1000));
+    res.json(withPending(await q.limit(1000), await pendingRequestMap(db, 'payment')));
   } catch (error) {
     sendError(res, error, 'Error fetching payments');
   }

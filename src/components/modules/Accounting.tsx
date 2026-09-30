@@ -24,7 +24,9 @@ import {
   ExternalLink,
   Globe,
   Calendar,
-  Eye
+  Eye,
+  ShieldCheck,
+  History
 } from 'lucide-react';
 import {
   Card,
@@ -78,9 +80,12 @@ import BankReconcilePanel from './accounting/BankReconcilePanel';
 import CashFlowPanel from './accounting/CashFlowPanel';
 import TaxReportsPanel from './accounting/TaxReportsPanel';
 import RecurringPanel from './accounting/RecurringPanel';
-import { PeriodLockCard, TaxSettingsCard } from './accounting/SettingsCards';
+import { ApprovalLimitCard, PeriodLockCard, TaxSettingsCard } from './accounting/SettingsCards';
+import ApprovalsPanel from './accounting/ApprovalsPanel';
+import CorrectionDialog, { CorrectionTarget } from './accounting/CorrectionDialog';
+import PaymentsDialog, { PaymentsTarget } from './accounting/PaymentsDialog';
 
-const LEDGER_TYPES = ['manual', 'invoice', 'bill', 'payment', 'credit_note', 'invoice_void', 'bill_void', 'opening_balance', 'payroll', 'depreciation', 'disposal'];
+const LEDGER_TYPES = ['manual', 'invoice', 'bill', 'payment', 'credit_note', 'invoice_void', 'bill_void', 'reversal', 'opening_balance', 'payroll', 'depreciation', 'disposal'];
 const JOURNAL_PAGE_SIZE = 50;
 
 
@@ -198,6 +203,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [obInfo, setObInfo] = useState<{ journal: { id: number; date: string } | null; entries_on_or_before: number; entries_after: number } | null>(null);
   const [voidTarget, setVoidTarget] = useState<{ kind: 'invoice' | 'bill'; id: string; label: string } | null>(null);
   const [creditNoteTarget, setCreditNoteTarget] = useState<any>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget>(null);
+  const [paymentsTarget, setPaymentsTarget] = useState<PaymentsTarget>(null);
+  const [approvalCount, setApprovalCount] = useState(0);
+  const isAdmin = user?.role === 'admin';
   const [linkBankTarget, setLinkBankTarget] = useState<any>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -277,6 +286,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   useEffect(() => {
     fetchData();
   }, [activeSub, reportStartDate, reportEndDate]);
+
+  const refreshApprovalCount = () => {
+    accountingApi.getApprovalCount().then(res => setApprovalCount(Number(res.data.count) || 0)).catch(() => undefined);
+  };
+  useEffect(refreshApprovalCount, [activeSub]);
 
   useEffect(() => {
     if (activeSub === 'accounting-transactions') fetchLedger();
@@ -575,11 +589,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const formData = new FormData(e.target as HTMLFormElement);
     const payload = { date: formData.get('date') as string, reason: formData.get('reason') as string };
     try {
-      if (voidTarget.kind === 'invoice') await accountingApi.voidInvoice(voidTarget.id, payload);
-      else await accountingApi.voidBill(voidTarget.id, payload);
-      toast.success(`${voidTarget.label} voided; a reversing journal was posted`);
+      const res = voidTarget.kind === 'invoice'
+        ? await accountingApi.voidInvoice(voidTarget.id, payload)
+        : await accountingApi.voidBill(voidTarget.id, payload);
+      toast.success(res.data.message);
       setVoidTarget(null);
       fetchData();
+      refreshApprovalCount();
     } catch (error: any) {
       toast.error(errorText(error, 'Failed to void'));
     }
@@ -595,9 +611,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         amount: Number(formData.get('amount')),
         reason: formData.get('reason') as string
       });
-      toast.success(`Credit note ${res.data.id} issued`);
+      toast.success(res.data.message);
       setCreditNoteTarget(null);
       fetchData();
+      refreshApprovalCount();
     } catch (error: any) {
       toast.error(errorText(error, 'Failed to issue credit note'));
     }
@@ -624,8 +641,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       project_id: formData.get('project_id')
     };
     try {
-      await accountingApi.recordBill(data);
-      toast.success('Vendor bill recorded');
+      const res = await accountingApi.recordBill(data);
+      if (res.data.request) toast.info(res.data.message);
+      else toast.success('Vendor bill recorded');
+      refreshApprovalCount();
       setIsRecordBillOpen(false);
       setBillCategory('');
       setBillAccountId('');
@@ -676,11 +695,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       date: formData.get('date'),
       description: formData.get('description'),
       project_id: projectId && projectId !== 'none' ? projectId : null,
-      items: journalItems.filter(item => item.account_id !== '')
+      items: journalItems.filter(item => item.account_id !== ''),
+      reason: formData.get('correction_reason') || undefined
     };
     try {
       if (editingJournalId) {
-        await accountingApi.updateJournal(editingJournalId, data);
+        const res = await accountingApi.updateJournal(editingJournalId, data);
+        toast.success(res.data.message);
+        refreshApprovalCount();
       } else {
         try {
           await accountingApi.postJournal(data);
@@ -690,7 +712,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           await accountingApi.postJournal({ ...data, force: true });
         }
       }
-      toast.success(editingJournalId ? 'Journal entry updated' : 'Journal entry posted');
+      if (!editingJournalId) toast.success('Journal entry posted');
       setIsJournalOpen(false);
       setEditingJournalId(null);
       setEditingJournal(null);
@@ -714,8 +736,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const openJournalEditor = async (journalId: string | number) => {
     try {
       const res = await accountingApi.getJournalDetails(journalId);
+      if (res.data.status === 'reversed') {
+        toast.info(`Journal #${res.data.id} has already been reversed${res.data.reversed_by_journal_id ? ` by #${res.data.reversed_by_journal_id}` : ''}.`);
+        return false;
+      }
       if (!res.data.editable) {
         toast.info(`This is a ${String(res.data.reference_type).replace('_', ' ')} entry. Change it from its source document (void or credit note) instead of editing the journal.`);
+        return false;
+      }
+      if (res.data.pending_request) {
+        toast.info(`Request #${res.data.pending_request.id} for this journal is already waiting for admin approval.`);
         return false;
       }
       if (!coa.length) {
@@ -735,10 +765,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   };
 
   const handleDeleteJournal = async (journalId: string | number) => {
-    if (!window.confirm('Delete this manual journal entry? Its effect on account balances will be reversed.')) return false;
+    const reason = window.prompt('Void this journal entry? Once an admin approves, a reversing entry is posted and the original stays on record.\n\nReason for voiding:');
+    if (reason === null) return false;
+    if (reason.trim().length < 3) {
+      toast.error('A reason is required to void a journal');
+      return false;
+    }
     try {
-      await accountingApi.deleteJournal(journalId);
-      toast.success('Journal entry deleted and balances reversed');
+      const res = await accountingApi.deleteJournal(journalId, reason.trim());
+      toast.success(res.data.message);
+      refreshApprovalCount();
       fetchData();
       if (activeSub === 'accounting-transactions') fetchLedger();
       return true;
@@ -1037,6 +1073,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
   const renderContent = () => {
     switch (activeSub) {
+      case 'accounting-approvals':
+        return <ApprovalsPanel isAdmin={isAdmin} onChanged={refreshApprovalCount} />;
       case 'accounting-bank':
         return (
           <div className="space-y-6">
@@ -1271,10 +1309,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             statusLower === 'paid' ? 'bg-green-100 text-green-700 border-none' : 
                             statusLower === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : 
                             statusLower === 'void' ? 'bg-gray-100 text-gray-500 border-none' :
+                            statusLower === 'pending_approval' ? 'bg-yellow-100 text-yellow-700 border-none' :
                             'bg-red-50 text-red-600 border-none'
                           }>
                             {bill.status.replace('_', ' ').toUpperCase()}
                           </Badge>
+                          {bill.pending_request && bill.pending_request.action !== 'create' && (
+                            <Badge className="ml-1 bg-yellow-100 text-yellow-700 border-none">{bill.pending_request.action === 'void' ? 'VOID PENDING' : 'CORRECTION PENDING'}</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end items-center">
@@ -1282,12 +1324,22 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               <Eye className="w-4 h-4" />
                             </Button>
                             <AttachmentsButton entityType="bill" entityId={bill.id} label={`Bill ${bill.id}`} />
-                            {statusLower !== 'paid' && statusLower !== 'void' && (
+                            {Number(bill.paid_amount || 0) > 0 && (
+                              <Button variant="ghost" size="sm" className="h-8 text-xs" title="Payments on this bill" onClick={() => setPaymentsTarget({ type: 'Bill', id: String(bill.id), label: `Bill ${bill.id} (${bill.supplier_name})` })}>
+                                <History className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {statusLower !== 'paid' && statusLower !== 'void' && statusLower !== 'pending_approval' && bill.pending_request?.action !== 'void' && (
                               <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Bill', id: bill.id, amount: bill.amount, balance_due: bill.balance_due ?? bill.amount }); setBillPaymentWhtRate('0'); setIsPayBillOpen(true); }}>
                                 PAY
                               </Button>
                             )}
-                            {statusLower === 'unpaid' && Number(bill.paid_amount || 0) === 0 && (
+                            {statusLower !== 'void' && statusLower !== 'pending_approval' && !bill.pending_request && (
+                              <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-amber-600" onClick={() => setCorrectionTarget({ kind: 'bill', record: bill })}>
+                                CORRECT
+                              </Button>
+                            )}
+                            {statusLower === 'unpaid' && Number(bill.paid_amount || 0) === 0 && !bill.pending_request && (
                               <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-red-600" onClick={() => setVoidTarget({ kind: 'bill', id: String(bill.id), label: `Bill ${bill.id} (${bill.supplier_name})` })}>
                                 VOID
                               </Button>
@@ -1729,20 +1781,33 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           </TableCell>
                           <TableCell>
                             <Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : inv.status === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : isVoid ? 'bg-gray-100 text-gray-500 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{String(inv.status).replace('_', ' ').toUpperCase()}</Badge>
+                            {inv.pending_request && (
+                              <Badge className="ml-1 bg-yellow-100 text-yellow-700 border-none">
+                                {inv.pending_request.action === 'void' ? 'VOID PENDING' : inv.pending_request.action === 'credit_note' ? 'CREDIT PENDING' : 'CORRECTION PENDING'}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end items-center">
-                              {!isVoid && inv.status !== 'paid' && (
+                              {hasPayments && (
+                                <Button variant="ghost" size="sm" className="h-8 text-xs" title="Payments on this invoice" onClick={() => setPaymentsTarget({ type: 'Invoice', id: String(inv.id), label: `Invoice ${inv.id}` })}>
+                                  <History className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {!isVoid && !inv.pending_request && (
+                                <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-amber-600" onClick={() => setCorrectionTarget({ kind: 'invoice', record: inv })}>CORRECT</Button>
+                              )}
+                              {!isVoid && inv.status !== 'paid' && inv.pending_request?.action !== 'void' && (
                                 <Button variant="outline" size="sm" className="font-bold h-8 text-xs border-[#141414]" onClick={() => { setSelectedTarget({ type: 'Invoice', id: inv.id, amount: inv.amount, balance_due: inv.balance_due ?? inv.amount }); setIsPayInvoiceOpen(true); }}>
                                   RECEIVE
                                 </Button>
                               )}
                               <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-blue-600" title="Print invoice" onClick={() => printInvoice(inv)}><Printer className="w-3 h-3" /></Button>
                               <AttachmentsButton entityType="invoice" entityId={inv.id} label={`Invoice ${inv.id}`} />
-                              {!isVoid && Number(inv.balance_due) > 0 && (
+                              {!isVoid && Number(inv.balance_due) > 0 && !inv.pending_request && (
                                 <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-purple-600" onClick={() => setCreditNoteTarget(inv)}>CREDIT</Button>
                               )}
-                              {!isVoid && !hasPayments && (
+                              {!isVoid && !hasPayments && !inv.pending_request && (
                                 <Button variant="ghost" size="sm" className="font-bold h-8 text-xs text-red-600" onClick={() => setVoidTarget({ kind: 'invoice', id: String(inv.id), label: `Invoice ${inv.id}` })}>VOID</Button>
                               )}
                             </div>
@@ -1806,7 +1871,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <form onSubmit={handleCreditNote}>
                   <DialogHeader>
                     <DialogTitle>Credit Note for {creditNoteTarget?.id}</DialogTitle>
-                    <DialogDescription>Reduces what {creditNoteTarget?.client} owes. Revenue and output taxes are reversed in proportion to the original invoice.</DialogDescription>
+                    <DialogDescription>Reduces what {creditNoteTarget?.client} owes. Revenue and output taxes are reversed in proportion to the original invoice. An admin must approve it before it posts.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -1815,7 +1880,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     </div>
                     <div className="space-y-2"><Label>Reason</Label><Input name="reason" required className="bg-[#F5F5F5] border-none" placeholder="e.g. Discount agreed, work not delivered" /></div>
                   </div>
-                  <DialogFooter><Button type="submit" className="w-full bg-purple-600 text-white h-11 font-bold">ISSUE CREDIT NOTE</Button></DialogFooter>
+                  <DialogFooter><Button type="submit" className="w-full bg-purple-600 text-white h-11 font-bold">REQUEST CREDIT NOTE</Button></DialogFooter>
                 </form>
               </DialogContent>
             </Dialog>
@@ -1892,21 +1957,27 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Date</TableHead><TableHead>#</TableHead><TableHead>Description</TableHead><TableHead>Type</TableHead><TableHead>Accounts</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {transactions.map((tx: any) => {
-                    const isManual = tx.reference_type === 'manual';
+                    const isReversed = tx.status === 'reversed';
+                    const isManual = tx.reference_type === 'manual' && !isReversed && !tx.pending_request;
                     const target = sourceTarget(tx.reference_type);
                     return (
                       <TableRow key={tx.id} className="hover:bg-blue-50/20 cursor-pointer" onClick={() => openJournalDrillDown(tx)}>
                         <TableCell className="text-[#8E9299] font-mono text-xs whitespace-nowrap">{formatDate(tx.date)}</TableCell>
                         <TableCell className="text-[#8E9299] font-mono text-xs">{tx.id}</TableCell>
                         <TableCell className="font-bold text-[#141414]">{tx.description}{tx.reference_id && <p className="text-[10px] text-[#8E9299] font-mono">{tx.reference_id}</p>}</TableCell>
-                        <TableCell><Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{String(tx.reference_type || '').replace(/_/g, ' ')}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="border-[#E4E3E0] text-[#141414] uppercase text-[10px]">{String(tx.reference_type || '').replace(/_/g, ' ')}</Badge>
+                          {isReversed && <Badge className="ml-1 bg-gray-100 text-gray-600 border-none text-[10px]">{tx.reversed_by_journal_id ? `REVERSED BY #${tx.reversed_by_journal_id}` : 'REVERSED'}</Badge>}
+                          {tx.pending_request && <Badge className="ml-1 bg-yellow-100 text-yellow-700 border-none text-[10px]">{tx.pending_request.action === 'void' ? 'VOID PENDING' : 'CORRECTION PENDING'}</Badge>}
+                          {tx.approval_request_id && <p className="text-[10px] text-[#8E9299] mt-1">Approval #{tx.approval_request_id}</p>}
+                        </TableCell>
                         <TableCell className="text-xs text-[#8E9299] max-w-[260px] truncate" title={tx.accounts}>{tx.accounts}</TableCell>
                         <TableCell className="text-right font-black text-[#141414]">{currSym}{fmtMoney(tx.total_amount)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1 items-center" onClick={(e) => e.stopPropagation()}>
                             <AttachmentsButton entityType="journal" entityId={tx.id} label={`Journal #${tx.id}`} />
                             {isManual && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Edit journal" onClick={() => openJournalEditor(tx.id)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Request a correction" onClick={() => openJournalEditor(tx.id)}>
                                 <Edit className="w-4 h-4" />
                               </Button>
                             )}
@@ -1916,7 +1987,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               </Button>
                             )}
                             {isManual && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" title="Delete journal" onClick={() => handleDeleteJournal(tx.id)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" title="Request a void" onClick={() => handleDeleteJournal(tx.id)}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             )}
@@ -2688,6 +2759,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <TaxSettingsCard coa={coa} />
 
               <PeriodLockCard isAdmin={user?.role === 'admin'} />
+              <ApprovalLimitCard isAdmin={isAdmin} currSym={currSym} />
 
               {/* Opening Balances Tool */}
               <Card className="col-span-1 md:col-span-2 border-none shadow-sm rounded-2xl overflow-hidden">
@@ -2846,7 +2918,35 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         <h1 className="text-4xl font-black tracking-tight text-[#141414]">Finance Hub.</h1>
         <p className="text-[#8E9299] text-lg mt-1 font-medium">Enterprise Treasury, AP/AR, and Ledger Configuration.</p>
       </div>
+      {approvalCount > 0 && activeSub !== 'accounting-approvals' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 px-5 py-3">
+          <p className="text-sm font-bold text-yellow-800 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            {isAdmin
+              ? `${approvalCount} request${approvalCount === 1 ? '' : 's'} waiting for your approval`
+              : `${approvalCount} of your request${approvalCount === 1 ? ' is' : 's are'} waiting for admin approval`}
+          </p>
+          {onNavigate && <Button size="sm" className="bg-[#141414] text-white font-bold" onClick={() => onNavigate('accounting-approvals')}>Open Approvals</Button>}
+        </div>
+      )}
       {renderContent()}
+
+      <CorrectionDialog
+        target={correctionTarget}
+        coa={coa}
+        suppliers={suppliers}
+        projects={projects}
+        currSym={currSym}
+        onClose={() => setCorrectionTarget(null)}
+        onSubmitted={() => { fetchData(); refreshApprovalCount(); }}
+      />
+      <PaymentsDialog
+        target={paymentsTarget}
+        bankAccounts={bankAccounts}
+        currSym={currSym}
+        onClose={() => setPaymentsTarget(null)}
+        onChanged={() => { fetchData(); refreshApprovalCount(); }}
+      />
 
       {/* Void Invoice / Bill Modal */}
       <Dialog open={!!voidTarget} onOpenChange={(open) => !open && setVoidTarget(null)}>
@@ -2854,13 +2954,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           <form onSubmit={handleVoid}>
             <DialogHeader>
               <DialogTitle>Void {voidTarget?.label}</DialogTitle>
-              <DialogDescription>A reversing journal is posted on the date below and the document is marked VOID. The original stays on record for audit.</DialogDescription>
+              <DialogDescription>An admin must approve the void. Once approved, a reversing journal is posted on the date below (or the first open date if that period is closed) and the document is marked VOID. The original stays on record for audit.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2"><Label>Void Date</Label><Input name="date" type="date" required defaultValue={todayIso()} className="bg-[#F5F5F5] border-none" /></div>
-              <div className="space-y-2"><Label>Reason</Label><Input name="reason" required className="bg-[#F5F5F5] border-none" placeholder="e.g. Raised in error, duplicate" /></div>
+              <div className="space-y-2"><Label>Reason</Label><Input name="reason" required minLength={3} className="bg-[#F5F5F5] border-none" placeholder="e.g. Raised in error, duplicate" /></div>
             </div>
-            <DialogFooter><Button type="submit" variant="destructive" className="w-full h-11 font-bold">VOID DOCUMENT</Button></DialogFooter>
+            <DialogFooter><Button type="submit" variant="destructive" className="w-full h-11 font-bold">REQUEST VOID</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -3219,10 +3319,20 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         <DialogContent className="max-w-3xl rounded-2xl border-none shadow-2xl">
           <form onSubmit={handlePostJournal} key={journalFormKey}>
             <DialogHeader className="bg-[#F5F5F5]/30 p-6 border-b border-[#F5F5F5]">
-              <DialogTitle className="text-2xl font-black text-[#141414]">{editingJournalId ? `Edit Journal #${editingJournalId}` : 'Double-Entry Journal Post'}</DialogTitle>
-              <DialogDescription className="font-bold text-[#8E9299]">Maintain ledger integrity with balanced debits and credits.</DialogDescription>
+              <DialogTitle className="text-2xl font-black text-[#141414]">{editingJournalId ? `Correct Journal #${editingJournalId}` : 'Double-Entry Journal Post'}</DialogTitle>
+              <DialogDescription className="font-bold text-[#8E9299]">
+                {editingJournalId
+                  ? 'Your correction goes to an admin. Once approved, the original entry is reversed and the corrected one is posted.'
+                  : 'Maintain ledger integrity with balanced debits and credits.'}
+              </DialogDescription>
             </DialogHeader>
             <div className="p-8 space-y-8">
+              {editingJournalId && (
+                <div className="space-y-2">
+                  <Label className="font-bold text-xs uppercase text-[#8E9299]">Reason for the correction <span className="text-red-500">*</span></Label>
+                  <Input name="correction_reason" required minLength={3} placeholder="e.g. Posted to the wrong expense account" className="h-12 bg-amber-50 border-none rounded-xl font-bold" />
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label className="font-bold text-xs uppercase text-[#8E9299]">Post Date</Label>
@@ -3322,7 +3432,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 disabled={Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) > 0.01}
               >
                 {Math.abs(journalItems.reduce((s, i) => s + i.debit, 0) - journalItems.reduce((s, i) => s + i.credit, 0)) < 0.01 
-                  ? 'AUTHORIZE & POST' 
+                  ? (editingJournalId ? 'SEND FOR APPROVAL' : 'AUTHORIZE & POST')
                   : 'LEDGER UNBALANCED'}
               </Button>
             </DialogFooter>

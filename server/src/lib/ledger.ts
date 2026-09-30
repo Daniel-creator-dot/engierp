@@ -28,6 +28,8 @@ export interface JournalInput {
   reference_id?: string | number | null;
   project_id?: string | null;
   lines: JournalLine[];
+  /** Set when the posting results from an approved correction request. */
+  approval_request_id?: number | null;
 }
 
 export class LedgerError extends Error {
@@ -146,11 +148,27 @@ export async function postJournal(trx: Knex.Transaction, input: JournalInput): P
     reference_type: input.reference_type,
     reference_id: input.reference_id != null ? String(input.reference_id) : null,
     project_id: input.project_id && input.project_id !== 'none' ? input.project_id : null,
+    ...(input.approval_request_id ? { approval_request_id: input.approval_request_id } : {}),
   }).returning('id');
   const journalId = typeof inserted === 'object' ? inserted.id : inserted;
 
   await applyLines(trx, input.lines.map((l) => ({ ...l, journal_id: journalId })));
   return journalId;
+}
+
+/**
+ * The date a correction can post on: the preferred date if its period is open, otherwise today
+ * (or the day after the lock when the lock is in the future). `shifted` tells callers to label it.
+ */
+export async function openPostingDate(conn: Conn, preferred?: string | Date | null) {
+  const wanted = toIsoDate(preferred);
+  const closedThrough = await getBooksClosedThrough(conn);
+  if (!closedThrough || wanted > closedThrough) return { date: wanted, shifted: false };
+  const today = toIsoDate();
+  if (today > closedThrough) return { date: today, shifted: true };
+  const [y, m, d] = closedThrough.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  return { date: next, shifted: true };
 }
 
 /** Replaces a journal's header and lines in place (both old and new dates must be open). */
@@ -188,19 +206,23 @@ export async function deleteJournal(trx: Knex.Transaction, journalId: number | s
 export async function reverseJournal(
   trx: Knex.Transaction,
   journalId: number | string,
-  opts: { date?: string | null; description: string; reference_type: string; reference_id?: string | number | null }
+  opts: { date?: string | null; description: string; reference_type: string; reference_id?: string | number | null; approval_request_id?: number | null }
 ) {
   const header = await trx('journal_entries').where({ id: journalId }).first();
   if (!header) throw new LedgerError('Journal entry not found', 404);
+  if (header.status === 'reversed') throw new LedgerError(`Journal #${journalId} has already been reversed`);
   const entries = await trx('ledger_entries').where({ journal_id: journalId });
-  return postJournal(trx, {
+  const reversalId = await postJournal(trx, {
     date: opts.date,
     description: opts.description,
     reference_type: opts.reference_type,
     reference_id: opts.reference_id,
     project_id: header.project_id,
     lines: entries.map((e: any) => ({ account_id: e.account_id, debit: e.credit, credit: e.debit })),
+    approval_request_id: opts.approval_request_id,
   });
+  await trx('journal_entries').where({ id: journalId }).update({ status: 'reversed', reversed_by_journal_id: reversalId, updated_at: trx.fn.now() });
+  return reversalId;
 }
 
 export async function findAccountByCode(conn: Conn, code: string) {

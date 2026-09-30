@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, Percent, Plus, Trash2, Unlock } from 'lucide-react';
+import { Loader2, Lock, Percent, Plus, ShieldCheck, Trash2, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -103,6 +103,55 @@ export function TaxSettingsCard({ coa }: { coa: any[] }) {
             <Button className="w-full bg-blue-600 text-white rounded-xl h-12 font-black" disabled={saving} onClick={save}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SAVE TAX SETTINGS'}</Button>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ApprovalLimitCard({ isAdmin, currSym }: { isAdmin: boolean; currSym: string }) {
+  const [saved, setSaved] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    accountingApi.getApprovalSettings()
+      .then(res => { const v = Number(res.data.bill_approval_threshold || 0); setSaved(v); setDraft(v > 0 ? String(v) : ''); })
+      .catch((error) => toast.error(errorText(error, 'Failed to load the approval limit')));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await accountingApi.updateApprovalSettings(draft === '' ? 0 : Number(draft));
+      const v = Number(res.data.bill_approval_threshold || 0);
+      setSaved(v);
+      setDraft(v > 0 ? String(v) : '');
+      toast.success(v > 0 ? `Bills above ${currSym}${v.toLocaleString()} now need admin approval` : 'Approval limit turned off');
+    } catch (error: any) {
+      toast.error(errorText(error, 'Failed to save the approval limit'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+      <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5]">
+        <CardTitle className="text-xl font-black text-[#141414] flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-blue-600" /> Bill Approval Limit</CardTitle>
+        <CardDescription>New bills above this amount wait for an admin before they reach Accounts Payable. Corrections and voids always need approval, whatever the amount.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-8 space-y-5">
+        <div className="p-5 rounded-2xl bg-[#F5F5F5]">
+          {saved > 0
+            ? <><Badge className="bg-blue-100 text-blue-700 border-none font-bold">ON</Badge><p className="mt-2 font-bold">Bills above {currSym}{saved.toLocaleString(undefined, { minimumFractionDigits: 2 })} need approval</p></>
+            : <><Badge className="bg-gray-100 text-gray-600 border-none font-bold">OFF</Badge><p className="mt-2 font-bold">New bills post immediately</p></>}
+        </div>
+        <div className="space-y-2">
+          <Label className="font-bold text-xs uppercase text-[#8E9299]">Approval limit ({currSym})</Label>
+          <Input type="number" min="0" step="0.01" value={draft} placeholder="Blank or 0 turns it off" disabled={!isAdmin} onChange={(e) => setDraft(e.target.value)} className="bg-[#F5F5F5] border-none h-11" />
+          {!isAdmin && <p className="text-xs text-orange-600 font-medium">Only an admin can change the approval limit.</p>}
+        </div>
+        {isAdmin && <Button className="w-full bg-[#141414] text-white h-11 font-bold" disabled={saving || Number(draft || 0) === saved} onClick={save}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SAVE LIMIT'}</Button>}
       </CardContent>
     </Card>
   );
