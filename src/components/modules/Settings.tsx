@@ -61,6 +61,7 @@ import {
 } from '../ui/dialog';
 import { toast } from 'sonner';
 import { settingsApi } from '../../lib/api';
+import { formatCurrency } from '../../lib/currency';
 import { useAuth } from '../../contexts/AuthContext';
 import CatalogManager from './CatalogManager';
 import UserManagement from '../settings/UserManagement';
@@ -496,7 +497,7 @@ export default function Settings() {
                     <Badge {...({ key: i } as any)} className="bg-white text-[#141414] border-[#E4E3E0] px-4 py-2 rounded-xl flex items-center gap-2">
                       <span className="font-bold">{d.name}</span>
                       <span className="text-[10px] text-[#8E9299] bg-[#F5F5F5] px-2 py-0.5 rounded-md">
-                        {d.type === 'percentage' ? `${d.value}%` : `${currency === 'USD' ? '$' : '₵'}${d.value}`}
+                        {d.type === 'percentage' ? `${d.value}%` : formatCurrency(Number(d.value), currency)}
                       </span>
                       <button 
                         className="text-[#8E9299] hover:text-red-500 ml-1" 

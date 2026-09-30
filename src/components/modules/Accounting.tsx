@@ -70,7 +70,7 @@ import { accountingApi, settingsApi, projectsApi, procurementApi, catalogApi } f
 import { Service, useCategories } from '../../lib/catalog';
 import CategorySelect from '../CategorySelect';
 import { Invoice } from '../../types';
-import { getCurrencySymbol } from '../../lib/currency';
+import { getCurrencySymbol, formatWithSymbol } from '../../lib/currency';
 import { escapeHtml } from '../../lib/html';
 import { formatDate, todayIso } from '../../lib/dates';
 import { brandingFrom, downloadCsv, errorText, fmtMoney, openPrintWindow } from './accounting/print';
@@ -441,7 +441,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   };
 
   const getSetting = (key: string) => companySettings.find(s => s.key === key)?.value || '';
-  const currSym = getSetting('currency') === 'USD' ? '$' : getCurrencySymbol(getSetting('currency')); // consistent symbol
+  const currSym = getCurrencySymbol(getSetting('currency'));
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const accountingConfig = JSON.parse(getSetting('accounting_config') || '{"sales_tax_rate": "15", "tax_name": "VAT"}');
 
 
@@ -826,18 +827,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const companyName = getSetting('company_name') || 'ENGINEERING ERP';
     const companyAddress = getSetting('company_address') || '';
     const signature = getSetting('company_signature');
-    const currSym = getCurrencySymbol();
 
     const totalRevenue = incomeStatement.filter(a => a.type === 'Income').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0);
     const totalExpenses = incomeStatement.filter(a => a.type === 'Expense').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0);
     const netIncome = totalRevenue - totalExpenses;
 
     const revenueRows = incomeStatement.filter(a => a.type === 'Income').map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_credit - a.total_debit).toLocaleString()}</td></tr>`
+      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${money((a.total_credit - a.total_debit))}</td></tr>`
     ).join('');
 
     const expenseRows = incomeStatement.filter(a => a.type === 'Expense').map((a: any) => 
-      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${(a.total_debit - a.total_credit).toLocaleString()}</td></tr>`
+      `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${money((a.total_debit - a.total_credit))}</td></tr>`
     ).join('');
 
     const content = `
@@ -858,7 +858,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${revenueRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Revenue</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #2E7D32;">${currSym}${totalRevenue.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #2E7D32;">${money(totalRevenue)}</td>
           </tr>
           <tr style="background: #FFEBEE;">
             <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #C62828;">Operating Expenses</td>
@@ -866,11 +866,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${expenseRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Expenses</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalExpenses.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${money(totalExpenses)}</td>
           </tr>
           <tr style="background: #141414; color: white;">
             <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Net Income</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${netIncome.toLocaleString()}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${money(netIncome)}</td>
           </tr>
         </tbody>
       </table>
@@ -880,7 +880,6 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   };
 
   const handleExportIncomeStatementExcel = () => {
-    const currSym = getCurrencySymbol();
     const totalRevenue = incomeStatement.filter(a => a.type === 'Income').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0);
     const totalExpenses = incomeStatement.filter(a => a.type === 'Expense').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0);
     const netIncome = totalRevenue - totalExpenses;
@@ -911,7 +910,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
     // Apply number formats
     const currency = getSetting('currency') || 'GHS';
-    const numFormat = currency === 'USD' ? '"$"#,##0.00' : '"Gh"#,##0.00';
+    const numFormat = currency === 'USD' ? '"$"#,##0.00;-"$"#,##0.00' : '"GH₵ "#,##0.00;-"GH₵ "#,##0.00';
     
     for (const cellId in ws) {
       if (cellId.startsWith('!')) continue;
@@ -935,7 +934,6 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     const companyName = getSetting('company_name') || 'ENGINEERING ERP';
     const companyAddress = getSetting('company_address') || '';
     const signature = getSetting('company_signature');
-    const currSym = getCurrencySymbol();
 
     const assets = balanceSheet.accounts.filter((a: any) => a.type === 'Asset');
     const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
@@ -947,17 +945,17 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
     const assetRows = assets.map((a: any) => {
       const bal = Number(a.total_debit || 0) - Number(a.total_credit || 0);
-      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${money(bal)}</td></tr>`;
     }).join('');
 
     const liabilityRows = liabilities.map((a: any) => {
       const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
-      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${money(bal)}</td></tr>`;
     }).join('');
 
     const equityRows = equity.map((a: any) => {
       const bal = Number(a.total_credit || 0) - Number(a.total_debit || 0);
-      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${currSym}${bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`;
+      return `<tr><td style="padding: 8px 16px;">${escapeHtml(a.name)}</td><td style="padding: 8px 16px; text-align: right;">${money(bal)}</td></tr>`;
     }).join('');
 
     const content = `
@@ -978,7 +976,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${assetRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Assets</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #1565C0;">${currSym}${totalAssets.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #1565C0;">${money(totalAssets)}</td>
           </tr>
           <tr style="background: #FFEBEE;">
             <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #C62828;">Liabilities</td>
@@ -986,7 +984,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${liabilityRows}
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Liabilities</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${currSym}${totalLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${money(totalLiabilities)}</td>
           </tr>
           <tr style="background: #F3E5F5;">
             <td colspan="2" style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; color: #6A1B9A;">Equity</td>
@@ -994,15 +992,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           ${equityRows}
           <tr style="background: #F5F5F5;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Retained Earnings</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right;">${currSym}${balanceSheet.retainedEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right;">${money(balanceSheet.retainedEarnings)}</td>
           </tr>
           <tr style="background: #F5F5F5; font-weight: bold;">
             <td style="border: 1px solid #E4E3E0; padding: 12px;">Total Equity</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #6A1B9A;">${currSym}${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #6A1B9A;">${money(totalEquity)}</td>
           </tr>
           <tr style="background: #141414; color: white;">
             <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Total Liabilities & Equity</td>
-            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${currSym}${(totalLiabilities + totalEquity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${money((totalLiabilities + totalEquity))}</td>
           </tr>
         </tbody>
       </table>
@@ -1012,7 +1010,6 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   };
 
   const handleExportBalanceSheetExcel = () => {
-    const currSym = getCurrencySymbol();
     const assets = balanceSheet.accounts.filter((a: any) => a.type === 'Asset');
     const liabilities = balanceSheet.accounts.filter((a: any) => a.type === 'Liability');
     const equity = balanceSheet.accounts.filter((a: any) => a.type === 'Equity');
@@ -1050,7 +1047,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     
     // Apply number formats
     const currency = getSetting('currency') || 'GHS';
-    const numFormat = currency === 'USD' ? '"$"#,##0.00' : '"Gh"#,##0.00';
+    const numFormat = currency === 'USD' ? '"$"#,##0.00;-"$"#,##0.00' : '"GH₵ "#,##0.00;-"GH₵ "#,##0.00';
     
     for (const cellId in ws) {
       if (cellId.startsWith('!')) continue;
@@ -1151,7 +1148,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     {b.coa_account_id ? (
                       <>
                         <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-3">Ledger: {b.coa_code} {b.coa_name}</div>
-                        <div className="text-3xl font-black">{currSym}{fmtMoney(b.ledger_balance)}</div>
+                        <div className="text-3xl font-black">{money(b.ledger_balance)}</div>
                       </>
                     ) : (
                       <div className="mt-3 space-y-2">
@@ -1299,9 +1296,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableCell className="font-mono text-xs">{formatDate(bill.date || bill.created_at)}</TableCell>
                         <TableCell className="font-mono text-xs">{formatDate(bill.due_date)}</TableCell>
                         <TableCell className="text-right font-black text-red-600">
-                          {currSym}{Number(bill.amount).toLocaleString()}
+                          {money(Number(bill.amount))}
                           {statusLower === 'partially_paid' && bill.balance_due !== undefined && (
-                            <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{Number(bill.balance_due).toLocaleString()}</p>
+                            <p className="text-[10px] text-orange-600 mt-1">Due: {money(Number(bill.balance_due))}</p>
                           )}
                         </TableCell>
                         <TableCell>
@@ -1445,7 +1442,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-[#8E9299]">Amount</Label>
-                        <div className="p-3 bg-red-50 rounded-xl font-black text-red-600">{currSym}{Number(selectedBill.amount).toLocaleString()}</div>
+                        <div className="p-3 bg-red-50 rounded-xl font-black text-red-600">{money(Number(selectedBill.amount))}</div>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-[#8E9299]">Due Date</Label>
@@ -1466,7 +1463,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       {selectedBill.status?.toLowerCase() === 'partially_paid' && selectedBill.balance_due !== undefined && (
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-[#8E9299]">Balance Due</Label>
-                          <div className="p-3 bg-orange-50 rounded-xl font-bold text-orange-600">{currSym}{Number(selectedBill.balance_due).toLocaleString()}</div>
+                          <div className="p-3 bg-orange-50 rounded-xl font-bold text-orange-600">{money(Number(selectedBill.balance_due))}</div>
                         </div>
                       )}
                     </div>
@@ -1498,7 +1495,6 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           } catch {
             breakdown = [];
           }
-          const money = (v: any) => `${escapeHtml(currSym)}${fmtMoney(v)}`;
           const cell = 'padding: 10px; border-bottom: 1px solid #E4E3E0;';
           const itemsHtml = itemsArr.length > 0 ? itemsArr.map((it: any) => `
             <tr>
@@ -1613,7 +1609,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                       <SelectTrigger className="bg-white border-none h-8 rounded-lg text-xs text-[#8E9299]"><SelectValue placeholder="Pick a saved service..." /></SelectTrigger>
                                       <SelectContent>
                                         {services.map(s => (
-                                          <SelectItem key={s.id} value={String(s.id)}>{s.name} ({currSym}{Number(s.default_price).toLocaleString()} / {s.unit})</SelectItem>
+                                          <SelectItem key={s.id} value={String(s.id)}>{s.name} ({money(Number(s.default_price))} / {s.unit})</SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -1659,7 +1655,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                                   />
                                 </div>
                                 <div className="col-span-1 text-right font-bold text-xs text-[#141414]">
-                                  {(item.quantity * item.unitPrice).toLocaleString()}
+                                  {fmtMoney(item.quantity * item.unitPrice)}
                                 </div>
                                 <div className="col-span-1 flex justify-end">
                                   <Button
@@ -1684,7 +1680,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-2">
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-blue-600 font-medium">Subtotal</span>
-                            <span className="font-bold">{currSym}{fmtMoney(invoiceSubtotal)}</span>
+                            <span className="font-bold">{money(invoiceSubtotal)}</span>
                           </div>
                           <label className="flex items-center gap-2 text-sm text-blue-700 font-medium cursor-pointer">
                             <input type="checkbox" checked={invoiceApplyTax} onChange={(e) => setInvoiceApplyTax(e.target.checked)} />
@@ -1693,7 +1689,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           {invoiceTaxLines.map(c => (
                             <div key={c.code} className="flex justify-between items-center text-sm">
                               <span className="text-blue-600 font-medium">{c.name} ({c.rate}%)</span>
-                              <span className="font-bold">{currSym}{fmtMoney(c.amount)}</span>
+                              <span className="font-bold">{money(c.amount)}</span>
                             </div>
                           ))}
                           <div className="flex justify-between items-center pt-2 border-t border-blue-100">
@@ -1702,7 +1698,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                               <p className="text-xs text-blue-800 font-medium">{invoiceItems.length} line items specified</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-2xl font-black text-blue-700">{currSym}{fmtMoney(invoiceTotal)}</p>
+                              <p className="text-2xl font-black text-blue-700">{money(invoiceTotal)}</p>
                             </div>
                           </div>
                         </div>
@@ -1773,11 +1769,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <TableCell className="text-[#8E9299] text-xs font-mono">{formatDate(inv.date || inv.created_at)}</TableCell>
                           <TableCell className="text-[#8E9299] text-xs font-mono">{formatDate(inv.dueDate)}</TableCell>
                           <TableCell className="text-right font-black">
-                            {currSym}{fmtMoney(inv.amount)}
+                            {money(inv.amount)}
                             {!isVoid && Number(inv.balance_due) > 0 && Number(inv.balance_due) < Number(inv.amount) && (
-                              <p className="text-[10px] text-orange-600 mt-1">Due: {currSym}{fmtMoney(inv.balance_due)}</p>
+                              <p className="text-[10px] text-orange-600 mt-1">Due: {money(inv.balance_due)}</p>
                             )}
-                            {Number(inv.credited_amount || 0) > 0 && <p className="text-[10px] text-purple-600">Credited: {currSym}{fmtMoney(inv.credited_amount)}</p>}
+                            {Number(inv.credited_amount || 0) > 0 && <p className="text-[10px] text-purple-600">Credited: {money(inv.credited_amount)}</p>}
                           </TableCell>
                           <TableCell>
                             <Badge className={inv.status === 'paid' ? 'bg-green-100 text-green-700 border-none' : inv.status === 'partially_paid' ? 'bg-orange-100 text-orange-700 border-none' : isVoid ? 'bg-gray-100 text-gray-500 border-none' : 'bg-yellow-50 text-yellow-600 border-none'}>{String(inv.status).replace('_', ' ').toUpperCase()}</Badge>
@@ -1972,7 +1968,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           {tx.approval_request_id && <p className="text-[10px] text-[#8E9299] mt-1">Approval #{tx.approval_request_id}</p>}
                         </TableCell>
                         <TableCell className="text-xs text-[#8E9299] max-w-[260px] truncate" title={tx.accounts}>{tx.accounts}</TableCell>
-                        <TableCell className="text-right font-black text-[#141414]">{currSym}{fmtMoney(tx.total_amount)}</TableCell>
+                        <TableCell className="text-right font-black text-[#141414]">{money(tx.total_amount)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1 items-center" onClick={(e) => e.stopPropagation()}>
                             <AttachmentsButton entityType="journal" entityId={tx.id} label={`Journal #${tx.id}`} />
@@ -2056,25 +2052,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-blue-500">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Operating Profit</CardDescription>
-                    <CardTitle className="text-3xl font-black text-blue-600">{currSym}{(managementAccounts.Income - managementAccounts.Expense).toLocaleString()}</CardTitle>
+                    <CardTitle className="text-3xl font-black text-blue-600">{money((managementAccounts.Income - managementAccounts.Expense))}</CardTitle>
                   </CardHeader>
                 </Card>
                 <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-green-500">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Revenue</CardDescription>
-                    <CardTitle className="text-3xl font-black text-green-600">{currSym}{managementAccounts.Income.toLocaleString()}</CardTitle>
+                    <CardTitle className="text-3xl font-black text-green-600">{money(managementAccounts.Income)}</CardTitle>
                   </CardHeader>
                 </Card>
                 <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-red-500">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Expenses</CardDescription>
-                    <CardTitle className="text-3xl font-black text-red-600">{currSym}{managementAccounts.Expense.toLocaleString()}</CardTitle>
+                    <CardTitle className="text-3xl font-black text-red-600">{money(managementAccounts.Expense)}</CardTitle>
                   </CardHeader>
                 </Card>
                 <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-purple-500">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Payroll Paid</CardDescription>
-                    <CardTitle className="text-3xl font-black text-purple-600">{currSym}{(managementAccounts.TotalPayroll || 0).toLocaleString()}</CardTitle>
+                    <CardTitle className="text-3xl font-black text-purple-600">{money((managementAccounts.TotalPayroll || 0))}</CardTitle>
                   </CardHeader>
                 </Card>
               </div>
@@ -2115,10 +2111,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{currSym}{incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{money(incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Operating Expenses</TableCell></TableRow>
                       {incomeStatement.filter(a => a.type === 'Expense').map(a => (
@@ -2142,15 +2138,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{money((a.total_debit - a.total_credit))}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{money(incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
                         <TableCell className="font-black text-lg">Net Income</TableCell>
                         <TableCell className="text-right font-black text-xl">
-                          {currSym}{(incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0)).toLocaleString()}
+                          {money((incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0)))}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -2194,10 +2190,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{currSym}{(a.total_debit - a.total_credit).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{money((a.total_debit - a.total_credit))}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{money(balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Liabilities</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Liability').map((a: any) => (
@@ -2221,10 +2217,10 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{currSym}{balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0).toLocaleString()}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{money(balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Equity</TableCell></TableRow>
                       {balanceSheet.accounts.filter((a: any) => a.type === 'Equity').map((a: any) => (
@@ -2248,11 +2244,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{currSym}{(a.total_credit - a.total_debit).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{currSym}{balanceSheet.retainedEarnings.toLocaleString()}</TableCell></TableRow>
-                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{currSym}{(balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings).toLocaleString()}</TableCell></TableRow>
+                      <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{money(balanceSheet.retainedEarnings)}</TableCell></TableRow>
+                      <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{money((balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings))}</TableCell></TableRow>
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -2278,16 +2274,16 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <CardContent className="p-6 space-y-4">
                           <div className="flex justify-between items-center">
                             <span className="text-[#8E9299] text-sm">Total Revenue</span>
-                            <span className="font-bold text-green-600">{currSym}{projectRevenue.toLocaleString()}</span>
+                            <span className="font-bold text-green-600">{money(projectRevenue)}</span>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-[#8E9299] text-sm">Total Direct Costs</span>
-                            <span className="font-bold text-red-600">{currSym}{projectCost.toLocaleString()}</span>
+                            <span className="font-bold text-red-600">{money(projectCost)}</span>
                           </div>
                           <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
                             <span className="font-black text-[#141414]">Net Project Profit</span>
                             <span className={`font-black text-xl ${projectProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                              {currSym}{projectProfit.toLocaleString()}
+                              {money(projectProfit)}
                             </span>
                           </div>
                           <div className="w-full bg-[#F5F5F5] h-2 rounded-full overflow-hidden">
@@ -2355,14 +2351,14 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                         <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.opening_balance || 0) === 0 ? '-' : `${fmtMoney(Math.abs(a.opening_balance))} ${Number(a.opening_balance) > 0 ? 'Dr' : 'Cr'}`}</TableCell>
                         <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.period_debit) > 0 ? fmtMoney(a.period_debit) : '-'}</TableCell>
                         <TableCell className="text-right font-mono text-xs text-[#8E9299]">{Number(a.period_credit) > 0 ? fmtMoney(a.period_credit) : '-'}</TableCell>
-                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_debit) > 0 ? `${currSym}${fmtMoney(a.total_debit)}` : '-'}</TableCell>
-                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_credit) > 0 ? `${currSym}${fmtMoney(a.total_credit)}` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_debit) > 0 ? `${money(a.total_debit)}` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono text-[#141414]">{Number(a.total_credit) > 0 ? `${money(a.total_credit)}` : '-'}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
                       <TableCell colSpan={5} className="font-black text-right text-lg">BALANCING TOTAL</TableCell>
-                      <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_debit), 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-black text-lg">{currSym}{trialBalance.reduce((s, a) => s + Number(a.total_credit), 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-black text-lg">{money(trialBalance.reduce((s, a) => s + Number(a.total_debit), 0))}</TableCell>
+                      <TableCell className="text-right font-black text-lg">{money(trialBalance.reduce((s, a) => s + Number(a.total_credit), 0))}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
@@ -2411,7 +2407,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                 >
                   <p className={`text-[10px] font-bold uppercase tracking-widest ${coaFilter === t.type ? 'text-white/60' : 'text-[#8E9299]'}`}>{t.type}</p>
                   <p className={`text-2xl font-black ${coaFilter === t.type ? 'text-white' : 'text-[#141414]'}`}>{t.count}</p>
-                  <p className={`text-xs font-bold mt-1 ${coaFilter === t.type ? 'text-white/70' : 'text-[#8E9299]'}`}>{t.balance < 0 ? '-' : ''}{currSym}{fmtMoney(Math.abs(t.balance))}</p>
+                  <p className={`text-xs font-bold mt-1 ${coaFilter === t.type ? 'text-white/70' : 'text-[#8E9299]'}`}>{money(t.balance)}</p>
                 </button>
               ))}
             </div>
@@ -2592,7 +2588,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <TableCell className="font-mono font-bold text-blue-600">{a.code}</TableCell>
                           <TableCell className="font-bold text-[#141414]">{a.name}</TableCell>
                           <TableCell><Badge className={`${typeColors[a.type] || 'bg-gray-100 text-gray-700'} border-none font-bold text-[10px]`}>{a.type.toUpperCase()}</Badge></TableCell>
-                          <TableCell className={`text-right font-black ${Number(a.natural_balance ?? 0) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{Number(a.natural_balance ?? 0) < 0 ? '-' : ''}{currSym}{fmtMoney(Math.abs(Number(a.natural_balance ?? 0)))}</TableCell>
+                          <TableCell className={`text-right font-black ${Number(a.natural_balance ?? 0) >= 0 ? 'text-[#141414]' : 'text-red-600'}`}>{money(a.natural_balance)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button 
@@ -2772,24 +2768,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                       <div className="flex gap-6 text-sm">
                         <div className="text-center">
                           <p className="text-[10px] font-black uppercase text-[#8E9299]">Assets</p>
-                          <p className="font-black text-green-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                          <p className="font-black text-green-600">{money(Object.entries(openingBalances).reduce((sum, [id, bal]) => {
                             const acc = coa.find(a => String(a.id) === id);
                             return sum + (acc?.type === 'Asset' ? Number(bal) : 0);
-                          }, 0).toLocaleString()}</p>
+                          }, 0))}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[10px] font-black uppercase text-[#8E9299]">Liabilities</p>
-                          <p className="font-black text-red-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                          <p className="font-black text-red-600">{money(Object.entries(openingBalances).reduce((sum, [id, bal]) => {
                             const acc = coa.find(a => String(a.id) === id);
                             return sum + (acc?.type === 'Liability' ? Number(bal) : 0);
-                          }, 0).toLocaleString()}</p>
+                          }, 0))}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[10px] font-black uppercase text-[#8E9299]">Equity</p>
-                          <p className="font-black text-purple-600">{currSym}{Object.entries(openingBalances).reduce((sum, [id, bal]) => {
+                          <p className="font-black text-purple-600">{money(Object.entries(openingBalances).reduce((sum, [id, bal]) => {
                             const acc = coa.find(a => String(a.id) === id);
                             return sum + (acc?.type === 'Equity' ? Number(bal) : 0);
-                          }, 0).toLocaleString()}</p>
+                          }, 0))}</p>
                         </div>
                       </div>
                       <div className="relative ml-4">
@@ -3041,7 +3037,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
                             <TableCell className="text-xs text-[#8E9299]">{tx.bank_name}</TableCell>
                             <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>
-                              {tx.type === 'Credit' ? '+' : '-'}{currSym}{Number(tx.amount).toLocaleString()}
+                              {tx.type === 'Credit' ? '+' : '-'}{money(Number(tx.amount))}
                             </TableCell>
                             <TableCell>
                               <Badge className={tx.status === 'Reconciled' ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>
@@ -3120,8 +3116,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           <TableCell className="text-xs font-bold text-[#8E9299] font-mono">{formatDate(le.date)}</TableCell>
                           <TableCell className="font-bold text-[#141414]">{le.account_name ? `${le.account_code} - ${le.account_name}` : le.description}</TableCell>
                           <TableCell className="text-[10px] uppercase font-black text-blue-600 tracking-widest">{String(le.reference_type || '').replace(/_/g, ' ')}</TableCell>
-                          <TableCell className="text-right font-mono text-green-600 font-bold">{Number(le.debit) > 0 ? `${currSym}${fmtMoney(le.debit)}` : '-'}</TableCell>
-                          <TableCell className="text-right font-mono text-red-600 font-bold">{Number(le.credit) > 0 ? `${currSym}${fmtMoney(le.credit)}` : '-'}</TableCell>
+                          <TableCell className="text-right font-mono text-green-600 font-bold">{Number(le.debit) > 0 ? `${money(le.debit)}` : '-'}</TableCell>
+                          <TableCell className="text-right font-mono text-red-600 font-bold">{Number(le.credit) > 0 ? `${money(le.credit)}` : '-'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               {le.reference_type === 'manual' && (
@@ -3415,11 +3411,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
               <div className="flex-1 flex gap-8">
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Debits</p>
-                  <p className="text-xl font-black text-green-400 font-mono">{currSym}{journalItems.reduce((s, i) => s + i.debit, 0).toLocaleString()}</p>
+                  <p className="text-xl font-black text-green-400 font-mono">{money(journalItems.reduce((s, i) => s + i.debit, 0))}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Total Credits</p>
-                  <p className="text-xl font-black text-red-400 font-mono">{currSym}{journalItems.reduce((s, i) => s + i.credit, 0).toLocaleString()}</p>
+                  <p className="text-xl font-black text-red-400 font-mono">{money(journalItems.reduce((s, i) => s + i.credit, 0))}</p>
                 </div>
               </div>
               <Button 

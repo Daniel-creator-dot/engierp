@@ -49,9 +49,10 @@ import { assetsApi, projectsApi, apiErrorMessage } from '../../lib/api';
 import CategorySelect from '../CategorySelect';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDate, todayIso } from '../../lib/dates';
+import { formatWithSymbol } from '../../lib/currency';
 
 const DEFAULT = 'default';
-const money = (value: unknown) => `GH₵${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (value: unknown) => formatWithSymbol(value);
 
 const STATUS_BADGE: Record<string, string> = {
   Available: 'bg-green-100 text-green-700',

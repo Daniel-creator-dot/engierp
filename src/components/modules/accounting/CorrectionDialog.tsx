@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { accountingApi } from '../../../lib/api';
 import { errorText } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 export type CorrectionTarget = { kind: 'bill' | 'invoice'; record: any } | null;
 
@@ -31,6 +32,7 @@ interface Props {
 
 /** Proposes a correction to a posted bill or invoice. Nothing changes until an admin approves it. */
 export default function CorrectionDialog({ target, coa, suppliers, projects, currSym, onClose, onSubmitted }: Props) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [form, setForm] = useState<any>({});
   const [items, setItems] = useState<{ description: string; quantity: number; unitPrice: number; service_id?: number | null }[]>([]);
   const [reason, setReason] = useState('');
@@ -175,7 +177,7 @@ export default function CorrectionDialog({ target, coa, suppliers, projects, cur
                 ))}
                 <div className="flex justify-between items-center">
                   <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={() => setItems([...items, { description: '', quantity: 1, unitPrice: 0 }])}><Plus className="w-4 h-4" /> Add line</Button>
-                  <span className="text-xs font-bold text-[#8E9299]">Subtotal {currSym}{invoiceSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-xs font-bold text-[#8E9299]">Subtotal {money(invoiceSubtotal)}</span>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm font-medium">

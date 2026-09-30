@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { accountingApi } from '../../../lib/api';
 import { formatDate, todayIso } from '../../../lib/dates';
 import { errorText, fmtMoney } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 interface Props {
   bankAccounts: any[];
@@ -66,6 +67,7 @@ function guessColumn(headers: string[], patterns: RegExp[]) {
 }
 
 export default function BankReconcilePanel({ bankAccounts, bankTx, coa, currSym, onChanged, onEditLine, onOpenJournal }: Props) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'open' | 'all'>('open');
   const [busy, setBusy] = useState(false);
@@ -300,7 +302,7 @@ export default function BankReconcilePanel({ bankAccounts, bankTx, coa, currSym,
                   <TableCell className="font-mono text-xs text-[#8E9299] whitespace-nowrap">{formatDate(tx.date)}</TableCell>
                   <TableCell className="font-bold text-[#141414]">{tx.description}</TableCell>
                   <TableCell className="text-xs text-[#8E9299]">{tx.account_name}</TableCell>
-                  <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{currSym}{fmtMoney(tx.amount)}</TableCell>
+                  <TableCell className={`text-right font-black ${tx.type === 'Credit' ? 'text-green-600' : 'text-[#141414]'}`}>{tx.type === 'Credit' ? '+' : '-'}{money(tx.amount)}</TableCell>
                   <TableCell><Badge className={reconciled ? 'bg-green-100 text-green-700 border-none' : 'bg-yellow-100 text-yellow-700 border-none'}>{tx.status}</Badge></TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
@@ -323,7 +325,7 @@ export default function BankReconcilePanel({ bankAccounts, bankTx, coa, currSym,
         <DialogContent className="rounded-2xl max-w-2xl">
           <DialogHeader>
             <DialogTitle>Match statement line</DialogTitle>
-            <DialogDescription>{matchTx && `${formatDate(matchTx.date)} · ${matchTx.description} · ${matchTx.type === 'Credit' ? '+' : '-'}${currSym}${fmtMoney(matchTx.amount)}`}</DialogDescription>
+            <DialogDescription>{matchTx && `${formatDate(matchTx.date)} · ${matchTx.description} · ${matchTx.type === 'Credit' ? '+' : '-'}${money(matchTx.amount)}`}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs font-bold uppercase text-[#8E9299]">Ledger postings with the same amount within 7 days</p>
@@ -335,7 +337,7 @@ export default function BankReconcilePanel({ bankAccounts, bankTx, coa, currSym,
                   <p className="text-sm font-bold">{c.description}</p>
                   <p className="text-[10px] text-[#8E9299] uppercase font-bold">#{c.journal_id} · {formatDate(c.date)} · {String(c.reference_type).replace(/_/g, ' ')}</p>
                 </div>
-                <span className="font-mono font-bold">{currSym}{fmtMoney(Number(c.debit) || Number(c.credit))}</span>
+                <span className="font-mono font-bold">{money(Number(c.debit) || Number(c.credit))}</span>
                 <Button size="sm" className="bg-green-600 text-white gap-1" onClick={() => matchTo(c.journal_id)}><CheckCircle2 className="w-4 h-4" /> Match</Button>
               </div>
             ))}

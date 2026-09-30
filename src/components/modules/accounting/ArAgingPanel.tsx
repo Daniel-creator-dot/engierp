@@ -11,6 +11,7 @@ import { accountingApi } from '../../../lib/api';
 import { escapeHtml } from '../../../lib/html';
 import { formatDate, todayIso } from '../../../lib/dates';
 import { downloadCsv, errorText, fmtMoney, openPrintWindow, PrintBranding } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 const BUCKETS = [
   { key: 'current', label: 'Current' },
@@ -61,7 +62,7 @@ export default function ArAgingPanel({ currSym, branding }: { currSym: string; b
     }
   };
 
-  const money = (v: any) => `${escapeHtml(currSym)}${fmtMoney(v)}`;
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
 
   const printAging = () => {
     if (!aging) return;
@@ -121,7 +122,7 @@ export default function ArAgingPanel({ currSym, branding }: { currSym: string; b
                   <TableRow key={c.client}>
                     <TableCell className="font-bold">{c.client}<p className="text-[10px] text-[#8E9299] font-normal">{c.invoices} open invoice(s)</p></TableCell>
                     {BUCKETS.map(b => <TableCell key={b.key} className={`text-right font-mono text-xs ${Number(c[b.key]) > 0 && b.key !== 'current' ? 'text-red-600 font-bold' : ''}`}>{Number(c[b.key]) > 0 ? fmtMoney(c[b.key]) : '-'}</TableCell>)}
-                    <TableCell className="text-right font-black">{currSym}{fmtMoney(c.total)}</TableCell>
+                    <TableCell className="text-right font-black">{money(c.total)}</TableCell>
                     <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-xs font-bold text-blue-600" onClick={() => { setClient(c.client); loadStatement(c.client); }}>Statement</Button></TableCell>
                   </TableRow>
                 ))}
@@ -130,7 +131,7 @@ export default function ArAgingPanel({ currSym, branding }: { currSym: string; b
                   <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
                     <TableCell className="font-black">Total</TableCell>
                     {BUCKETS.map(b => <TableCell key={b.key} className="text-right font-bold">{fmtMoney(aging.totals[b.key])}</TableCell>)}
-                    <TableCell className="text-right font-black">{currSym}{fmtMoney(aging.totals.total)}</TableCell>
+                    <TableCell className="text-right font-black">{money(aging.totals.total)}</TableCell>
                     <TableCell />
                   </TableRow>
                 )}
@@ -176,7 +177,7 @@ export default function ArAgingPanel({ currSym, branding }: { currSym: string; b
                 ))}
                 <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
                   <TableCell colSpan={4} className="text-right font-black">Amount Due</TableCell>
-                  <TableCell className="text-right font-black">{currSym}{fmtMoney(statement.closing_balance)}</TableCell>
+                  <TableCell className="text-right font-black">{money(statement.closing_balance)}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>

@@ -68,6 +68,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { escapeHtml } from '../../lib/html';
 import { printDocument } from '../../lib/printDocument';
 import { formatDate, todayIso } from '../../lib/dates';
+import { formatWithSymbol } from '../../lib/currency';
 
 interface ProjectsProps {
   activeSub?: string;
@@ -194,7 +195,7 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
     }
   };
 
-  const money = (value: unknown) => `${currSym}${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
 
   const handlePrintJobCost = () => {
     if (!costingData) return;
@@ -384,29 +385,29 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                     <div className="grid grid-cols-2 gap-4 py-4 border-t border-[#F5F5F5]">
                       <div>
                         <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Spent + Committed</p>
-                        <p className="text-lg font-black text-[#141414]">{currSym}{(Number(project.spent || 0) + Number(project.committed || 0)).toLocaleString()}</p>
+                        <p className="text-lg font-black text-[#141414]">{money((Number(project.spent || 0) + Number(project.committed || 0)))}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Remaining Budget</p>
                         <p className={`text-lg font-black ${Number(project.budget_remaining || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {currSym}{Number(project.budget_remaining || 0).toLocaleString()}
+                          {money(Number(project.budget_remaining || 0))}
                         </p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#F5F5F5]">
                       <div>
                         <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Revenue Billed</p>
-                        <p className="text-sm font-black text-[#141414]">{currSym}{Number(project.revenue || 0).toLocaleString()}</p>
+                        <p className="text-sm font-black text-[#141414]">{money(Number(project.revenue || 0))}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] text-[#8E9299] uppercase font-bold tracking-widest mb-1">Received</p>
-                        <p className="text-sm font-black text-green-600">{currSym}{Number(project.revenue_paid || 0).toLocaleString()}</p>
+                        <p className="text-sm font-black text-green-600">{money(Number(project.revenue_paid || 0))}</p>
                       </div>
                     </div>
                     <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
                       <span className="text-xs font-bold uppercase text-[#8E9299]">Gross Margin (billed − cost)</span>
                       <span className={`text-xl font-black ${Number(project.revenue || 0) - Number(project.spent || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                        {currSym}{(Number(project.revenue || 0) - Number(project.spent || 0)).toLocaleString()}
+                        {money((Number(project.revenue || 0) - Number(project.spent || 0)))}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[10px] font-bold text-[#8E9299] uppercase tracking-wider">
@@ -476,20 +477,20 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-4 lg:px-6 py-2">
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
                         <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Total Budget</p>
-                        <p className="text-base lg:text-xl font-black text-[#141414]">{currSym}{Number(costingData.revised_budget).toLocaleString()}</p>
+                        <p className="text-base lg:text-xl font-black text-[#141414]">{money(Number(costingData.revised_budget))}</p>
                       </div>
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
                         <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Spent to Date</p>
-                        <p className="text-base lg:text-xl font-black text-orange-600">{currSym}{Number(costingData.total_actuals).toLocaleString()}</p>
+                        <p className="text-base lg:text-xl font-black text-orange-600">{money(Number(costingData.total_actuals))}</p>
                       </div>
                       <div className="bg-[#F5F5F5]/50 p-4 rounded-2xl border border-white">
                         <p className="text-[9px] lg:text-[10px] font-black text-[#8E9299] uppercase mb-1">Open Commitments</p>
-                        <p className="text-base lg:text-xl font-black text-blue-600">{currSym}{Number(costingData.total_committed).toLocaleString()}</p>
+                        <p className="text-base lg:text-xl font-black text-blue-600">{money(Number(costingData.total_committed))}</p>
                       </div>
                       <div className="bg-[#141414] p-4 rounded-2xl shadow-xl shadow-slate-200">
                         <p className="text-[9px] lg:text-[10px] font-black text-white/50 uppercase mb-1">Budget Remaining</p>
                         <p className={`text-base lg:text-xl font-black ${costingData.budget_remaining >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {currSym}{Number(costingData.budget_remaining).toLocaleString()}
+                          {money(Number(costingData.budget_remaining))}
                         </p>
                       </div>
                     </div>
@@ -596,8 +597,8 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                         <TableRow key={c.id} className="border-b border-[#F5F5F5] hover:bg-[#F5F5F5]/30">
                           <TableCell className="font-bold text-blue-600">{c.id}</TableCell>
                           <TableCell className="font-medium">{c.project_name}</TableCell>
-                          <TableCell className="font-bold text-[#141414]">{currSym}{Number(c.value).toLocaleString()}</TableCell>
-                          <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{currSym}{Number(c.retention_amount).toLocaleString()}</TableCell>
+                          <TableCell className="font-bold text-[#141414]">{money(Number(c.value))}</TableCell>
+                          <TableCell className="text-[#8E9299] underline decoration-dotted font-medium">{money(Number(c.retention_amount))}</TableCell>
                           <TableCell><Badge className="bg-blue-100 text-blue-700 font-bold">{c.status.toUpperCase()}</Badge></TableCell>
                         </TableRow>
                       ))}
@@ -651,15 +652,15 @@ export default function Projects({ activeSub = 'projects-active' }: ProjectsProp
                             </div>
                             <p className="text-[10px] text-[#8E9299] mt-1">{w.poc_basis === 'reported' ? 'Reported' : 'Cost-based'}</p>
                           </TableCell>
-                          <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.actual_cost).toLocaleString()}</TableCell>
-                          <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.earned_revenue).toLocaleString()}</TableCell>
-                          <TableCell className="font-medium text-[#141414]">{currSym}{Number(w.billed_revenue).toLocaleString()}</TableCell>
-                          <TableCell className="font-medium text-green-600">{currSym}{Number(w.paid_revenue || 0).toLocaleString()}</TableCell>
+                          <TableCell className="font-medium text-[#141414]">{money(Number(w.actual_cost))}</TableCell>
+                          <TableCell className="font-medium text-[#141414]">{money(Number(w.earned_revenue))}</TableCell>
+                          <TableCell className="font-medium text-[#141414]">{money(Number(w.billed_revenue))}</TableCell>
+                          <TableCell className="font-medium text-green-600">{money(Number(w.paid_revenue || 0))}</TableCell>
                           <TableCell className="text-right">
                             <Badge className={w.over_under_billing >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
                               {w.over_under_billing >= 0 ? 'Underbilled Asset' : 'Overbilled Liability'}
                             </Badge>
-                            <p className="text-[10px] font-bold mt-1">{currSym}{Math.abs(w.over_under_billing).toLocaleString()}</p>
+                            <p className="text-[10px] font-bold mt-1">{money(Math.abs(w.over_under_billing))}</p>
                           </TableCell>
                         </TableRow>
                       ))}

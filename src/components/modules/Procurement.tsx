@@ -64,6 +64,7 @@ import { procurementApi, projectsApi, settingsApi, apiErrorMessage } from '../..
 import { useAuth } from '../../contexts/AuthContext';
 import CategorySelect from '../CategorySelect';
 import { formatDate, todayIso } from '../../lib/dates';
+import { formatWithSymbol } from '../../lib/currency';
 import { escapeHtml } from '../../lib/html';
 import { printDocument } from '../../lib/printDocument';
 
@@ -201,7 +202,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   };
 
   const currSym = currency === 'USD' ? '$' : 'GH₵';
-  const money = (value: unknown) => `${currSym}${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const isPaidStatus = (status?: string) => (status || '').toLowerCase() === 'paid';
   const billBadgeClass = (status?: string) => {
     const s = (status || '').toLowerCase();

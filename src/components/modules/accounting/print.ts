@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { escapeHtml, safeImageSrc } from '../../../lib/html';
+import { formatAmount } from '../../../lib/currency';
 
 export interface PrintBranding {
   companyName?: string;
@@ -111,7 +112,6 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
   toast.success(`${filename}.csv exported`);
 }
 
-export const fmtMoney = (value: unknown) =>
-  Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const fmtMoney = formatAmount;
 
 export const errorText = (error: any, fallback: string) => error?.response?.data?.message || fallback;

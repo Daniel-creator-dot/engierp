@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableRow } from '../../ui/table';
 import { accountingApi } from '../../../lib/api';
 import { escapeHtml } from '../../../lib/html';
 import { downloadCsv, errorText, fmtMoney, openPrintWindow, PrintBranding } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 const SECTIONS = [
   { key: 'operating', label: 'Operating Activities' },
@@ -14,9 +15,9 @@ const SECTIONS = [
   { key: 'financing', label: 'Financing Activities' },
 ] as const;
 
-const signed = (v: number) => `${v < 0 ? '-' : ''}${fmtMoney(Math.abs(v))}`;
 
 export default function CashFlowPanel({ startDate, endDate, currSym, branding }: { startDate: string; endDate: string; currSym: string; branding: PrintBranding }) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +34,6 @@ export default function CashFlowPanel({ startDate, endDate, currSym, branding }:
   const print = () => {
     if (!data) return;
     const td = 'padding: 8px 16px; border-bottom: 1px solid #F0F0F0;';
-    const money = (v: number) => `${escapeHtml(currSym)}${signed(v)}`;
     const sections = SECTIONS.map(s => {
       const sec = data[s.key];
       return `<tr style="background: #F5F5F5;"><td colspan="2" style="padding: 10px 16px; font-weight: bold;">${s.label}</td></tr>
@@ -85,19 +85,19 @@ export default function CashFlowPanel({ startDate, endDate, currSym, branding }:
                   ...sec.lines.map((l: any) => (
                     <TableRow key={`${s.key}-${l.account}`}>
                       <TableCell className="pl-8 text-[#141414]">{l.account}</TableCell>
-                      <TableCell className={`text-right font-mono ${l.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{currSym}{signed(l.amount)}</TableCell>
+                      <TableCell className={`text-right font-mono ${l.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>{money(l.amount)}</TableCell>
                     </TableRow>
                   )),
                   sec.lines.length === 0 && <TableRow key={`${s.key}-e`}><TableCell colSpan={2} className="pl-8 text-xs text-[#8E9299]">No cash movements</TableCell></TableRow>,
                   <TableRow key={`${s.key}-t`}>
                     <TableCell className="font-bold">Net cash from {s.label.toLowerCase()}</TableCell>
-                    <TableCell className="text-right font-black">{currSym}{signed(sec.net)}</TableCell>
+                    <TableCell className="text-right font-black">{money(sec.net)}</TableCell>
                   </TableRow>,
                 ];
               })}
-              <TableRow><TableCell className="font-bold">Net change in cash</TableCell><TableCell className="text-right font-black">{currSym}{signed(data.netCashFlow)}</TableCell></TableRow>
-              <TableRow><TableCell>Opening cash and bank</TableCell><TableCell className="text-right font-mono">{currSym}{signed(data.openingCash)}</TableCell></TableRow>
-              <TableRow className="bg-[#141414] text-white hover:bg-[#141414]"><TableCell className="font-black text-lg">Closing cash and bank</TableCell><TableCell className="text-right font-black text-lg">{currSym}{signed(data.closingCash)}</TableCell></TableRow>
+              <TableRow><TableCell className="font-bold">Net change in cash</TableCell><TableCell className="text-right font-black">{money(data.netCashFlow)}</TableCell></TableRow>
+              <TableRow><TableCell>Opening cash and bank</TableCell><TableCell className="text-right font-mono">{money(data.openingCash)}</TableCell></TableRow>
+              <TableRow className="bg-[#141414] text-white hover:bg-[#141414]"><TableCell className="font-black text-lg">Closing cash and bank</TableCell><TableCell className="text-right font-black text-lg">{money(data.closingCash)}</TableCell></TableRow>
             </TableBody>
           </Table>
         )}

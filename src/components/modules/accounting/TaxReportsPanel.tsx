@@ -8,6 +8,7 @@ import { accountingApi } from '../../../lib/api';
 import { escapeHtml } from '../../../lib/html';
 import { formatDate } from '../../../lib/dates';
 import { downloadCsv, errorText, fmtMoney, openPrintWindow, PrintBranding } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 export default function TaxReportsPanel({ startDate, endDate, currSym, branding }: { startDate: string; endDate: string; currSym: string; branding: PrintBranding }) {
   const [vat, setVat] = useState<any>(null);
@@ -24,7 +25,7 @@ export default function TaxReportsPanel({ startDate, endDate, currSym, branding 
     return () => { cancelled = true; };
   }, [startDate, endDate]);
 
-  const money = (v: number) => `${escapeHtml(currSym)}${fmtMoney(v)}`;
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const period = `${startDate ? formatDate(startDate) : 'Start'} to ${endDate ? formatDate(endDate) : 'today'}`;
   const components = vat ? Object.entries(vat.components as Record<string, { name: string; rate: number; amount: number }>) : [];
 
@@ -77,21 +78,21 @@ export default function TaxReportsPanel({ startDate, endDate, currSym, branding 
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             <div className="grid gap-4 md:grid-cols-4">
-              <div className="p-4 rounded-2xl bg-[#F5F5F5]"><p className="text-[10px] font-bold uppercase text-[#8E9299]">Taxable supplies</p><p className="text-xl font-black">{currSym}{fmtMoney(vat.taxable_sales)}</p></div>
-              <div className="p-4 rounded-2xl bg-blue-50"><p className="text-[10px] font-bold uppercase text-blue-700">Output tax</p><p className="text-xl font-black text-blue-700">{currSym}{fmtMoney(vat.output_tax)}</p></div>
-              <div className="p-4 rounded-2xl bg-green-50"><p className="text-[10px] font-bold uppercase text-green-700">Input VAT</p><p className="text-xl font-black text-green-700">{currSym}{fmtMoney(vat.input_tax)}</p></div>
-              <div className="p-4 rounded-2xl bg-[#141414] text-white"><p className="text-[10px] font-bold uppercase text-white/60">Net payable</p><p className="text-xl font-black">{currSym}{fmtMoney(vat.net_payable)}</p></div>
+              <div className="p-4 rounded-2xl bg-[#F5F5F5]"><p className="text-[10px] font-bold uppercase text-[#8E9299]">Taxable supplies</p><p className="text-xl font-black">{money(vat.taxable_sales)}</p></div>
+              <div className="p-4 rounded-2xl bg-blue-50"><p className="text-[10px] font-bold uppercase text-blue-700">Output tax</p><p className="text-xl font-black text-blue-700">{money(vat.output_tax)}</p></div>
+              <div className="p-4 rounded-2xl bg-green-50"><p className="text-[10px] font-bold uppercase text-green-700">Input VAT</p><p className="text-xl font-black text-green-700">{money(vat.input_tax)}</p></div>
+              <div className="p-4 rounded-2xl bg-[#141414] text-white"><p className="text-[10px] font-bold uppercase text-white/60">Net payable</p><p className="text-xl font-black">{money(vat.net_payable)}</p></div>
             </div>
             <Table>
               <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Component</TableHead><TableHead className="text-right">Rate</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
               <TableBody>
                 {components.map(([code, c]) => (
-                  <TableRow key={code}><TableCell className="font-bold">{c.name}</TableCell><TableCell className="text-right">{c.rate ? `${c.rate}%` : '-'}</TableCell><TableCell className="text-right font-mono">{currSym}{fmtMoney(c.amount)}</TableCell></TableRow>
+                  <TableRow key={code}><TableCell className="font-bold">{c.name}</TableCell><TableCell className="text-right">{c.rate ? `${c.rate}%` : '-'}</TableCell><TableCell className="text-right font-mono">{money(c.amount)}</TableCell></TableRow>
                 ))}
                 {components.length === 0 && <TableRow><TableCell colSpan={3} className="text-center py-6 text-[#8E9299]">No taxed invoices in this period.</TableCell></TableRow>}
               </TableBody>
             </Table>
-            {vat.credit_notes.length > 0 && <p className="text-xs text-[#8E9299]">Includes {vat.credit_notes.length} credit note(s) reducing output tax by {currSym}{fmtMoney(vat.credit_notes.reduce((s: number, c: any) => s + c.tax, 0))}.</p>}
+            {vat.credit_notes.length > 0 && <p className="text-xs text-[#8E9299]">Includes {vat.credit_notes.length} credit note(s) reducing output tax by {money(vat.credit_notes.reduce((s: number, c: any) => s + c.tax, 0))}.</p>}
           </CardContent>
         </Card>
       )}
@@ -120,7 +121,7 @@ export default function TaxReportsPanel({ startDate, endDate, currSym, branding 
                     <TableCell className="font-mono text-xs">{r.bill_id}</TableCell>
                     <TableCell className="text-right font-mono">{fmtMoney(r.gross)}</TableCell>
                     <TableCell className="text-right">{r.rate}%</TableCell>
-                    <TableCell className="text-right font-black">{currSym}{fmtMoney(r.wht)}</TableCell>
+                    <TableCell className="text-right font-black">{money(r.wht)}</TableCell>
                   </TableRow>
                 ))}
                 {wht.rows.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-[#8E9299]">No withholding tax deducted in this period.</TableCell></TableRow>}
@@ -129,7 +130,7 @@ export default function TaxReportsPanel({ startDate, endDate, currSym, branding 
                     <TableCell colSpan={4} className="font-black text-right">Totals</TableCell>
                     <TableCell className="text-right font-bold">{fmtMoney(wht.total_gross)}</TableCell>
                     <TableCell />
-                    <TableCell className="text-right font-black">{currSym}{fmtMoney(wht.total_wht)}</TableCell>
+                    <TableCell className="text-right font-black">{money(wht.total_wht)}</TableCell>
                   </TableRow>
                 )}
               </TableBody>

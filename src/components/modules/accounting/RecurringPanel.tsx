@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { accountingApi, procurementApi } from '../../../lib/api';
 import { formatDate, todayIso } from '../../../lib/dates';
 import { errorText, fmtMoney } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 interface Props {
   coa: any[];
@@ -24,6 +25,7 @@ type Line = { account_id: string; debit: number; credit: number };
 const emptyLines = (): Line[] => [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }];
 
 export default function RecurringPanel({ coa, projects, currSym, onGenerated }: Props) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [templates, setTemplates] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -144,7 +146,7 @@ export default function RecurringPanel({ coa, projects, currSym, onGenerated }: 
                   <TableCell className="text-xs uppercase font-bold text-[#8E9299]">{t.kind}</TableCell>
                   <TableCell className="text-xs capitalize">{t.frequency}</TableCell>
                   <TableCell className="font-mono text-xs">{formatDate(t.next_run_date)}{t.end_date ? <span className="text-[#8E9299]"> (until {formatDate(t.end_date)})</span> : ''}</TableCell>
-                  <TableCell className="text-right font-bold">{currSym}{fmtMoney(amount)}</TableCell>
+                  <TableCell className="text-right font-bold">{money(amount)}</TableCell>
                   <TableCell>{!t.is_active ? <Badge className="bg-gray-100 text-gray-500 border-none">Paused</Badge> : t.due ? <Badge className="bg-orange-100 text-orange-700 border-none">Due</Badge> : <Badge className="bg-green-100 text-green-700 border-none">Scheduled</Badge>}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => openEditor(t)}><Edit className="w-4 h-4" /></Button>

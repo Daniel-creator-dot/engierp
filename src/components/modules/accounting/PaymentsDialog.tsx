@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { accountingApi } from '../../../lib/api';
 import { formatDate } from '../../../lib/dates';
 import { errorText, fmtMoney } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 export type PaymentsTarget = { type: 'Invoice' | 'Bill'; id: string; label: string } | null;
 
@@ -27,6 +28,7 @@ interface Props {
 
 /** Payments on one invoice or bill, with correction and void requests that an admin approves. */
 export default function PaymentsDialog({ target, bankAccounts, currSym, onClose, onChanged }: Props) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<{ id: number; mode: 'correct' | 'void' } | null>(null);
@@ -114,8 +116,8 @@ export default function PaymentsDialog({ target, bankAccounts, currSym, onClose,
                         {p.payment_id} <span className="text-[#8E9299] font-medium">· {formatDate(p.date)} · {p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
                       </p>
                       <p className="text-sm font-black">
-                        {currSym}{fmtMoney(p.amount)}
-                        {Number(p.wht_amount || 0) > 0 && <span className="ml-2 text-xs font-medium text-[#8E9299]">incl. WHT {currSym}{fmtMoney(p.wht_amount)} ({Number(p.wht_rate)}%)</span>}
+                        {money(p.amount)}
+                        {Number(p.wht_amount || 0) > 0 && <span className="ml-2 text-xs font-medium text-[#8E9299]">incl. WHT {money(p.wht_amount)} ({Number(p.wht_rate)}%)</span>}
                       </p>
                       {isVoid && p.void_reason && <p className="text-xs text-[#8E9299]">Voided: {p.void_reason}</p>}
                     </div>

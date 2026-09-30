@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { toast } from 'sonner';
 import { hrApi } from '../../../lib/api';
-import { downloadWorkbook, errorMessage, readSpreadsheet } from './utils';
+import { downloadWorkbook, errorMessage, money, readSpreadsheet } from './utils';
 
 const COLUMNS: { header: string; field: string; example: string; aliases?: string[] }[] = [
   { header: 'Full Name', field: 'name', example: 'Ama Mensah', aliases: ['name', 'employee name'] },
@@ -196,7 +196,7 @@ export default function BulkImport({ open, onOpenChange, onImported }: BulkImpor
                         <TableCell className="font-mono text-xs">{r.row}</TableCell>
                         <TableCell className="font-medium">{r.data.name || '—'}</TableCell>
                         <TableCell>{r.data.department || '—'}</TableCell>
-                        <TableCell className="text-xs">{r.data.wage_type} · {Number(r.data.salary || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-xs">{r.data.wage_type} · {money(r.data.salary)}</TableCell>
                         <TableCell className="font-mono text-xs">{r.data.ssnit || '—'}</TableCell>
                         <TableCell className="text-xs space-y-1">
                           {r.errors.map(e => <div key={e} className="text-red-700">{e}</div>)}

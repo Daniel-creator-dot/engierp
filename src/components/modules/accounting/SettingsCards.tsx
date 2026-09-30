@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { accountingApi } from '../../../lib/api';
 import { formatDate } from '../../../lib/dates';
 import { errorText } from './print';
+import { formatWithSymbol } from '../../../lib/currency';
 
 type TaxComponent = { code: string; name: string; rate: number; account_code: string };
 const NONE = '__none__';
@@ -109,6 +110,7 @@ export function TaxSettingsCard({ coa }: { coa: any[] }) {
 }
 
 export function ApprovalLimitCard({ isAdmin, currSym }: { isAdmin: boolean; currSym: string }) {
+  const money = (value: unknown) => formatWithSymbol(value, currSym);
   const [saved, setSaved] = useState(0);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -126,7 +128,7 @@ export function ApprovalLimitCard({ isAdmin, currSym }: { isAdmin: boolean; curr
       const v = Number(res.data.bill_approval_threshold || 0);
       setSaved(v);
       setDraft(v > 0 ? String(v) : '');
-      toast.success(v > 0 ? `Bills above ${currSym}${v.toLocaleString()} now need admin approval` : 'Approval limit turned off');
+      toast.success(v > 0 ? `Bills above ${money(v)} now need admin approval` : 'Approval limit turned off');
     } catch (error: any) {
       toast.error(errorText(error, 'Failed to save the approval limit'));
     } finally {
@@ -143,7 +145,7 @@ export function ApprovalLimitCard({ isAdmin, currSym }: { isAdmin: boolean; curr
       <CardContent className="p-8 space-y-5">
         <div className="p-5 rounded-2xl bg-[#F5F5F5]">
           {saved > 0
-            ? <><Badge className="bg-blue-100 text-blue-700 border-none font-bold">ON</Badge><p className="mt-2 font-bold">Bills above {currSym}{saved.toLocaleString(undefined, { minimumFractionDigits: 2 })} need approval</p></>
+            ? <><Badge className="bg-blue-100 text-blue-700 border-none font-bold">ON</Badge><p className="mt-2 font-bold">Bills above {money(saved)} need approval</p></>
             : <><Badge className="bg-gray-100 text-gray-600 border-none font-bold">OFF</Badge><p className="mt-2 font-bold">New bills post immediately</p></>}
         </div>
         <div className="space-y-2">
