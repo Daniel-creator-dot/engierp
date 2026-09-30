@@ -205,6 +205,12 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
   const currSym = currency === 'USD' ? '$' : 'GH₵';
   const money = (value: unknown) => `${currSym}${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const isPaidStatus = (status?: string) => (status || '').toLowerCase() === 'paid';
+  const billBadgeClass = (status?: string) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'paid') return 'bg-green-100 text-green-700 border-none';
+    if (s === 'partially_paid') return 'bg-amber-100 text-amber-700 border-none';
+    return 'bg-red-50 text-red-700 border-none';
+  };
   const formatStatus = (status?: string) => (status || 'unknown').replace(/_/g, ' ').toUpperCase();
 
   // ------------------------------------------------------------ Purchase orders
@@ -1057,7 +1063,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                                   <TableCell className="text-right font-black">{money(bill.total_amount)}</TableCell>
                                   <TableCell className="text-right font-bold">{money(bill.balance_due)}</TableCell>
                                   <TableCell>
-                                    <Badge className={isPaidStatus(bill.status) ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                                    <Badge className={billBadgeClass(bill.status)}>
                                       {formatStatus(bill.status)}
                                     </Badge>
                                   </TableCell>
@@ -1127,7 +1133,7 @@ export default function Procurement({ activeSub = 'procurement-pos' }: Procureme
                     <div className="space-y-2"><Label>Amount Paid / Balance</Label><div className="font-bold">{money(selectedBill.paid_amount)} / {money(selectedBill.balance_due)}</div></div>
                     <div className="space-y-2">
                       <Label>Status</Label>
-                      <Badge className={isPaidStatus(selectedBill.status) ? 'bg-green-100 text-green-700 border-none' : 'bg-red-50 text-red-700 border-none'}>
+                      <Badge className={billBadgeClass(selectedBill.status)}>
                         {formatStatus(selectedBill.status)}
                       </Badge>
                     </div>
