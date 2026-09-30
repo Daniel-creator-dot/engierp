@@ -26,7 +26,10 @@ import {
   Calendar,
   Eye,
   ShieldCheck,
-  History
+  History,
+  RefreshCw,
+  Info,
+  X
 } from 'lucide-react';
 import {
   Card,
@@ -70,9 +73,9 @@ import { accountingApi, settingsApi, projectsApi, procurementApi, catalogApi } f
 import { Service, useCategories } from '../../lib/catalog';
 import CategorySelect from '../CategorySelect';
 import { Invoice } from '../../types';
-import { getCurrencySymbol, formatWithSymbol } from '../../lib/currency';
+import { getCurrencySymbol, formatCompactWithSymbol, formatWithSymbol } from '../../lib/currency';
 import { escapeHtml } from '../../lib/html';
-import { formatDate, todayIso } from '../../lib/dates';
+import { formatDate, inclusiveDays, todayIso } from '../../lib/dates';
 import { brandingFrom, downloadCsv, errorText, fmtMoney, openPrintWindow } from './accounting/print';
 import AttachmentsButton from './accounting/AttachmentsButton';
 import ArAgingPanel from './accounting/ArAgingPanel';
@@ -84,6 +87,7 @@ import { ApprovalLimitCard, PeriodLockCard, TaxSettingsCard } from './accounting
 import ApprovalsPanel from './accounting/ApprovalsPanel';
 import CorrectionDialog, { CorrectionTarget } from './accounting/CorrectionDialog';
 import PaymentsDialog, { PaymentsTarget } from './accounting/PaymentsDialog';
+import ReportsDashboard, { PeriodPresets, presetRange } from './accounting/ReportsDashboard';
 
 const LEDGER_TYPES = ['manual', 'invoice', 'bill', 'payment', 'credit_note', 'invoice_void', 'bill_void', 'reversal', 'opening_balance', 'payroll', 'depreciation', 'disposal'];
 const JOURNAL_PAGE_SIZE = 50;
@@ -175,17 +179,40 @@ const AccountSelect = ({ value, onValueChange, accounts, placeholder }: any) => 
   );
 };
 
-const AccountingGuidance = ({ title, message }: { title: string, message: string }) => (
-  <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-2xl mb-6 flex gap-4 animate-in fade-in slide-in-from-left duration-500">
-    <div className="p-2 bg-blue-100 rounded-xl h-fit">
-      <AlertCircle className="w-5 h-5 text-blue-600" />
+const SECTION_SUBTITLES: Record<string, string> = {
+  'accounting-approvals': 'Bills and corrections waiting for a decision.',
+  'accounting-bank': 'Bank and cash balances, statement import and reconciliation.',
+  'accounting-ap': 'Supplier bills and payments.',
+  'accounting-ar': 'Customer invoices, receipts and statements.',
+  'accounting-invoices': 'Customer invoices, receipts and statements.',
+  'accounting-transactions': 'Every journal in the ledger, searchable.',
+  'accounting-reports': 'Financial statements, tax and management reports.',
+  'accounting-coa': 'Accounts and their balances.',
+  'accounting-foundation': 'Fiscal year, company identity and opening balances.',
+};
+
+const hintKey = (title: string) => `finance-hint-dismissed:${title}`;
+
+/** A one-line "how this works" hint that the user can dismiss for good. */
+const AccountingGuidance = ({ title, message }: { title: string, message: string }) => {
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(hintKey(title)) === '1'; } catch { return false; }
+  });
+  if (hidden) return null;
+  const dismiss = () => {
+    try { localStorage.setItem(hintKey(title), '1'); } catch { /* storage unavailable */ }
+    setHidden(true);
+  };
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-black/[0.03]">
+      <Info className="w-4 h-4 mt-0.5 shrink-0 text-blue-600" />
+      <p className="flex-1 text-xs leading-relaxed text-[#6B7280]"><span className="font-bold text-[#141414]">{title}.</span> {message}</p>
+      <button type="button" onClick={dismiss} className="shrink-0 p-1 -m-1 rounded-lg text-[#8E9299] hover:text-[#141414] hover:bg-[#F5F5F5]" aria-label={`Hide the ${title} tip`}>
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
-    <div>
-      <h4 className="text-sm font-black text-blue-900 uppercase tracking-wider">{title}</h4>
-      <p className="text-xs text-blue-700 font-medium leading-relaxed mt-1">{message}</p>
-    </div>
-  </div>
-);
+  );
+};
 
 export default function Accounting({ activeSub = 'accounting-transactions', user, onNavigate }: AccountingProps) {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -224,8 +251,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [managementAccounts, setManagementAccounts] = useState<any>(null);
 
   const [reportTab, setReportTab] = useState('dashboard');
-  const [reportStartDate, setReportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportStartDate, setReportStartDate] = useState(`${todayIso().slice(0, 8)}01`);
+  const [reportEndDate, setReportEndDate] = useState(todayIso());
+  const reportRequest = React.useRef(0);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -389,7 +417,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
         setCOA(coaRes.data);
         setBankAccounts(accRes.data);
       } else if (activeSub === 'accounting-reports') {
-        const [tb, inc, bs, mgmt, btx, invRes, billsRes, projRes, accRes] = await Promise.all([
+        const request = ++reportRequest.current;
+        const [tb, inc, bs, mgmt, btx, invRes, billsRes, projRes, accRes, fyRes] = await Promise.all([
           accountingApi.getTrialBalance(reportStartDate, reportEndDate),
           accountingApi.getIncomeStatement(reportStartDate, reportEndDate),
           accountingApi.getBalanceSheet(reportEndDate),
@@ -398,8 +427,11 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
           accountingApi.getInvoices(),
           accountingApi.getBills(),
           projectsApi.getProjects().catch(() => ({ data: [] })),
-          accountingApi.getBankAccounts()
+          accountingApi.getBankAccounts(),
+          accountingApi.getFiscalYear().catch(() => null)
         ]);
+        if (request !== reportRequest.current) return;
+        if (fyRes?.data) setFiscalYear(fyRes.data);
         setTrialBalance(tb.data);
         setIncomeStatement(inc.data);
         setBalanceSheet(bs.data);
@@ -443,6 +475,41 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const getSetting = (key: string) => companySettings.find(s => s.key === key)?.value || '';
   const currSym = getCurrencySymbol(getSetting('currency'));
   const money = (value: unknown) => formatWithSymbol(value, currSym);
+  const compactMoney = (value: number) => formatCompactWithSymbol(value, currSym);
+
+  const [showZeroRows, setShowZeroRows] = useState(false);
+  const showStatementRow = (a: any) => showZeroRows || Math.abs(Number(a.total_debit || 0) - Number(a.total_credit || 0)) >= 0.005;
+  const showTrialBalanceRow = (a: any) => showZeroRows
+    || [a.opening_balance, a.period_debit, a.period_credit, a.total_debit, a.total_credit].some(v => Math.abs(Number(v || 0)) >= 0.005);
+  const signTone = (value: number) => (value < -0.005 ? 'text-rose-600' : '');
+
+  const statementRevenue = incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (Number(a.total_credit || 0) - Number(a.total_debit || 0)), 0);
+  const statementExpenses = incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (Number(a.total_debit || 0) - Number(a.total_credit || 0)), 0);
+  const statementNet = statementRevenue - statementExpenses;
+
+  const projectFigures = (p: any) => {
+    const projectInvoices = invoices.filter(inv => inv.project_id === p.id && inv.status !== 'void');
+    const projectBills = bills.filter(b => b.project_id === p.id && String(b.status).toLowerCase() !== 'void');
+    const revenue = projectInvoices.reduce((s, inv: any) => s + Number(inv.subtotal ?? inv.amount) * (Number(inv.amount) > 0 ? 1 - Number(inv.credited_amount || 0) / Number(inv.amount) : 1), 0);
+    const cost = projectBills.reduce((s, b) => s + Number(b.amount), 0);
+    return { revenue, cost, profit: revenue - cost };
+  };
+
+  const openAccountDrill = async (a: any, dates: { start: string; end: string }, label: string) => {
+    const matchingBank = bankAccounts.find((ba: any) => String(ba.coa_account_id) === String(a.id));
+    setSelectedPeriodLabel(label);
+    setPeriodFilterDates(dates);
+    setPeriodFilterAccountId(matchingBank ? String(matchingBank.id) : null);
+    setSelectedCOAId(String(a.id));
+    setDrillDownMode(matchingBank ? 'bank' : 'ledger');
+    setIsPeriodBankDetailsOpen(true);
+    try {
+      const res = await accountingApi.getLedgerEntries(a.id);
+      setLedgerEntries(res.data);
+    } catch (error) {
+      toast.error("Failed to load ledger details");
+    }
+  };
   const accountingConfig = JSON.parse(getSetting('accounting_config') || '{"sales_tax_rate": "15", "tax_name": "VAT"}');
 
 
@@ -869,7 +936,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; color: #C62828;">${money(totalExpenses)}</td>
           </tr>
           <tr style="background: #141414; color: white;">
-            <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">Net Income</td>
+            <td style="border: 1px solid #E4E3E0; padding: 12px; font-weight: bold; font-size: 1.1rem;">${netIncome < 0 ? 'Net Loss' : 'Net Income'}</td>
             <td style="border: 1px solid #E4E3E0; padding: 12px; text-align: right; font-weight: bold; font-size: 1.2rem;">${money(netIncome)}</td>
           </tr>
         </tbody>
@@ -2014,20 +2081,25 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       case 'accounting-reports':
         return (
           <div className="space-y-8">
-            <AccountingGuidance 
-              title="Financial Statement Governance" 
-              message="Financial statements provide a snapshot of the company's health. Income Statement tracks performance over time, while the Balance Sheet shows a specific point-in-time position." 
-            />
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-[#141414]">Financial Position</h2>
-                <p className="text-[#8E9299]">Enterprise Reporting driven by Double-Entry Ledger.</p>
+                <p className="text-sm text-[#8E9299]">
+                  {formatDate(reportStartDate)} – {formatDate(reportEndDate)}
+                  {inclusiveDays(reportStartDate, reportEndDate) > 0 && ` · ${inclusiveDays(reportStartDate, reportEndDate)} days`}
+                </p>
               </div>
-              <div className="flex items-center gap-2 bg-[#F5F5F5] p-1 rounded-xl">
-                <Input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} className="bg-transparent border-none w-36 text-sm font-bold" />
-                <span className="text-[#8E9299] font-bold">to</span>
-                <Input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} className="bg-transparent border-none w-36 text-sm font-bold" />
-                <Button size="icon" className="bg-[#141414] text-white rounded-lg h-8 w-8 ml-2" onClick={fetchData}><Search className="w-4 h-4" /></Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <PeriodPresets startDate={reportStartDate} endDate={reportEndDate} fiscal={fiscalYear}
+                  onChange={(start, end) => { setReportStartDate(start); setReportEndDate(end); }} />
+                <div className="flex items-center gap-1 bg-[#F5F5F5] p-1 rounded-xl">
+                  <Input type="date" aria-label="From" value={reportStartDate} max={reportEndDate} onChange={e => setReportStartDate(e.target.value)} className="bg-transparent border-none w-36 h-8 text-sm font-bold" />
+                  <span className="text-[#8E9299] text-xs font-bold">to</span>
+                  <Input type="date" aria-label="To" value={reportEndDate} min={reportStartDate} onChange={e => setReportEndDate(e.target.value)} className="bg-transparent border-none w-36 h-8 text-sm font-bold" />
+                  <Button size="icon" title="Refresh" aria-label="Refresh reports" className="bg-[#141414] text-white rounded-lg h-8 w-8 ml-1" onClick={fetchData} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -2041,45 +2113,38 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   {tab.replace('-', ' ')}
                 </button>
               ))}
+              {['income-statement', 'balance-sheet', 'trial-balance'].includes(reportTab) && (
+                <label className="ml-auto flex items-center gap-2 pl-4 text-xs font-bold text-[#8E9299] whitespace-nowrap cursor-pointer select-none">
+                  <input type="checkbox" checked={showZeroRows} onChange={e => setShowZeroRows(e.target.checked)} className="accent-[#141414]" />
+                  Show zero balances
+                </label>
+              )}
             </div>
 
             {reportTab === 'cash-flow' && <CashFlowPanel startDate={reportStartDate} endDate={reportEndDate} currSym={currSym} branding={branding()} />}
 
             {reportTab === 'tax-reports' && <TaxReportsPanel startDate={reportStartDate} endDate={reportEndDate} currSym={currSym} branding={branding()} />}
 
-            {reportTab === 'dashboard' && managementAccounts && (
-              <div className="grid gap-6 md:grid-cols-4">
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-blue-500">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Operating Profit</CardDescription>
-                    <CardTitle className="text-3xl font-black text-blue-600">{money((managementAccounts.Income - managementAccounts.Expense))}</CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-green-500">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Revenue</CardDescription>
-                    <CardTitle className="text-3xl font-black text-green-600">{money(managementAccounts.Income)}</CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-red-500">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Expenses</CardDescription>
-                    <CardTitle className="text-3xl font-black text-red-600">{money(managementAccounts.Expense)}</CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card className="border-none shadow-sm rounded-2xl overflow-hidden border-t-4 border-t-purple-500">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-xs uppercase font-bold text-[#8E9299]">Total Payroll Paid</CardDescription>
-                    <CardTitle className="text-3xl font-black text-purple-600">{money((managementAccounts.TotalPayroll || 0))}</CardTitle>
-                  </CardHeader>
-                </Card>
-              </div>
+            {reportTab === 'dashboard' && (
+              <ReportsDashboard
+                data={managementAccounts}
+                incomeStatement={incomeStatement}
+                startDate={reportStartDate}
+                endDate={reportEndDate}
+                loading={isLoading}
+                money={money}
+                compact={compactMoney}
+                branding={branding()}
+                onOpenTab={setReportTab}
+                onOpenAccount={(a) => openAccountDrill(a, { start: reportStartDate, end: reportEndDate }, `${a.name} (${reportStartDate} to ${reportEndDate})`)}
+                onShowYtd={() => { const r = presetRange('ytd', fiscalYear); setReportStartDate(r.start); setReportEndDate(r.end); }}
+              />
             )}
 
             {reportTab === 'income-statement' && (
               <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
-                  <CardTitle>Income Statement <span className="text-sm font-normal text-[#8E9299]">{reportStartDate} to {reportEndDate}</span></CardTitle>
+                  <CardTitle>Income Statement <span className="text-sm font-normal text-[#8E9299]">{formatDate(reportStartDate)} – {formatDate(reportEndDate)}</span></CardTitle>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handlePrintIncomeStatement}><Printer className="w-4 h-4 mr-2" /> Print</Button>
                     <Button variant="outline" size="sm" onClick={handleExportIncomeStatementExcel}><FileSpreadsheet className="w-4 h-4 mr-2" /> Excel</Button>
@@ -2090,7 +2155,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                     <TableBody>
                       <TableRow className="bg-green-50/30 hover:bg-green-50/30"><TableCell colSpan={2} className="font-bold text-green-700">Revenue</TableCell></TableRow>
-                      {incomeStatement.filter(a => a.type === 'Income').map(a => (
+                      {incomeStatement.filter(a => a.type === 'Income' && showStatementRow(a)).map(a => (
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-green-50/50 cursor-pointer"
@@ -2111,13 +2176,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
+                          <TableCell className={`text-right font-mono ${signTone(a.total_credit - a.total_debit)}`}>{money(a.total_credit - a.total_debit)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Revenue</TableCell><TableCell className="text-right font-black text-green-600">{money(incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Operating Expenses</TableCell></TableRow>
-                      {incomeStatement.filter(a => a.type === 'Expense').map(a => (
+                      {incomeStatement.filter(a => a.type === 'Expense' && showStatementRow(a)).map(a => (
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
@@ -2138,15 +2203,15 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{money((a.total_debit - a.total_credit))}</TableCell>
+                          <TableCell className={`text-right font-mono ${signTone(a.total_debit - a.total_credit)}`}>{money(a.total_debit - a.total_credit)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Expenses</TableCell><TableCell className="text-right font-black text-red-600">{money(incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
-                        <TableCell className="font-black text-lg">Net Income</TableCell>
-                        <TableCell className="text-right font-black text-xl">
-                          {money((incomeStatement.filter(a => a.type === 'Income').reduce((s, a) => s + (a.total_credit - a.total_debit), 0) - incomeStatement.filter(a => a.type === 'Expense').reduce((s, a) => s + (a.total_debit - a.total_credit), 0)))}
+                        <TableCell className="font-black text-lg">{statementNet < 0 ? 'Net Loss' : 'Net Income'}</TableCell>
+                        <TableCell className={`text-right font-black text-xl ${statementNet < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          {money(statementNet)}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -2158,7 +2223,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
             {reportTab === 'balance-sheet' && (
               <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden max-w-4xl">
                 <CardHeader className="bg-[#F5F5F5]/30 border-b border-[#F5F5F5] flex flex-row justify-between items-center">
-                  <CardTitle>Balance Sheet <span className="text-sm font-normal text-[#8E9299]">As of {reportEndDate}</span></CardTitle>
+                  <CardTitle>Balance Sheet <span className="text-sm font-normal text-[#8E9299]">As of {formatDate(reportEndDate)}</span></CardTitle>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handlePrintBalanceSheet}><Printer className="w-4 h-4 mr-2" /> Print</Button>
                     <Button variant="outline" size="sm" onClick={handleExportBalanceSheetExcel}><FileSpreadsheet className="w-4 h-4 mr-2" /> Excel</Button>
@@ -2169,7 +2234,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     <TableHeader><TableRow className="bg-[#F5F5F5]/50"><TableHead>Account</TableHead><TableHead className="text-right">Balance</TableHead></TableRow></TableHeader>
                     <TableBody>
                       <TableRow className="bg-blue-50/30 hover:bg-blue-50/30"><TableCell colSpan={2} className="font-bold text-blue-700">Assets</TableCell></TableRow>
-                      {balanceSheet.accounts.filter((a: any) => a.type === 'Asset').map((a: any) => (
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Asset' && showStatementRow(a)).map((a: any) => (
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-blue-50/50 cursor-pointer"
@@ -2190,13 +2255,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{money((a.total_debit - a.total_credit))}</TableCell>
+                          <TableCell className={`text-right font-mono ${signTone(a.total_debit - a.total_credit)}`}>{money(a.total_debit - a.total_credit)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Assets</TableCell><TableCell className="text-right font-black text-blue-600">{money(balanceSheet.accounts.filter((a: any) => a.type === 'Asset').reduce((s: number, a: any) => s + (a.total_debit - a.total_credit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-red-50/30 hover:bg-red-50/30"><TableCell colSpan={2} className="font-bold text-red-700">Liabilities</TableCell></TableRow>
-                      {balanceSheet.accounts.filter((a: any) => a.type === 'Liability').map((a: any) => (
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Liability' && showStatementRow(a)).map((a: any) => (
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-red-50/50 cursor-pointer"
@@ -2217,13 +2282,13 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
+                          <TableCell className={`text-right font-mono ${signTone(a.total_credit - a.total_debit)}`}>{money(a.total_credit - a.total_debit)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Liabilities</TableCell><TableCell className="text-right font-black text-red-600">{money(balanceSheet.accounts.filter((a: any) => a.type === 'Liability').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0))}</TableCell></TableRow>
 
                       <TableRow className="bg-purple-50/30 hover:bg-purple-50/30"><TableCell colSpan={2} className="font-bold text-purple-700">Equity</TableCell></TableRow>
-                      {balanceSheet.accounts.filter((a: any) => a.type === 'Equity').map((a: any) => (
+                      {balanceSheet.accounts.filter((a: any) => a.type === 'Equity' && showStatementRow(a)).map((a: any) => (
                         <TableRow 
                           key={a.id} 
                           className="hover:bg-purple-50/50 cursor-pointer"
@@ -2244,11 +2309,28 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                           }}
                         >
                           <TableCell className="pl-8 font-bold text-[#141414]">{a.name}</TableCell>
-                          <TableCell className="text-right font-mono">{money((a.total_credit - a.total_debit))}</TableCell>
+                          <TableCell className={`text-right font-mono ${signTone(a.total_credit - a.total_debit)}`}>{money(a.total_credit - a.total_debit)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow><TableCell className="pl-8 font-bold text-[#141414]">Retained Earnings</TableCell><TableCell className="text-right font-mono">{money(balanceSheet.retainedEarnings)}</TableCell></TableRow>
                       <TableRow className="bg-[#F5F5F5]/50 hover:bg-[#F5F5F5]/50"><TableCell className="font-bold">Total Equity</TableCell><TableCell className="text-right font-black text-purple-600">{money((balanceSheet.accounts.filter((a: any) => a.type === 'Equity').reduce((s: number, a: any) => s + (a.total_credit - a.total_debit), 0) + balanceSheet.retainedEarnings))}</TableCell></TableRow>
+                      {(() => {
+                        const sum = (type: string, sign: 1 | -1) => balanceSheet.accounts.filter((a: any) => a.type === type).reduce((s: number, a: any) => s + sign * (Number(a.total_debit || 0) - Number(a.total_credit || 0)), 0);
+                        const assets = sum('Asset', 1);
+                        const liabilitiesAndEquity = sum('Liability', -1) + sum('Equity', -1) + Number(balanceSheet.retainedEarnings || 0);
+                        const difference = assets - liabilitiesAndEquity;
+                        return (
+                          <TableRow className="bg-[#141414] text-white hover:bg-[#141414]">
+                            <TableCell className="font-black text-lg">
+                              Total Liabilities & Equity
+                              {Math.abs(difference) < 0.01
+                                ? <Badge className="ml-3 bg-emerald-500/20 text-emerald-300 border-none align-middle">Balanced</Badge>
+                                : <Badge className="ml-3 bg-rose-500/20 text-rose-300 border-none align-middle">Out by {money(difference)}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-right font-black text-xl">{money(liabilitiesAndEquity)}</TableCell>
+                          </TableRow>
+                        );
+                      })()}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -2257,13 +2339,24 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
 
             {reportTab === 'project-analysis' && (
               <div className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-3">
+                {projects.length > 0 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-xs text-[#8E9299]">All-time invoiced revenue (net of credit notes and tax) against supplier bills tagged to each project.</p>
+                    <Button variant="outline" size="sm" onClick={() => handleExportCSV('project_analysis', ['Project', 'Name', 'Client', 'Revenue', 'Direct costs', 'Profit', 'Margin %'], projects.map(p => {
+                      const f = projectFigures(p);
+                      return [p.id, p.name, p.client || '', f.revenue.toFixed(2), f.cost.toFixed(2), f.profit.toFixed(2), f.revenue > 0 ? ((f.profit / f.revenue) * 100).toFixed(1) : ''];
+                    }))}><FileSpreadsheet className="w-4 h-4 mr-2" /> Export CSV</Button>
+                  </div>
+                )}
+                {projects.length === 0 && (
+                  <div className="rounded-3xl border border-dashed border-[#E6E6E6] bg-white px-6 py-12 text-center">
+                    <p className="text-sm font-bold text-[#141414]">No projects yet</p>
+                    <p className="mt-1 text-xs text-[#8E9299]">Project revenue and direct costs appear here once invoices and bills are tagged to a project.</p>
+                  </div>
+                )}
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                   {projects.map(p => {
-                    const projectInvoices = invoices.filter(inv => inv.project_id === p.id && inv.status !== 'void');
-                    const projectBills = bills.filter(b => b.project_id === p.id && String(b.status).toLowerCase() !== 'void');
-                    const projectRevenue = projectInvoices.reduce((s, inv: any) => s + Number(inv.subtotal ?? inv.amount) * (Number(inv.amount) > 0 ? 1 - Number(inv.credited_amount || 0) / Number(inv.amount) : 1), 0);
-                    const projectCost = projectBills.reduce((s, b) => s + Number(b.amount), 0);
-                    const projectProfit = projectRevenue - projectCost;
+                    const { revenue: projectRevenue, cost: projectCost, profit: projectProfit } = projectFigures(p);
 
                     return (
                       <Card key={p.id} className="border-none shadow-sm rounded-2xl overflow-hidden border-l-4 border-l-blue-600">
@@ -2281,19 +2374,19 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                             <span className="font-bold text-red-600">{money(projectCost)}</span>
                           </div>
                           <div className="pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
-                            <span className="font-black text-[#141414]">Net Project Profit</span>
+                            <span className="font-black text-[#141414]">{projectProfit < 0 ? 'Net Project Loss' : 'Net Project Profit'}</span>
                             <span className={`font-black text-xl ${projectProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                               {money(projectProfit)}
                             </span>
                           </div>
                           <div className="w-full bg-[#F5F5F5] h-2 rounded-full overflow-hidden">
                             <div
-                              className="bg-blue-600 h-full"
-                              style={{ width: `${Math.min(100, (projectRevenue > 0 ? (projectProfit / projectRevenue) * 100 : 0))}%` }}
+                              className={`${projectProfit >= 0 ? 'bg-blue-600' : 'bg-red-500'} h-full`}
+                              style={{ width: `${Math.min(100, projectRevenue > 0 ? Math.abs(projectProfit / projectRevenue) * 100 : 0)}%` }}
                             />
                           </div>
-                          <p className="text-[10px] text-center text-[#8E9299] uppercase font-bold tracking-wider">
-                            Margin: {projectRevenue > 0 ? ((projectProfit / projectRevenue) * 100).toFixed(1) : 0}%
+                          <p className={`text-[10px] text-center uppercase font-bold tracking-wider ${projectProfit < 0 ? 'text-red-600' : 'text-[#8E9299]'}`}>
+                            {projectRevenue > 0 ? `Margin: ${((projectProfit / projectRevenue) * 100).toFixed(1)}%` : projectCost > 0 ? 'Costs with no revenue yet' : 'No activity yet'}
                           </p>
                         </CardContent>
                       </Card>
@@ -2326,7 +2419,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {trialBalance.map(a => (
+                    {trialBalance.filter(showTrialBalanceRow).map(a => (
                       <TableRow 
                         key={a.id} 
                         className="hover:bg-[#F5F5F5]/50 cursor-pointer"
@@ -2912,7 +3005,7 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
     <div className="space-y-8">
       <div>
         <h1 className="text-4xl font-black tracking-tight text-[#141414]">Finance Hub.</h1>
-        <p className="text-[#8E9299] text-lg mt-1 font-medium">Enterprise Treasury, AP/AR, and Ledger Configuration.</p>
+        {SECTION_SUBTITLES[activeSub] && <p className="text-[#8E9299] text-lg mt-1 font-medium">{SECTION_SUBTITLES[activeSub]}</p>}
       </div>
       {approvalCount > 0 && activeSub !== 'accounting-approvals' && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 px-5 py-3">

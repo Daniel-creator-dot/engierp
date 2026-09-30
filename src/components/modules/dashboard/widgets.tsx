@@ -112,10 +112,33 @@ interface KpiCardProps {
   valueClassName?: string;
   loading?: boolean;
   onClick?: () => void;
+  /** Shorter format used when the full amount does not fit the card width; the full amount stays in the tooltip. */
+  compact?: (value: number) => string;
 }
 
-export function KpiCard({ icon: Icon, tone, label, value, format, info, change, goodWhenUp, badge, footnote, spark, valueClassName, loading, onClick }: KpiCardProps) {
+/** True while `text` fits inside the element's width; re-checked whenever the element resizes. */
+function useFits(text: string, enabled: boolean) {
+  const boxRef = useRef<HTMLParagraphElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(true);
+  useEffect(() => {
+    const box = boxRef.current;
+    const probe = probeRef.current;
+    if (!enabled || !box || !probe) return;
+    const check = () => setFits(probe.offsetWidth <= box.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [text, enabled]);
+  return { boxRef, probeRef, fits };
+}
+
+export function KpiCard({ icon: Icon, tone, label, value, format, info, change, goodWhenUp, badge, footnote, spark, valueClassName, loading, onClick, compact }: KpiCardProps) {
   const animated = useCountUp(value);
+  const full = format(value);
+  const { boxRef, probeRef, fits } = useFits(full, !!compact);
+  const shown = compact && !fits ? compact(animated) : format(animated);
   return (
     <div
       role={onClick ? 'button' : undefined}
@@ -135,7 +158,10 @@ export function KpiCard({ icon: Icon, tone, label, value, format, info, change, 
         <p className="text-[11px] font-bold text-[#8E9299] uppercase tracking-widest truncate">{label}</p>
         {info && <InfoTip text={info} />}
       </div>
-      <p className={`mt-1 text-[1.65rem] leading-tight font-black tabular-nums tracking-tight truncate ${valueClassName || 'text-[#141414]'}`}>{format(animated)}</p>
+      <p ref={boxRef} title={full} className={`relative mt-1 text-[1.65rem] leading-tight font-black tabular-nums tracking-tight truncate ${valueClassName || 'text-[#141414]'}`}>
+        {shown}
+        {compact && <span ref={probeRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{full}</span>}
+      </p>
       {footnote && <div className="mt-1 min-h-[2.5em] text-[11px] leading-[1.25em] text-[#8E9299] font-medium line-clamp-2">{footnote}</div>}
       {spark && <div className="mt-3 -mx-1"><Sparkline data={spark} color={TONES[tone].stroke} /></div>}
     </div>

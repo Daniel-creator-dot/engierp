@@ -17,12 +17,12 @@ import {
 } from 'recharts';
 import type { Aging, MonthPoint, Money } from './types';
 
-const AXIS = { stroke: '#A1A5AB', fontSize: 11, tickLine: false, axisLine: false } as const;
+export const AXIS = { stroke: '#A1A5AB', fontSize: 11, tickLine: false, axisLine: false } as const;
 /** Recharts wraps tick text on spaces; a non-breaking space keeps "GH₵ 1.2M" on one line. */
-const axisTick = (compact: Money) => (v: number) => compact(v).replace(/ /g, '\u00A0');
+export const axisTick = (compact: Money) => (v: number) => compact(v).replace(/ /g, '\u00A0');
 export const DONUT_COLORS = ['#2563eb', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e', '#94a3b8'];
 
-function ChartTooltip({ active, payload, label, money }: any) {
+export function ChartTooltip({ active, payload, label, money }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-2xl bg-[#141414] px-3.5 py-2.5 text-white shadow-2xl min-w-[170px]">

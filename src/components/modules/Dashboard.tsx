@@ -208,7 +208,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       {finance && figures && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Reveal delay={0.05}>
-            <KpiCard icon={TrendingUp} tone="emerald" label={`Revenue · ${figures.period.label}`} value={figures.period.income} format={money}
+            <KpiCard icon={TrendingUp} tone="emerald" label={`Revenue · ${figures.period.label}`} value={figures.period.income} format={money} compact={compact}
               loading={isRefreshing}
               change={figures.period.income ? percentChange(figures.period.income, figures.prior.income) : null} goodWhenUp
               info={`Income posted to revenue accounts in the general ledger, ${figures.period.label.toLowerCase()}, compared with the ${figures.period.priorLabel}.`}
@@ -216,7 +216,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               spark={monthly.map(m => m.income)} onClick={go('accounting-reports')} />
           </Reveal>
           <Reveal delay={0.1}>
-            <KpiCard icon={TrendingDown} tone="rose" label={`Expenses · ${figures.period.label}`} value={figures.period.expense} format={money}
+            <KpiCard icon={TrendingDown} tone="rose" label={`Expenses · ${figures.period.label}`} value={figures.period.expense} format={money} compact={compact}
               loading={isRefreshing}
               change={percentChange(figures.period.expense, figures.prior.expense)} goodWhenUp={false}
               info={`Everything posted to expense accounts, ${figures.period.label.toLowerCase()}. Green means spending fell compared with the ${figures.period.priorLabel}.`}
@@ -225,7 +225,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </Reveal>
           <Reveal delay={0.15}>
             <KpiCard icon={Activity} tone={isLoss ? 'rose' : 'blue'} label={`${isLoss ? 'Net loss' : 'Net profit'} · ${figures.period.label}`}
-              value={Math.abs(figures.period.net)} format={money} valueClassName={isLoss ? 'text-rose-600' : undefined}
+              value={Math.abs(figures.period.net)} format={money} compact={compact} valueClassName={isLoss ? 'text-rose-600' : undefined}
               loading={isRefreshing}
               badge={isLoss ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-rose-700">Loss</span> : undefined}
               info={`Revenue minus expenses, ${figures.period.label.toLowerCase()}.\nRevenue: ${money(figures.period.income)}\nExpenses: ${money(figures.period.expense)}\n${isLoss ? 'Net loss' : 'Net profit'}: ${money(Math.abs(figures.period.net))}`}
@@ -235,7 +235,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               spark={monthly.map(m => m.net)} onClick={go('accounting-reports')} />
           </Reveal>
           <Reveal delay={0.2}>
-            <KpiCard icon={Wallet} tone="amber" label="Cash & bank" value={finance.cashPosition} format={money}
+            <KpiCard icon={Wallet} tone="amber" label="Cash & bank" value={finance.cashPosition} format={money} compact={compact}
               valueClassName={finance.cashPosition < 0 ? 'text-rose-600' : undefined}
               change={lastMonthCash !== undefined ? percentChange(finance.cashPosition, lastMonthCash) : null} goodWhenUp
               info={'Balance of all cash and bank accounts in the ledger right now. The change compares with the balance at the end of last month.'}
