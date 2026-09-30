@@ -52,6 +52,21 @@ async function financeSection(today: Date) {
   }
   const monthly = months.map(m => ({ ...m, net: m.income - m.expense }));
 
+  const prevStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevEnd = new Date(today.getFullYear(), today.getMonth() - 1, Math.min(today.getDate(), new Date(today.getFullYear(), today.getMonth(), 0).getDate()));
+  const prevToDateRows = await db('ledger_entries as le')
+    .join('journal_entries as je', 'le.journal_id', 'je.id')
+    .join('chart_of_accounts as coa', 'le.account_id', 'coa.id')
+    .whereIn('coa.type', ['Income', 'Expense'])
+    .whereBetween('je.date', [isoDate(prevStart), isoDate(prevEnd)])
+    .select('coa.type', db.raw('COALESCE(SUM(le.debit), 0) as debit'), db.raw('COALESCE(SUM(le.credit), 0) as credit'))
+    .groupBy('coa.type');
+  const previousMonthToDate = { income: 0, expense: 0, throughDay: prevEnd.getDate() };
+  for (const row of prevToDateRows as any[]) {
+    if (row.type === 'Income') previousMonthToDate.income += num(row.credit) - num(row.debit);
+    else previousMonthToDate.expense += num(row.debit) - num(row.credit);
+  }
+
   const ytdRows = await db('ledger_entries as le')
     .join('journal_entries as je', 'le.journal_id', 'je.id')
     .join('chart_of_accounts as coa', 'le.account_id', 'coa.id')
@@ -61,8 +76,8 @@ async function financeSection(today: Date) {
     .groupBy('coa.type');
   const ytd = { income: 0, expense: 0 };
   for (const row of ytdRows as any[]) {
-    if (row.type === 'Income') ytd.income = num(row.credit) - num(row.debit);
-    else ytd.expense = num(row.debit) - num(row.credit);
+    if (row.type === 'Income') ytd.income += num(row.credit) - num(row.debit);
+    else ytd.expense += num(row.debit) - num(row.credit);
   }
 
   const cashRow: any = await db('ledger_entries as le')
@@ -121,6 +136,7 @@ async function financeSection(today: Date) {
   return {
     currentMonth: current,
     previousMonth: previous,
+    previousMonthToDate,
     monthly,
     ytd: { ...ytd, net: ytd.income - ytd.expense },
     cashPosition: num(cashRow?.balance),

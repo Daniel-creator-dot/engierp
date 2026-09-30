@@ -118,8 +118,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   if (assets?.maintenanceDueCount) attention.push({ label: `${assets.maintenanceDueCount} equipment maintenance due`, detail: assets.maintenanceDue.slice(0, 2).map((m: any) => `${m.name} · ${formatDate(m.date)}`).join('; '), tone: 'amber', target: 'assets' });
   if (operations?.pendingReview) attention.push({ label: `${operations.pendingReview} site report(s) pending review`, detail: 'Review in Field Operations', tone: 'blue', target: 'field-ops' });
 
-  const revenueChange = finance ? percentChange(finance.currentMonth.income, finance.previousMonth.income) : null;
-  const expenseChange = finance ? percentChange(finance.currentMonth.expense, finance.previousMonth.expense) : null;
+  const priorToDate = finance?.previousMonthToDate ?? finance?.previousMonth;
+  const monthName = new Date().toLocaleString('en', { month: 'long' });
+  const priorLabel = finance?.previousMonthToDate ? `Same days last month ${money(priorToDate.income)}` : `Last month ${money(finance?.previousMonth.income)}`;
+  const revenueChange = finance && finance.currentMonth.income ? percentChange(finance.currentMonth.income, priorToDate.income) : null;
+  const expenseChange = finance ? percentChange(finance.currentMonth.expense, priorToDate.expense) : null;
+  const isLoss = !!finance && finance.ytd.net < 0;
+  const displayName = (user?.name || user?.email?.split('@')[0] || '').trim().toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
   const hasChartData = finance?.monthly.some((m: any) => m.income || m.expense);
 
   return (
@@ -128,7 +133,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div>
           <p className="text-sm font-bold text-blue-600 uppercase tracking-widest">{formatDate(new Date().toISOString())}</p>
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#141414] mt-1">
-            {greeting()}{user?.email ? `, ${user.email.split('@')[0]}` : ''}
+            {greeting()}{displayName ? `, ${displayName}` : ''}
           </h1>
           <p className="text-[#8E9299] font-medium mt-1">Here's how the business is doing today.</p>
         </div>
@@ -145,12 +150,19 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       {finance && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KPI icon={TrendingUp} color="green" label={`Revenue · ${finance.currentMonth.label}`} value={money(finance.currentMonth.income)}
-            change={revenueChange} goodWhenUp footnote={`Last month ${money(finance.previousMonth.income)}`} onClick={go('accounting-reports')} />
-          <KPI icon={TrendingDown} color="red" label={`Expenses · ${finance.currentMonth.label}`} value={money(finance.currentMonth.expense)}
-            change={expenseChange} goodWhenUp={false} footnote={`Last month ${money(finance.previousMonth.expense)}`} onClick={go('accounting-reports')} />
-          <KPI icon={Activity} color={finance.ytd.net >= 0 ? 'blue' : 'red'} label={`Net profit · ${new Date().getFullYear()} to date`} value={money(finance.ytd.net)}
-            footnote={`Revenue ${money(finance.ytd.income)} · Expenses ${money(finance.ytd.expense)}`} onClick={go('accounting-reports')} />
+          <KPI icon={TrendingUp} color="green" label={`Revenue · ${monthName} to date`} value={money(finance.currentMonth.income)}
+            change={revenueChange} goodWhenUp
+            footnote={finance.currentMonth.income ? priorLabel : `No revenue recorded yet this month · last month ${money(finance.previousMonth.income)}`}
+            onClick={go('accounting-reports')} />
+          <KPI icon={TrendingDown} color="red" label={`Expenses · ${monthName} to date`} value={money(finance.currentMonth.expense)}
+            change={expenseChange} goodWhenUp={false}
+            footnote={finance.previousMonthToDate ? `Same days last month ${money(priorToDate.expense)}` : `Last month ${money(finance.previousMonth.expense)}`}
+            onClick={go('accounting-reports')} />
+          <KPI icon={Activity} color={isLoss ? 'red' : 'blue'} label={`${isLoss ? 'Net loss' : 'Net profit'} · ${new Date().getFullYear()} to date`}
+            value={money(Math.abs(finance.ytd.net))} valueClassName={isLoss ? 'text-red-600' : undefined}
+            footnote={`Revenue ${money(finance.ytd.income)} · Expenses ${money(finance.ytd.expense)}`}
+            title={`${new Date().getFullYear()} to date, from the general ledger\nRevenue: ${money(finance.ytd.income)}\nExpenses: ${money(finance.ytd.expense)}\n${isLoss ? 'Net loss' : 'Net profit'}: ${money(Math.abs(finance.ytd.net))}`}
+            onClick={go('accounting-reports')} />
           <KPI icon={Wallet} color="orange" label="Cash & bank" value={money(finance.cashPosition)}
             footnote="Balance of cash and bank accounts in the ledger" onClick={go('accounting-bank')} />
         </div>
@@ -389,16 +401,19 @@ interface KPIProps {
   footnote?: string;
   change?: number | null;
   goodWhenUp?: boolean;
+  valueClassName?: string;
+  title?: string;
   onClick?: () => void;
 }
 
-function KPI({ icon: Icon, label, value, color, footnote, change, goodWhenUp = true, onClick }: KPIProps) {
+function KPI({ icon: Icon, label, value, color, footnote, change, goodWhenUp = true, valueClassName, title, onClick }: KPIProps) {
   const hasChange = change !== undefined && change !== null && Number.isFinite(change);
   const isUp = hasChange && (change as number) >= 0;
   const isGood = hasChange && (isUp === goodWhenUp);
   return (
     <Card
       onClick={onClick}
+      title={title}
       className={`border-none shadow-sm rounded-3xl bg-white transition-all ${onClick ? 'cursor-pointer hover:shadow-lg hover:shadow-black/5' : ''}`}
     >
       <CardContent className="p-5">
@@ -412,8 +427,8 @@ function KPI({ icon: Icon, label, value, color, footnote, change, goodWhenUp = t
           )}
         </div>
         <p className="mt-4 text-[11px] font-bold text-[#8E9299] uppercase tracking-widest">{label}</p>
-        <p className="text-2xl font-black text-[#141414] mt-1 tabular-nums truncate">{value}</p>
-        {footnote && <p className="text-[11px] text-[#8E9299] mt-1 truncate" title={footnote}>{footnote}</p>}
+        <p className={`text-2xl font-black mt-1 tabular-nums truncate ${valueClassName || 'text-[#141414]'}`}>{value}</p>
+        {footnote && <p className="text-[11px] text-[#8E9299] mt-1 truncate" title={title ? undefined : footnote}>{footnote}</p>}
       </CardContent>
     </Card>
   );
