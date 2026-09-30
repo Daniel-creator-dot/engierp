@@ -69,7 +69,13 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   useVersionCheck();
+
+  const navigateMobile = (module: Module) => {
+    setActiveModule(module);
+    setMobileNavOpen(false);
+  };
 
   if (loading) {
     return (
@@ -265,7 +271,7 @@ export default function App() {
                     if (item.subItems) {
                       toggleParent(item.id);
                     } else {
-                      setActiveModule(item.id as Module);
+                      navigateMobile(item.id as Module);
                     }
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
@@ -294,7 +300,7 @@ export default function App() {
                       {item.subItems.map((sub) => (
                         <button
                           key={sub.id}
-                          onClick={() => setActiveModule(sub.id)}
+                          onClick={() => navigateMobile(sub.id)}
                           className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                             activeModule === sub.id
                               ? 'text-white font-semibold bg-white/10'
@@ -315,7 +321,7 @@ export default function App() {
 
       <div className="p-4 border-t border-white/10">
         <button 
-          onClick={() => setActiveModule('settings')}
+          onClick={() => navigateMobile('settings')}
           className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/10 text-white/70 transition-colors ${
             activeModule === 'settings' ? 'bg-white/10 text-white' : ''
           }`}
@@ -356,9 +362,17 @@ export default function App() {
               return (
                 <div key={item.id} className="space-y-1">
                   <button
+                    title={isSidebarOpen ? undefined : item.label}
+                    aria-label={item.label}
                     onClick={() => {
                       if (item.subItems) {
-                        toggleParent(item.id);
+                        // Sub-items only render in the expanded sidebar, so open it rather than toggling invisibly.
+                        if (!isSidebarOpen) {
+                          setIsSidebarOpen(true);
+                          setExpandedParents(prev => new Set(prev).add(item.id));
+                        } else {
+                          toggleParent(item.id);
+                        }
                       } else {
                         setActiveModule(item.id as Module);
                       }
@@ -416,19 +430,19 @@ export default function App() {
             }`}
           >
             <Settings className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="font-medium">Settings</span>}
+            {isSidebarOpen ? <span className="font-medium">Settings</span> : <span className="sr-only">Settings</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 bg-white border-b border-[#E4E3E0] flex items-center justify-between px-4 md:px-8 shrink-0">
           <div className="flex items-center gap-2 md:gap-4">
             {/* Mobile Sidebar Trigger */}
             <div className="lg:hidden">
-              <Sheet>
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover:bg-[#F5F5F5]">
                     <Menu className="w-5 h-5" />
@@ -494,14 +508,14 @@ export default function App() {
           </div>
         </header>
 
-        {/* Module Content */}
-        <ScrollArea className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
+        {/* Module Content: a native scroller, so wide tables scroll inside their own containers instead of widening the page. */}
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+          <div className="max-w-7xl mx-auto min-w-0">
             {renderModule()}
           </div>
-        </ScrollArea>
+        </div>
       </main>
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div>
   );
 }
