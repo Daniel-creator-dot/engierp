@@ -116,7 +116,7 @@ export default function SecurityPanel() {
                     label="SMS gateway"
                     detail={summary.sms_configured
                       ? summary.sms_key_from_env ? 'Key set from the SMS_API_KEY environment variable.' : 'Using the key saved in the SMS Gateway tab.'
-                      : 'Not configured: password-reset codes and SMS alerts are disabled. Set SMS_API_KEY on the host.'}
+                      : 'Not configured: password-reset codes and SMS alerts are disabled. Set SMS_API_KEY and SMS_SENDER_ID on the host.'}
                   />
                 </div>
                 <p className="text-xs text-[#8E9299] flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Every sign-in, user change and settings change is recorded in the Audit Log tab.</p>

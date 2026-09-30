@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../lib/audit';
+import { getSmsStatus, normalizePhone, sendSMS } from '../utils/sms';
 
 const router = Router();
 
@@ -52,9 +53,33 @@ router.get('/sms', authenticateToken, authorizeRole(['admin']), async (req, res)
       api_key_set: !!api_key,
       api_secret_set: !!api_secret,
       env_key_set: !!process.env.SMS_API_KEY?.trim(),
+      env_provider_set: !!process.env.SMS_PROVIDER?.trim(),
+      env_sender_set: !!process.env.SMS_SENDER_ID?.trim(),
+      env_url_set: !!process.env.SMS_API_URL?.trim(),
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching SMS config' });
+  }
+});
+
+router.get('/sms/status', authenticateToken, authorizeRole(['admin']), async (_req, res) => {
+  try {
+    res.json(await getSmsStatus());
+  } catch (error) {
+    res.status(500).json({ message: 'Error checking SMS status' });
+  }
+});
+
+router.post('/sms/test', authenticateToken, authorizeRole(['admin']), async (req: AuthRequest, res) => {
+  try {
+    const phone = normalizePhone(String(req.body?.phone || ''));
+    if (!/^\d{9,15}$/.test(phone)) return res.status(400).json({ message: 'Enter a valid phone number' });
+    const result = await sendSMS(phone, 'Test message from bytzforge ERP: SMS is working.');
+    await logAudit(req, 'sms_test_sent', 'setting', 'sms_configurations', undefined, { to: phone, success: result.success, error: result.error });
+    if (!result.success) return res.status(result.disabled ? 503 : 502).json({ message: `SMS failed: ${result.error || 'unknown error'}` });
+    res.json({ message: `Test SMS sent to ${phone}` });
+  } catch (error) {
+    res.status(500).json({ message: 'Error sending test SMS' });
   }
 });
 

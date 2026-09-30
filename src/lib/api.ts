@@ -327,4 +327,6 @@ export const settingsApi = {
   getSecuritySummary: () => api.get('/settings/users/security-summary'),
   getSMSConfig: () => api.get('/settings/sms'),
   updateSMSConfig: (data: any) => api.post('/settings/sms', data),
+  getSMSStatus: () => api.get('/settings/sms/status'),
+  sendTestSMS: (phone: string) => api.post('/settings/sms/test', { phone }),
 };

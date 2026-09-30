@@ -72,12 +72,16 @@ export default function Settings() {
   const canManageCatalog = ['admin', 'accountant', 'procurement'].includes(currentUser?.role || '');
   const [currency, setCurrency] = useState('GHS');
   const [smsConfig, setSmsConfig] = useState<any>({
-    provider: 'Hubtel',
+    provider: 'Intek',
     api_key: '',
     api_secret: '',
     sender_id: '',
     api_url: ''
   });
+  const [smsStatus, setSmsStatus] = useState<any>(null);
+  const [smsStatusLoading, setSmsStatusLoading] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [payrollConfig, setPayrollConfig] = useState<any>({
     ssnit_employee: '5.5',
     ssnit_employer: '13',
@@ -162,9 +166,36 @@ export default function Settings() {
   const fetchSMSConfig = async () => {
     try {
       const res = await settingsApi.getSMSConfig();
-      if (res.data.id) setSmsConfig(res.data);
+      setSmsConfig((prev: any) => ({ ...prev, ...res.data, provider: res.data.provider || prev.provider }));
     } catch (error) {
       console.error('Failed to load SMS config');
+    }
+    fetchSMSStatus();
+  };
+
+  const fetchSMSStatus = async () => {
+    setSmsStatusLoading(true);
+    try {
+      const res = await settingsApi.getSMSStatus();
+      setSmsStatus(res.data);
+    } catch (error) {
+      setSmsStatus(null);
+    } finally {
+      setSmsStatusLoading(false);
+    }
+  };
+
+  const handleSendTestSMS = async () => {
+    if (!testPhone.trim()) return toast.error('Enter a phone number');
+    setIsSendingTest(true);
+    try {
+      const res = await settingsApi.sendTestSMS(testPhone.trim());
+      toast.success(res.data.message || 'Test SMS sent');
+      fetchSMSStatus();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Test SMS failed');
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -577,16 +608,67 @@ export default function Settings() {
 
         <TabsContent value="sms" className="space-y-6">
           <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle>Gateway Status</CardTitle>
+              <CardDescription>Live check against the provider. No SMS is sent unless you use the test button.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {smsStatusLoading && !smsStatus ? (
+                <p className="text-sm text-[#8E9299] flex items-center"><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking…</p>
+              ) : smsStatus ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div><p className="text-[#8E9299]">Provider</p><p className="font-medium capitalize">{smsStatus.provider === 'url' ? 'Custom URL' : smsStatus.provider}</p></div>
+                  <div>
+                    <p className="text-[#8E9299]">API key</p>
+                    <Badge className={smsStatus.configured && !smsStatus.error ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                      {!smsStatus.configured ? 'Not set' : smsStatus.error ? 'Rejected' : smsStatus.key_source === 'env' ? 'Set on server' : 'Saved here'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-[#8E9299]">Sender ID</p>
+                    <p className="font-medium">
+                      {smsStatus.sender_id || '—'}
+                      {smsStatus.sender_approved === true && <span className="ml-2 text-green-700">approved</span>}
+                      {smsStatus.sender_approved === false && <span className="ml-2 text-red-700">not approved</span>}
+                    </p>
+                  </div>
+                  <div><p className="text-[#8E9299]">Balance</p><p className="font-medium">{smsStatus.balance_units != null ? `${Number(smsStatus.balance_units).toLocaleString()} units` : '—'}</p></div>
+                  {smsStatus.error && <p className="col-span-full text-red-700">Provider error: {smsStatus.error}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-red-700">Could not load SMS status.</p>
+              )}
+              <div className="flex flex-col md:flex-row gap-3 md:items-end pt-2">
+                <div className="space-y-2 flex-1">
+                  <Label>Send a test SMS</Label>
+                  <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="e.g. 0241234567" className="bg-[#F5F5F5] border-none rounded-xl" />
+                </div>
+                <Button type="button" onClick={handleSendTestSMS} disabled={isSendingTest || !smsStatus?.configured} className="bg-[#141414] text-white rounded-xl">
+                  {isSendingTest ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Smartphone className="w-4 h-4 mr-2" />} Send test
+                </Button>
+                <Button type="button" variant="outline" onClick={fetchSMSStatus} disabled={smsStatusLoading} className="rounded-xl">Refresh</Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
             <form onSubmit={handleSaveSMS}>
               <CardHeader><CardTitle>SMS Gateway Governance</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
-                  <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                  <div className="space-y-2"><Label>Provider</Label><Input value={smsConfig.provider || ''} onChange={(e) => setSmsConfig({...smsConfig, provider: e.target.value})} placeholder="Intek, Hubtel, Twilio or Custom" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                  <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id || ''} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>
-                <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://api.yourprovider.com/v1?to={to}&msg={msg}&key={key}" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
-                {smsConfig.env_key_set && (
-                  <p className="text-sm p-3 rounded-xl bg-green-50 text-green-800">The API key is set on the server (SMS_API_KEY) and takes precedence over any key saved here.</p>
+                <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url || ''} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://www.inteksms.top/api/v1 — or a custom template: ...?to={to}&msg={msg}&key={key}" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                {(smsConfig.env_key_set || smsConfig.env_provider_set || smsConfig.env_sender_set || smsConfig.env_url_set) && (
+                  <p className="text-sm p-3 rounded-xl bg-green-50 text-green-800">
+                    Set on the server and taking precedence over this form:{' '}
+                    {[
+                      smsConfig.env_provider_set && 'SMS_PROVIDER',
+                      smsConfig.env_key_set && 'SMS_API_KEY',
+                      smsConfig.env_sender_set && 'SMS_SENDER_ID',
+                      smsConfig.env_url_set && 'SMS_API_URL',
+                    ].filter(Boolean).join(', ')}.
+                  </p>
                 )}
                 <div className="space-y-2">
                   <Label>API Key</Label>

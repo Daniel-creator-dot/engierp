@@ -35,10 +35,11 @@ npm run build               # production frontend build
 | `DATABASE_URL` | API | Yes (production) | Postgres connection string. Used when `NODE_ENV=production`. |
 | `NODE_ENV` | API | Yes (production) | Set to `production` on the host. |
 | `JWT_SECRET` | API | Strongly recommended | Signs login sessions. Use 32+ random characters (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`). If unset, the API falls back to a random secret stored in the `app_secrets` table and logs a warning. Changing it signs everyone out. |
-| `SMS_API_KEY` | API | For SMS | SMS gateway key (SMS Notify GH by default). Without it (and without a key saved in Settings → SMS Gateway), SMS is disabled: forgot-password is unavailable and alerts are in-app only. |
+| `SMS_API_KEY` | API | For SMS | SMS gateway key (Intek SMS by default). Without it (and without a key saved in Settings → SMS Gateway), SMS is disabled: forgot-password is unavailable and alerts are in-app only. Set it on the host only; never commit it. |
+| `SMS_PROVIDER` | API | Optional | `intek` (default), `hubtel`, `twilio` or `custom`. Overrides the provider saved in Settings. |
+| `SMS_SENDER_ID` | API | For SMS | Approved sender ID on the provider account. Overrides the one saved in Settings. |
+| `SMS_API_URL` | API | Optional | Intek base URL (default `https://www.inteksms.top/api/v1`), or for `custom` a URL template with placeholders `{key}`, `{to}`, `{msg}`, `{sender}`, `{secret}`. Overrides the URL saved in Settings. |
 | `SMS_API_SECRET` | API | Optional | Only for providers that need a secret (Hubtel, Twilio). |
-| `SMS_SENDER_ID` | API | Optional | Overrides the sender ID saved in Settings. |
-| `SMS_API_URL` | API | Optional | Gateway URL template used only when none is saved in Settings. Placeholders: `{key}`, `{to}`, `{msg}`, `{sender}`, `{secret}`. |
 | `PORT` | API | Set by host | Port to listen on (default 5000). |
 | `VITE_API_URL` | Web build | Yes (production) | Public URL of the API, e.g. `https://your-api.onrender.com/api`. `/api` is appended if missing. Read at build time. |
 
@@ -49,7 +50,8 @@ The API and the web app deploy separately.
 **API (e.g. a Render web service)**
 - Build command: `npm install`
 - Start command: `npm run server`
-- Env: `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET`, `SMS_API_KEY`
+- Env: `NODE_ENV=production`, `DATABASE_URL`, `JWT_SECRET`, `SMS_API_KEY`, `SMS_SENDER_ID`, `SMS_API_URL`, `SMS_PROVIDER`
+- SMS check: Settings → SMS Gateway shows the provider, key status, sender ID approval and balance (read-only), and has a "Send test" button for admins.
 - Health check: `GET /health`
 - Migrations run on every start; add new ones as `server/migrations/<timestamp>_<name>.ts`. Never change the production schema by hand.
 
