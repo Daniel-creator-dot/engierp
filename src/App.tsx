@@ -174,9 +174,9 @@ export default function App() {
         return { ...item, subItems: item.subItems.filter(sub => allowedSubs.includes(sub.id)) };
       }
     }
-    // The WIP report endpoint is limited to PM, accountant and admin
+    // The WIP and job cost endpoints are limited to PM, accountant and admin
     if (item.id === 'projects' && item.subItems && !['admin', 'pm', 'accountant'].includes(user.role)) {
-      return { ...item, subItems: item.subItems.filter(sub => sub.id !== 'projects-wip') };
+      return { ...item, subItems: item.subItems.filter(sub => sub.id !== 'projects-wip' && sub.id !== 'projects-costing') };
     }
     return item;
   });

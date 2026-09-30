@@ -137,6 +137,17 @@ export const fieldOpsApi = {
   submitReport: (data: any) => api.post('/field-ops/reports', data),
   getTasks: () => api.get('/field-ops/tasks'),
   updateTask: (id: string, status: string) => api.patch(`/field-ops/tasks/${id}`, { status }),
+  createTask: (data: { project_id: string; name: string; description?: string; assigned_to?: string; due_date?: string }) =>
+    api.post('/field-ops/tasks', data),
+  editTask: (id: number | string, data: any) => api.patch(`/field-ops/tasks/${id}`, data),
+  deleteTask: (id: number | string) => api.delete(`/field-ops/tasks/${id}`),
+  reviewReport: (id: number | string, status: 'Approved' | 'Rejected') => api.patch(`/field-ops/reports/${id}`, { status }),
+  uploadReportPhoto: (reportId: number | string, file: Blob, fileName?: string) =>
+    api.post(`/field-ops/reports/${reportId}/photos`, file, {
+      headers: { 'Content-Type': file.type || 'image/jpeg', ...(fileName ? { 'X-File-Name': encodeURIComponent(fileName) } : {}) },
+    }),
+  getReportPhotos: (reportId: number | string) => api.get(`/field-ops/reports/${reportId}/photos`),
+  getPhotoBlob: (photoId: number | string) => api.get(`/field-ops/photos/${photoId}`, { responseType: 'blob' }),
 };
 
 export const assetsApi = {
