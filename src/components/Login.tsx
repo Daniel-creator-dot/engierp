@@ -7,7 +7,8 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Briefcase, Lock, Mail, Loader2, Smartphone, ArrowLeft, KeyRound, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { authApi } from '../lib/api';
+import { authApi, apiErrorMessage } from '../lib/api';
+import { passwordProblem, PASSWORD_HINT } from './ChangePasswordForm';
 
 type LoginMode = 'login' | 'forgot_phone' | 'forgot_otp' | 'reset_password' | 'success';
 
@@ -28,8 +29,8 @@ export default function Login() {
     try {
       await login({ email, password });
       toast.success('Welcome back!');
-    } catch (error) {
-      toast.error('Login failed', { description: 'Please check your credentials.' });
+    } catch (error: any) {
+      toast.error('Login failed', { description: apiErrorMessage(error, 'Please check your credentials.') });
     } finally {
       setIsLoading(false);
     }
@@ -39,15 +40,11 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const response = await authApi.forgotPassword(phone) as any;
-      if (response.data.diagnostic) {
-        toast.info(response.data.message, { description: response.data.diagnostic });
-      } else {
-        toast.success(response.data.message);
-      }
+      const response = await authApi.forgotPassword(phone);
+      toast.success(response.data.message);
       setMode('forgot_otp');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to send OTP');
+      toast.error(apiErrorMessage(error, 'Failed to send reset code'));
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +57,11 @@ export default function Login() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    const problem = passwordProblem(newPassword);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     setIsLoading(true);
     try {
       await authApi.resetPassword({ 
@@ -70,7 +72,8 @@ export default function Login() {
       toast.success('Password updated successfully');
       setMode('success');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Reset failed');
+      toast.error(apiErrorMessage(error, 'Reset failed'));
+      if (/request a new code|expired/i.test(error?.response?.data?.message || '')) setMode('forgot_otp');
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +103,8 @@ export default function Login() {
           {mode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
-                <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Administrator Email</Label>
-                <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="email" placeholder="admin@bytzforge.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
+                <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Email</Label>
+                <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="email" placeholder="you@company.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -183,6 +186,7 @@ export default function Login() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="text-xs text-[#8E9299]">{PASSWORD_HINT}</p>
               </div>
               <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Update Password'}</Button>
             </form>

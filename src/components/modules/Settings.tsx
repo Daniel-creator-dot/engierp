@@ -22,7 +22,8 @@ import {
   FileSpreadsheet,
   Calculator,
   Eye,
-  Tags
+  Tags,
+  History
 } from 'lucide-react';
 import { 
   Card, 
@@ -62,12 +63,14 @@ import { toast } from 'sonner';
 import { settingsApi } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import CatalogManager from './CatalogManager';
+import UserManagement from '../settings/UserManagement';
+import SecurityPanel from '../settings/SecurityPanel';
+import AuditLogViewer from '../settings/AuditLogViewer';
 
 export default function Settings() {
   const { user: currentUser } = useAuth();
   const canManageCatalog = currentUser?.role === 'admin' || currentUser?.role === 'accountant';
   const [currency, setCurrency] = useState('GHS');
-  const [users, setUsers] = useState<any[]>([]);
   const [smsConfig, setSmsConfig] = useState<any>({
     provider: 'Hubtel',
     api_key: '',
@@ -104,9 +107,6 @@ export default function Settings() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isViewUserOpen, setIsViewUserOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
   
   const [isDeductionModalOpen, setIsDeductionModalOpen] = useState(false);
   const [newDeduction, setNewDeduction] = useState({ name: '', type: 'fixed' as 'fixed' | 'percentage', value: 0 });
@@ -116,11 +116,8 @@ export default function Settings() {
 
   useEffect(() => {
     fetchSettings();
-    if (currentUser?.role === 'admin' || currentUser?.role === 'hr') {
-      fetchUsers();
-      if (currentUser?.role === 'admin') fetchSMSConfig();
-    }
-  }, [currentUser]);
+    if (currentUser?.role === 'admin') fetchSMSConfig();
+  }, [currentUser?.role]);
 
   const fetchSettings = async () => {
     try {
@@ -162,15 +159,6 @@ export default function Settings() {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const res = await settingsApi.getUsers();
-      setUsers(res.data);
-    } catch (error) {
-      toast.error('Failed to load users');
-    }
-  };
-
   const fetchSMSConfig = async () => {
     try {
       const res = await settingsApi.getSMSConfig();
@@ -207,34 +195,13 @@ export default function Settings() {
     }
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = {
-      email: formData.get('email'),
-      role: formData.get('role'),
-      phone: formData.get('phone')
-    };
-
-    try {
-      await settingsApi.addUser(data);
-      toast.success('User created!');
-      setIsInviteModalOpen(false);
-      fetchUsers();
-    } catch (error) {
-      toast.error('Failed to create user');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleSaveSMS = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
       await settingsApi.updateSMSConfig(smsConfig);
       toast.success('SMS Gateway updated!');
+      fetchSMSConfig();
     } catch (error) {
       toast.error('Failed to save SMS config');
     } finally {
@@ -319,6 +286,11 @@ export default function Settings() {
           <TabsTrigger value="security" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
             <Shield className="w-4 h-4 mr-2" /> Security
           </TabsTrigger>
+          {currentUser?.role === 'admin' && (
+            <TabsTrigger value="audit" className="px-8 py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-xl transition-all">
+              <History className="w-4 h-4 mr-2" /> Audit Log
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
@@ -597,85 +569,11 @@ export default function Settings() {
           </TabsContent>
         )}
 
-        <TabsContent value="users" className="space-y-6">
-          <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Internal Workspace Users</CardTitle></div>
-              <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
-                <DialogTrigger asChild><Button className="bg-[#141414] text-white gap-2 rounded-xl px-6"><Plus className="w-4 h-4" /> Add Member</Button></DialogTrigger>
-                <DialogContent>
-                  <form onSubmit={handleAddUser}>
-                    <DialogHeader><DialogTitle>Initialize Member Access</DialogTitle></DialogHeader>
-                    <div className="p-4 space-y-4">
-                      <div className="space-y-2"><Label>Email</Label><Input name="email" type="email" required className="bg-[#F5F5F5] border-none" /></div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Phone</Label><Input name="phone" required className="bg-[#F5F5F5] border-none" /></div>
-                        <div className="space-y-2">
-                          <Label>Role</Label>
-                          <Select name="role" required defaultValue="pm">
-                            <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="admin">Admin</SelectItem><SelectItem value="hr">HR</SelectItem><SelectItem value="accountant">Accountant</SelectItem><SelectItem value="pm">Project Manager</SelectItem></SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter><Button type="submit" className="bg-[#141414] text-white w-full rounded-xl" disabled={isSaving}>Create Account</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {users.map((u, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-[#F5F5F5]/50 border border-[#F5F5F5] rounded-2xl">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">{u.email[0].toUpperCase()}</div>
-                      <div><p className="font-bold">{u.email}</p><p className="text-xs text-[#8E9299]">{u.phone}</p></div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{u.role}</Badge>
-                      <Button variant="ghost" size="icon" onClick={() => { setSelectedUser(u); setIsViewUserOpen(true); }} className="h-8 w-8 text-blue-600 hover:bg-blue-50 rounded-full">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <Dialog open={isViewUserOpen} onOpenChange={setIsViewUserOpen}>
-          <DialogContent>
-            {selectedUser && (
-              <div>
-                <DialogHeader>
-                  <DialogTitle>User Access Profile</DialogTitle>
-                </DialogHeader>
-                <div className="py-6 space-y-4">
-                  <div className="flex items-center gap-4 p-4 bg-[#F5F5F5] rounded-2xl">
-                    <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">{selectedUser.email[0].toUpperCase()}</div>
-                    <div>
-                      <p className="font-bold text-lg">{selectedUser.email}</p>
-                      <Badge className="bg-blue-100 text-blue-700 uppercase">{selectedUser.role}</Badge>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase text-[#8E9299]">Phone Number</p>
-                      <p className="font-medium">{selectedUser.phone || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase text-[#8E9299]">Employee Link</p>
-                      <p className="font-mono text-blue-600 font-bold">{selectedUser.employee_id || 'None'}</p>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter><Button onClick={() => setIsViewUserOpen(false)} className="bg-[#141414] text-white w-full rounded-xl">Close</Button></DialogFooter>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
+          <TabsContent value="users" className="space-y-6">
+            <UserManagement />
+          </TabsContent>
+        )}
 
         <TabsContent value="sms" className="space-y-6">
           <Card className="border-none shadow-sm">
@@ -687,8 +585,17 @@ export default function Settings() {
                   <div className="space-y-2"><Label>Sender ID</Label><Input value={smsConfig.sender_id} onChange={(e) => setSmsConfig({...smsConfig, sender_id: e.target.value})} className="bg-[#F5F5F5] border-none rounded-xl" /></div>
                 </div>
                 <div className="space-y-2"><Label>API Endpoint / Custom URL</Label><Input value={smsConfig.api_url} onChange={(e) => setSmsConfig({...smsConfig, api_url: e.target.value})} placeholder="https://api.yourprovider.com/v1?to={to}&msg={msg}&key={key}" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
-                <div className="space-y-2"><Label>API Key</Label><Input value={smsConfig.api_key} onChange={(e) => setSmsConfig({...smsConfig, api_key: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
-                <div className="space-y-2"><Label>API Secret</Label><Input value={smsConfig.api_secret} onChange={(e) => setSmsConfig({...smsConfig, api_secret: e.target.value})} type="password" className="bg-[#F5F5F5] border-none rounded-xl" /></div>
+                {smsConfig.env_key_set && (
+                  <p className="text-sm p-3 rounded-xl bg-green-50 text-green-800">The API key is set on the server (SMS_API_KEY) and takes precedence over any key saved here.</p>
+                )}
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <Input value={smsConfig.api_key || ''} onChange={(e) => setSmsConfig({...smsConfig, api_key: e.target.value})} type="password" autoComplete="off" placeholder={smsConfig.api_key_set ? 'Saved — leave blank to keep it' : 'Not set'} className="bg-[#F5F5F5] border-none rounded-xl" />
+                </div>
+                <div className="space-y-2">
+                  <Label>API Secret</Label>
+                  <Input value={smsConfig.api_secret || ''} onChange={(e) => setSmsConfig({...smsConfig, api_secret: e.target.value})} type="password" autoComplete="off" placeholder={smsConfig.api_secret_set ? 'Saved — leave blank to keep it' : 'Not set'} className="bg-[#F5F5F5] border-none rounded-xl" />
+                </div>
               </CardContent>
               <CardFooter className="bg-[#F5F5F5]/30 p-6"><Button type="submit" className="bg-[#141414] text-white rounded-xl px-10" disabled={isSaving}>Update Gateway</Button></CardFooter>
             </form>
@@ -715,8 +622,14 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="security" className="space-y-6">
-          <Card className="border-none shadow-sm"><CardHeader><CardTitle>Encryption & Integrity</CardTitle></CardHeader><CardContent className="p-8"><div className="flex items-center justify-between p-4 bg-green-50 text-green-700 rounded-xl font-bold"><ShieldCheck className="w-5 h-5" /> All Financial Protocols Active</div></CardContent></Card>
+          <SecurityPanel />
         </TabsContent>
+
+        {currentUser?.role === 'admin' && (
+          <TabsContent value="audit" className="space-y-6">
+            <AuditLogViewer />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

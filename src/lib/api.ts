@@ -33,6 +33,34 @@ api.interceptors.response.use(undefined, async (error) => {
   return Promise.reject(error);
 });
 
+// Only these codes mean "the session is gone"; other 401/403s (e.g. no linked employee) must not log the user out.
+const SESSION_ENDED_CODES = new Set(['NO_TOKEN', 'TOKEN_EXPIRED', 'TOKEN_INVALID', 'ACCOUNT_DISABLED', 'SESSION_REVOKED']);
+const sessionListeners = new Set<(message: string) => void>();
+const passwordChangeListeners = new Set<() => void>();
+
+export const onSessionEnded = (listener: (message: string) => void) => {
+  sessionListeners.add(listener);
+  return () => { sessionListeners.delete(listener); };
+};
+
+export const onPasswordChangeRequired = (listener: () => void) => {
+  passwordChangeListeners.add(listener);
+  return () => { passwordChangeListeners.delete(listener); };
+};
+
+api.interceptors.response.use(undefined, (error) => {
+  const status = error?.response?.status;
+  const code = error?.response?.data?.code;
+  if (status === 401 && SESSION_ENDED_CODES.has(code) && localStorage.getItem('token')) {
+    localStorage.removeItem('token');
+    const message = error.response.data?.message || 'Your session has ended. Please log in again.';
+    sessionListeners.forEach(listener => listener(message));
+  } else if (status === 403 && code === 'PASSWORD_CHANGE_REQUIRED') {
+    passwordChangeListeners.forEach(listener => listener());
+  }
+  return Promise.reject(error);
+});
+
 export const apiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   if (data?.message || data?.error) return data.message || data.error;
@@ -46,6 +74,24 @@ export const authApi = {
   me: () => api.get('/auth/me'),
   forgotPassword: (phone: string) => api.post('/auth/forgot-password', { phone }),
   resetPassword: (data: any) => api.post('/auth/reset-password', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) => api.post('/auth/change-password', data),
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (data: { name?: string; phone?: string; email?: string }) => api.patch('/auth/profile', data),
+};
+
+export const notificationsApi = {
+  list: () => api.get('/notifications'),
+  markRead: (id: number) => api.patch(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all'),
+};
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }),
+};
+
+export const auditApi = {
+  list: (params: { entity?: string; action?: string; q?: string; from?: string; to?: string; limit?: number; offset?: number }) =>
+    api.get('/audit', { params }),
 };
 
 export const hrApi = {
@@ -184,6 +230,11 @@ export const settingsApi = {
   updateSetting: (key: string, value: string) => api.post('/settings', { key, value }),
   getUsers: () => api.get('/settings/users'),
   addUser: (data: any) => api.post('/settings/users', data),
+  updateUser: (id: number, data: { role?: string; phone?: string; email?: string; employee_id?: string }) => api.patch(`/settings/users/${id}`, data),
+  deactivateUser: (id: number) => api.post(`/settings/users/${id}/deactivate`),
+  reactivateUser: (id: number) => api.post(`/settings/users/${id}/reactivate`),
+  resetUserPassword: (id: number) => api.post(`/settings/users/${id}/reset-password`),
+  getSecuritySummary: () => api.get('/settings/users/security-summary'),
   getSMSConfig: () => api.get('/settings/sms'),
   updateSMSConfig: (data: any) => api.post('/settings/sms', data),
 };

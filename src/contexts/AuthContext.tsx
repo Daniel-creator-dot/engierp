@@ -1,11 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi } from '../lib/api';
+import { toast } from 'sonner';
+import { authApi, onSessionEnded, onPasswordChangeRequired } from '../lib/api';
 
-interface User {
+export interface User {
   id: number;
   email: string;
   role: string;
+  phone?: string | null;
   employee_id?: string;
+  name?: string | null;
+  must_change_password?: boolean;
+  last_login_at?: string | null;
 }
 
 interface AuthContextType {
@@ -13,6 +18,8 @@ interface AuthContextType {
   loading: boolean;
   login: (credentials: any) => Promise<void>;
   logout: () => void;
+  /** Store a refreshed token/user returned by change-password or profile updates. */
+  applySession: (token: string | undefined, user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkAuth();
+    const offSession = onSessionEnded((message) => {
+      setUser(null);
+      toast.error('Signed out', { description: message });
+    });
+    const offPasswordChange = onPasswordChangeRequired(() => {
+      setUser(current => current ? { ...current, must_change_password: true } : current);
+    });
+    return () => { offSession(); offPasswordChange(); };
   }, []);
 
   const checkAuth = async () => {
@@ -31,8 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const response = await authApi.me();
         setUser(response.data);
-      } catch (error) {
-        localStorage.removeItem('token');
+      } catch (error: any) {
+        // Keep the token on network errors so a brief outage doesn't sign everyone out.
+        if (error?.response?.status === 401) localStorage.removeItem('token');
         setUser(null);
       }
     }
@@ -51,8 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const applySession = (token: string | undefined, nextUser: User) => {
+    if (token) localStorage.setItem('token', token);
+    setUser(nextUser);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, applySession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -8,8 +8,6 @@ import {
   HardHat, 
   Settings,
   Menu,
-  Bell,
-  Search,
   LogOut,
   User,
   ChevronDown,
@@ -61,6 +59,9 @@ interface NavItem {
 
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
+import ChangePasswordForm from './components/ChangePasswordForm';
+import GlobalSearch from './components/GlobalSearch';
+import NotificationBell from './components/NotificationBell';
 
 export default function App() {
   const { user, loading, logout } = useAuth();
@@ -82,6 +83,26 @@ export default function App() {
         <Login />
         <Toaster position="top-right" />
       </>
+    );
+  }
+
+  if (user.must_change_password) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F5F5] p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 space-y-6">
+          <div className="space-y-1 text-center">
+            <h1 className="text-2xl font-black tracking-tight text-[#141414]">Choose a new password</h1>
+            <p className="text-sm text-[#8E9299]">
+              You signed in with a temporary password. Set your own password to continue.
+            </p>
+          </div>
+          <ChangePasswordForm submitLabel="Set Password & Continue" />
+          <button type="button" onClick={logout} className="w-full text-sm font-bold text-[#8E9299] hover:text-[#141414]">
+            Log out
+          </button>
+        </div>
+        <Toaster position="top-right" />
+      </div>
     );
   }
 
@@ -424,21 +445,11 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E9299]" />
-              <input 
-                type="text" 
-                placeholder="Search projects, invoices..." 
-                className="bg-[#F5F5F5] border-none rounded-full pl-10 pr-4 py-2 text-sm w-64 focus:ring-2 focus:ring-[#141414] outline-none transition-all"
-              />
-            </div>
+            <GlobalSearch onNavigate={setActiveModule} />
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative hover:bg-[#F5F5F5]">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </Button>
+            <NotificationBell onNavigate={setActiveModule} />
             
             <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
@@ -450,7 +461,7 @@ export default function App() {
                     <AvatarFallback className="bg-blue-600 text-white font-bold">{user.email.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden sm:block">
-                    <p className="text-sm font-semibold leading-none">{user.email.split('@')[0]}</p>
+                    <p className="text-sm font-semibold leading-none">{user.name || user.email.split('@')[0]}</p>
                     <p className="text-xs text-[#8E9299] mt-1 capitalize">{user.role}</p>
                   </div>
                 </Button>
