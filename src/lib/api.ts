@@ -98,16 +98,37 @@ export const hrApi = {
   getEmployees: () => api.get('/hr/employees'),
   addEmployee: (data: any) => api.post('/hr/employees', data),
   updateEmployee: (id: string, data: any) => api.patch(`/hr/employees/${id}`, data),
-  getLeaveRequests: () => api.get('/hr/leave-requests'),
+  bulkImportEmployees: (employees: any[], dryRun: boolean) => api.post('/hr/employees/bulk', { employees, dryRun }),
+  // Pass { mine: true } for the signed-in user's own records (self-service), whatever their role.
+  getLeaveRequests: (params?: { mine?: boolean }) => api.get('/hr/leave-requests', { params: params?.mine ? { mine: 1 } : undefined }),
   submitLeaveRequest: (data: any) => api.post('/hr/leave-requests', data),
-  updateLeaveStatus: (id: number, status: string) => api.patch(`/hr/leave-requests/${id}`, { status }),
-  getPayroll: () => api.get('/hr/payroll'),
+  updateLeaveStatus: (id: number, status: string, note?: string) => api.patch(`/hr/leave-requests/${id}`, { status, note }),
+  cancelLeaveRequest: (id: number) => api.patch(`/hr/leave-requests/${id}/cancel`),
+  getLeaveBalances: (params?: { year?: number; mine?: boolean }) =>
+    api.get('/hr/leave-balances', { params: { year: params?.year, mine: params?.mine ? 1 : undefined } }),
+  updateLeaveBalance: (employeeId: string, data: { year: number; entitlement: number; carried_over: number }) =>
+    api.put(`/hr/leave-balances/${employeeId}`, data),
+  getPayroll: (params?: { mine?: boolean; standalone?: boolean }) =>
+    api.get('/hr/payroll', { params: { mine: params?.mine ? 1 : undefined, standalone: params?.standalone ? 1 : undefined } }),
   processPayroll: (data: any) => api.post('/hr/payroll', data),
-  batchProcessPayroll: (data: { month: string, year: number }) => api.post('/hr/payroll/batch', data),
   approvePayroll: (id: number, status: string) => api.patch(`/hr/payroll/${id}`, { status }),
-  approveBatchPayroll: (data: { month: string, year: number }) => api.patch('/hr/payroll/batch/approve', data),
-  getAppraisals: () => api.get('/hr/appraisals'),
+  deletePayroll: (id: number) => api.delete(`/hr/payroll/${id}`),
+  getPayrollRuns: () => api.get('/hr/payroll-runs'),
+  getPayrollRun: (id: number) => api.get(`/hr/payroll-runs/${id}`),
+  createPayrollRun: (data: { month: string; year: number; payment_date?: string; project_id?: string; notes?: string }) =>
+    api.post('/hr/payroll-runs', data),
+  updatePayrollRunEntry: (runId: number, entryId: number, data: any) => api.patch(`/hr/payroll-runs/${runId}/entries/${entryId}`, data),
+  removePayrollRunEntry: (runId: number, entryId: number) => api.delete(`/hr/payroll-runs/${runId}/entries/${entryId}`),
+  payrollRunAction: (runId: number, action: 'review' | 'reopen' | 'approve' | 'mark-paid' | 'cancel') =>
+    api.post(`/hr/payroll-runs/${runId}/${action}`),
+  getPayrollSettings: () => api.get('/hr/payroll-settings'),
+  savePayrollSettings: (data: { config?: any; accounts?: any }) => api.put('/hr/payroll-settings', data),
+  getAppraisals: (params?: { mine?: boolean }) => api.get('/hr/appraisals', { params: params?.mine ? { mine: 1 } : undefined }),
   submitAppraisal: (data: any) => api.post('/hr/appraisals', data),
+  getAttendanceRoster: () => api.get('/hr/attendance/roster'),
+  getAttendance: (date: string, projectId?: string) => api.get('/hr/attendance', { params: { date, project_id: projectId || undefined } }),
+  saveAttendance: (data: { date: string; project_id?: string | null; entries: any[] }) => api.put('/hr/attendance', data),
+  getAttendanceSummary: (month: string, year: number) => api.get('/hr/attendance/summary', { params: { month, year } }),
 };
 
 export const procurementApi = {

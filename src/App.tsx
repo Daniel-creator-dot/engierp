@@ -131,6 +131,7 @@ export default function App() {
         { id: 'hr-payroll', label: 'Payroll' },
         { id: 'hr-attendance', label: 'Attendance' },
         { id: 'hr-leave', label: 'Leave Management' },
+        { id: 'hr-performance', label: 'Performance' },
       ]
     },
     { 
@@ -164,10 +165,13 @@ export default function App() {
       return undefined; // show all sub-items
     }
     if (role === 'accountant') {
-      return ['hr-directory', 'hr-leave', 'hr-payroll'];
+      return ['hr-directory', 'hr-payroll', 'hr-attendance', 'hr-leave', 'hr-performance'];
     }
-    // PM, Procurement, and all other roles only see Leave & Payroll
-    return ['hr-leave', 'hr-payroll'];
+    if (role === 'pm') {
+      return ['hr-payroll', 'hr-attendance', 'hr-leave', 'hr-performance'];
+    }
+    // Everyone else gets self-service: own leave, payslips and reviews
+    return ['hr-leave', 'hr-payroll', 'hr-performance'];
   };
 
   // Role-based filtering (with sub-item scoping)

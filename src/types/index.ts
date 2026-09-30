@@ -57,6 +57,7 @@ export interface Employee {
   probation_end_date?: string | null;
   contract_end_date?: string | null;
   exit_date?: string | null;
+  annual_leave_days?: number | null;
 }
 
 export interface Invoice {
@@ -91,8 +92,12 @@ export interface LeaveRequest {
   startDate: string;
   endDate: string;
   reason: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   created_at?: string;
+  employee_department?: string;
+  days?: number;
+  decided_at?: string | null;
+  decision_note?: string | null;
 }
 
 export interface PayrollRecord {
