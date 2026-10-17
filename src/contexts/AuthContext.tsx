@@ -10,6 +10,7 @@ export interface User {
   employee_id?: string;
   name?: string | null;
   must_change_password?: boolean;
+  otp_login?: boolean;
   last_login_at?: string | null;
 }
 
@@ -17,6 +18,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (credentials: any) => Promise<void>;
+  completeLogin: (token: string, user: User) => void;
   logout: () => void;
   /** Store a refreshed token/user returned by change-password or profile updates. */
   applySession: (token: string | undefined, user: User) => void;
@@ -62,6 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(user);
   };
 
+  const completeLogin = (token: string, nextUser: User) => {
+    localStorage.setItem('token', token);
+    setUser(nextUser);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -73,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, applySession }}>
+    <AuthContext.Provider value={{ user, loading, login, completeLogin, logout, applySession }}>
       {children}
     </AuthContext.Provider>
   );

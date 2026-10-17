@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import LogoImg from '../thisone.png';
 import { Button } from './ui/button';
@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { authApi, apiErrorMessage } from '../lib/api';
 import { passwordProblem, PASSWORD_HINT } from './ChangePasswordForm';
 
-type LoginMode = 'login' | 'forgot_phone' | 'forgot_otp' | 'reset_password' | 'success';
+type LoginMode = 'login' | 'email_otp' | 'forgot_phone' | 'forgot_otp' | 'reset_password' | 'success';
 
 export default function Login() {
   const [mode, setMode] = useState<LoginMode>('login');
@@ -18,19 +18,99 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [devCode, setDevCode] = useState('');
+  const [otpMessage, setOtpMessage] = useState('');
+  const [otpAccount, setOtpAccount] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login, completeLogin } = useAuth();
+
+  useEffect(() => {
+    if (mode !== 'login') return;
+    const value = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setOtpAccount(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await authApi.loginMethod(value);
+        if (!cancelled) setOtpAccount(response.data.method === 'otp');
+      } catch {
+        if (!cancelled) setOtpAccount(false);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [email, mode]);
+
+  const requestCode = async (address: string) => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.requestOtp(address.trim().toLowerCase());
+      setOtpMessage(response.data.message || '');
+      setDevCode(response.data.dev_code || '');
+      setOtpCode(response.data.dev_code || '');
+      setMode('email_otp');
+      if (response.data.dev_code) {
+        toast.message('Sign-in code is on this screen', { description: 'Email delivery is not configured in this environment.' });
+      } else {
+        toast.success(response.data.message);
+      }
+    } catch (error: any) {
+      toast.error(apiErrorMessage(error, 'Could not send a sign-in code'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const address = email.trim().toLowerCase();
+    let useOtp = otpAccount;
+    if (!useOtp) {
+      try {
+        const response = await authApi.loginMethod(address);
+        useOtp = response.data.method === 'otp';
+        setOtpAccount(useOtp);
+      } catch {
+        useOtp = false;
+      }
+    }
+    if (useOtp) {
+      await requestCode(address);
+      return;
+    }
+    if (!password) {
+      toast.error('Enter your password');
+      return;
+    }
     setIsLoading(true);
     try {
-      await login({ email, password });
+      await login({ email: address, password });
       toast.success('Welcome back!');
     } catch (error: any) {
+      if (error?.response?.data?.code === 'OTP_REQUIRED') {
+        setIsLoading(false);
+        await requestCode(address);
+        return;
+      }
       toast.error('Login failed', { description: apiErrorMessage(error, 'Please check your credentials.') });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const response = await authApi.verifyOtp(email.trim().toLowerCase(), otpCode.trim());
+      completeLogin(response.data.token, response.data.user);
+      toast.success('Welcome back!');
+    } catch (error: any) {
+      toast.error(apiErrorMessage(error, 'That code was not accepted'));
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +174,7 @@ export default function Login() {
               <span className="text-orange-500">forge</span>
             </CardTitle>
             <CardDescription className="text-[#8E9299] font-medium">
-              {mode === 'login' ? 'Terminal Access Portal' : 'Security Recovery'}
+              {mode === 'login' ? 'Terminal Access Portal' : mode === 'email_otp' ? 'Email sign-in code' : 'Security Recovery'}
             </CardDescription>
           </div>
         </CardHeader>
@@ -106,6 +186,9 @@ export default function Login() {
                 <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Email</Label>
                 <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="email" placeholder="you@company.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
+              {otpAccount ? (
+                <p className="text-sm text-[#8E9299]">This account signs in with a one-time email code. Password sign-in is not used.</p>
+              ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">Password</Label>
@@ -118,7 +201,6 @@ export default function Login() {
                     placeholder="••••••••" 
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)} 
-                    required 
                     className="h-12 pl-10 pr-12 bg-[#F5F5F5] border-none rounded-xl" 
                   />
                   <button
@@ -130,7 +212,30 @@ export default function Login() {
                   </button>
                 </div>
               </div>
+              )}
+              <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : otpAccount ? 'Email me a sign-in code' : 'Enter Dashboard'}</Button>
+            </form>
+          )}
+
+          {mode === 'email_otp' && (
+            <form onSubmit={handleEmailOtp} className="space-y-6">
+              <div className="space-y-2 text-center pb-2">
+                <p className="text-sm text-[#8E9299]">{otpMessage || <>Enter the 6-digit code for <b>{email}</b></>}</p>
+              </div>
+              {devCode && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center" data-testid="dev-otp">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-800">Local sign-in code</p>
+                  <p className="mt-1 text-sm text-amber-900">Email delivery is not configured, so the code is shown here. It is hidden in production.</p>
+                  <p className="mt-2 text-3xl font-black tracking-[0.3em] text-[#141414]">{devCode}</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label className="font-bold text-[10px] uppercase tracking-widest text-[#8E9299]">6-Digit Code</Label>
+                <div className="relative"><KeyRound className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl text-center tracking-[1em] font-black" /></div>
+              </div>
               <Button type="submit" className="w-full h-12 bg-[#141414] text-white rounded-xl font-bold shadow-xl shadow-black/10 hover:bg-black transition-all" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Enter Dashboard'}</Button>
+              <button type="button" onClick={() => requestCode(email)} className="w-full text-sm font-bold text-blue-600 hover:underline" disabled={isLoading}>Send a new code</button>
+              <button type="button" onClick={() => { setMode('login'); setDevCode(''); }} className="w-full text-sm font-bold text-[#8E9299] hover:text-[#141414]">Use a different account</button>
             </form>
           )}
 

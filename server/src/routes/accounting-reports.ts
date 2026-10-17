@@ -175,8 +175,9 @@ async function cashAccountIds() {
   const linked = await db('bank_accounts').whereNotNull('coa_account_id').pluck('coa_account_id');
   const named = await db('chart_of_accounts').where('type', 'Asset')
     .where(function () {
-      this.where('code', '1101').orWhere('name', 'ilike', '%cash%').orWhere('name', 'ilike', 'bank%').orWhere('name', 'ilike', '% bank%');
+      this.where('name', 'ilike', '%cash%').orWhere('name', 'ilike', 'bank%').orWhere('name', 'ilike', '% bank%').orWhere('name', 'ilike', '%mobile money%');
     })
+    .whereNot('name', 'ilike', '%depreciat%')
     .pluck('id');
   return [...new Set([...linked, ...named].map(Number))];
 }
@@ -186,6 +187,7 @@ type Section = 'operating' | 'investing' | 'financing';
 /** Classifies the account on the other side of a cash movement. */
 function sectionFor(acc: { type: string; code: string; name: string }): Section {
   const code = String(acc.code || '');
+  if (/depreciat/i.test(acc.name || '')) return 'investing';
   if (acc.type === 'Equity') return 'financing';
   if (acc.type === 'Liability' && (code.startsWith('22') || /loan|hire purchase|borrow/i.test(acc.name))) return 'financing';
   if (acc.type === 'Asset' && (code.startsWith('12') || code.startsWith('13'))) return 'investing';

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '../../contexts/AuthContext';
+import { personName } from '../../lib/personName';
 import { authApi, hrApi, settingsApi, apiErrorMessage } from '../../lib/api';
 import { formatCurrency } from '../../lib/currency';
 import { formatDate, inclusiveDays, todayIso } from '../../lib/dates';
@@ -129,7 +130,7 @@ export default function Profile() {
   }, [leave]);
 
   if (!user) return null;
-  const displayName = employee?.name || user.name || user.email.split('@')[0];
+  const displayName = (employee?.name || personName(user)).trim();
   const currency = company.currency || 'GHS';
 
   const openEdit = () => {

@@ -18,6 +18,7 @@ import {
 import { dashboardApi, settingsApi } from '../../lib/api';
 import { formatCompactCurrency, formatCurrency } from '../../lib/currency';
 import { useAuth } from '../../contexts/AuthContext';
+import { personName } from '../../lib/personName';
 import { Module } from '../../types';
 import Hero from './dashboard/Hero';
 import { AgingBar, ExpenseDonut, PerformanceChart } from './dashboard/charts';
@@ -156,7 +157,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const quality = buildDataQuality(summary);
   const upcoming = mergeUpcoming(summary);
   const actions = QUICK_ACTIONS.filter(a => a.roles.includes(role));
-  const displayName = (user?.name || user?.email?.split('@')[0] || '').trim().toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
+  const displayName = personName(user);
 
   const figures = finance ? periodFigures(finance) : null;
   const monthly = finance?.monthly ?? [];

@@ -17,8 +17,11 @@ import dashboardRoutes from './routes/dashboard';
 import auditRoutes from './routes/audit';
 import notificationRoutes from './routes/notifications';
 import searchRoutes from './routes/search';
+import commercialRoutes from './routes/commercial';
 import { syncSchema } from './utils/schemaSync';
 import { initJwtSecret } from './lib/secrets';
+import { databaseHasCompanyData } from './lib/preserve';
+import { ensureSuperAdmin } from './lib/superAdmin';
 
 dotenv.config();
 
@@ -48,6 +51,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/commercial', commercialRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -63,17 +67,16 @@ async function bootstrap() {
     // Run dynamic schema sync for any missing columns/tables
     await syncSchema(db);
 
-    // Check if seed data exists (don't re-seed if users already exist)
-    const existingUsers = await db('users').count('id as count').first();
-    const userCount = Number(existingUsers?.count || 0);
-
-    if (userCount === 0) {
+    // Never reseed a company database. Demo data is inserted only while every business table is empty.
+    if (await databaseHasCompanyData(db)) {
+      console.log('ℹ️  Company data is already in the database. Seed skipped; nothing was deleted or renamed.');
+    } else {
       console.log('⏳ Seeding initial data...');
       await db.seed.run();
       console.log('✅ Seed data inserted.');
-    } else {
-      console.log('ℹ️  Seed skipped — data already exists.');
     }
+
+    await ensureSuperAdmin(db);
   } catch (error) {
     console.error('❌ Bootstrap error:', error);
   }
@@ -85,8 +88,8 @@ async function bootstrap() {
 }
 
 bootstrap().then(() => {
-  app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
+  app.listen(Number(port), '0.0.0.0', () => {
+    console.log(`🚀 Server running on 0.0.0.0:${port}`);
   });
 });
 

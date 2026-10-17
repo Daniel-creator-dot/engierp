@@ -379,7 +379,7 @@ export function WorkforcePanel({ workforce, money, go }: { workforce: WorkforceS
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#8E9299]">Staff by department</p>
           {topDepartments.map(d => (
             <div key={d.name} className="flex items-center gap-3 text-sm">
-              <span className="w-28 truncate font-medium capitalize text-[#141414]" title={d.name}>{d.name.toLowerCase()}</span>
+              <span className="w-28 truncate font-medium text-[#141414]" title={d.name}>{d.name}</span>
               <div className="flex-1 h-2 bg-[#F2F2F2] rounded-full overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500" style={{ width: `${(d.count / maxDept) * 100}%` }} />
               </div>

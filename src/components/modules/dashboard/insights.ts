@@ -3,6 +3,7 @@ import {
   Banknote,
   CalendarClock,
   ClipboardCheck,
+  ClipboardList,
   FilePlus2,
   FileWarning,
   HardHat,
@@ -43,6 +44,9 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Run payroll', icon: Banknote, target: 'hr-payroll', roles: ['admin', 'hr', 'accountant'] },
   { label: 'Mark attendance', icon: ClipboardCheck, target: 'hr-attendance', roles: ['admin', 'hr', 'pm'] },
   { label: 'New PO', icon: ShoppingCart, target: 'procurement-pos', roles: ['admin', 'accountant', 'procurement'] },
+  { label: 'Bill of quantities', icon: ClipboardList, target: 'commercial-boq', roles: ['admin', 'pm', 'accountant'] },
+  { label: 'Variations', icon: FileWarning, target: 'commercial-variations', roles: ['admin', 'pm', 'accountant'] },
+  { label: 'Site safety', icon: ShieldAlert, target: 'commercial-safety', roles: ['admin', 'pm'] },
   { label: 'Site report', icon: HardHat, target: 'field-ops', roles: ['admin', 'pm'] },
 ];
 

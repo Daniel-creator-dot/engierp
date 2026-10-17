@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { AccountSpec, nameContradicts, pickAccount } from './accountIdentity';
 import { Conn, LedgerError, round2, toIsoDate } from './ledger';
 
 export const CREDIT_NOTE_METHOD = 'Credit Note';
@@ -66,48 +67,98 @@ export async function getAccountingConfig(conn: Conn): Promise<AccountingConfig>
   };
 }
 
-async function firstAccount(conn: Conn, codes: string[], nameLike: string | null, type?: string) {
-  for (const code of codes) {
-    const acc = await conn('chart_of_accounts').where({ code }).first();
-    if (acc) return acc;
+const NOT_CASH = /depreciat|receivable|inventory|equipment|vehicle|building|furniture|prepay|withholding|payable|vat input|staff advance/i;
+const NOT_RECEIVABLE = /depreciat|payable|cash on hand|inventory|equipment|withholding/i;
+const NOT_PAYABLE = /receivable|depreciat|cash|revenue|vat output|vat payable|paye|ssnit|withholding|accrued/i;
+
+const RECEIVABLE: AccountSpec = {
+  key: 'accounts_receivable', type: 'Asset', label: 'Accounts Receivable',
+  nameHints: ['accounts receivable', 'trade receivable'], codes: ['1104', '1003'],
+  contradicts: NOT_RECEIVABLE, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const PAYABLE: AccountSpec = {
+  key: 'accounts_payable', type: 'Liability', label: 'Accounts Payable',
+  nameHints: ['accounts payable', 'trade payable'], codes: ['2101', '2001'],
+  contradicts: NOT_PAYABLE, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const CASH: AccountSpec = {
+  key: 'cash_on_hand', type: 'Asset', label: 'Cash on Hand',
+  nameHints: ['cash on hand', 'petty cash', 'cash'], codes: ['1101', '1001'],
+  contradicts: NOT_CASH, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const WHT_PAYABLE: AccountSpec = {
+  key: 'wht_payable', type: 'Liability', label: 'Withholding Tax Payable',
+  nameHints: ['withholding tax payable', 'withholding tax'], codes: ['2102'],
+  contradicts: /receivable|cash|revenue/i, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const WHT_RECEIVABLE: AccountSpec = {
+  key: 'wht_receivable', type: 'Asset', label: 'Withholding Tax Receivable',
+  nameHints: ['withholding tax receivable', 'withholding tax'], codes: ['1108'],
+  contradicts: /payable|depreciat|cash on hand/i, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const INCOME: AccountSpec = {
+  key: 'default_income', type: 'Income', label: 'Income',
+  nameHints: ['civil engineering revenue', 'project revenue', 'revenue', 'income', 'fees'],
+  codes: ['4101', '4001'], contradicts: /expense|payable|depreciat/i, codePolicy: 'hint-or-safe', prefer: 'name',
+};
+const OPENING_EQUITY: AccountSpec = {
+  key: 'opening_balance_equity', type: 'Equity', label: 'Opening Balance Equity',
+  nameHints: ['opening balance equity'], codes: ['3900'],
+  codePolicy: 'hint-or-safe', prefer: 'name',
+};
+
+const pinKey = (key: string) => `ledger_account.${key}`;
+
+/**
+ * The account already chosen for this role, or the company's existing account
+ * whose name matches the role. The choice is stored by id so a later edit to
+ * an account code cannot point the role at a different name.
+ */
+export async function resolvePinnedAccount(conn: Conn, spec: AccountSpec) {
+  const accounts = await conn('chart_of_accounts').select('id', 'code', 'name', 'type');
+  const pin = await getSettingValue(conn, pinKey(spec.key));
+  const pinnedId = Number(pin);
+  const pinned = accounts.find((a: any) => Number(a.id) === pinnedId);
+  if (pinned && pinned.type === spec.type && !nameContradicts(pinned.name, spec.contradicts)) return pinned;
+
+  const chosen = pickAccount(accounts, spec);
+  if (!chosen) return pinned && pinned.type === spec.type ? pinned : null;
+  if (!pinned || Number(pinned.id) !== Number(chosen.id)) {
+    await saveSettingValue(conn, pinKey(spec.key), String(chosen.id));
   }
-  if (nameLike) {
-    const q = conn('chart_of_accounts').where('name', 'ilike', nameLike);
-    if (type) q.where({ type });
-    const acc = await q.orderBy('code').first();
-    if (acc) return acc;
+  return chosen;
+}
+
+async function requireAccount(conn: Conn, spec: AccountSpec) {
+  const acc = await resolvePinnedAccount(conn, spec);
+  if (!acc) {
+    throw new LedgerError(`${spec.label} was not found. Add an account of type ${spec.type} with that name. Existing account names were left unchanged.`);
   }
-  return null;
+  return acc;
 }
 
 export async function receivableAccount(conn: Conn) {
-  const acc = await firstAccount(conn, ['1104', '1003'], '%accounts receivable%', 'Asset');
-  if (!acc) throw new LedgerError('Accounts Receivable account (1104) not found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, RECEIVABLE);
 }
 
 export async function payableAccount(conn: Conn) {
-  const acc = await firstAccount(conn, ['2001'], '%accounts payable%', 'Liability');
-  if (!acc) throw new LedgerError('Accounts Payable account (2001) not found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, PAYABLE);
 }
 
 export async function cashOnHandAccount(conn: Conn) {
-  const acc = await firstAccount(conn, ['1101', '1001'], '%cash on hand%', 'Asset');
-  if (!acc) throw new LedgerError('Cash on Hand account (1101) not found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, CASH);
 }
 
 export async function whtPayableAccount(conn: Conn) {
-  const acc = await firstAccount(conn, ['2102'], '%withholding tax payable%', 'Liability');
-  if (!acc) throw new LedgerError('Withholding Tax Payable account (2102) not found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, WHT_PAYABLE);
 }
 
 export async function whtReceivableAccount(conn: Conn) {
-  const acc = await firstAccount(conn, ['1108'], '%withholding tax receivable%', 'Asset');
-  if (!acc) throw new LedgerError('Withholding Tax Receivable account (1108) not found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, WHT_RECEIVABLE);
+}
+
+export async function openingEquityAccount(conn: Conn) {
+  return requireAccount(conn, OPENING_EQUITY);
 }
 
 export async function defaultIncomeAccount(conn: Conn, config?: AccountingConfig) {
@@ -116,9 +167,7 @@ export async function defaultIncomeAccount(conn: Conn, config?: AccountingConfig
     const acc = await conn('chart_of_accounts').where({ id: cfg.default_income_account_id, type: 'Income' }).first();
     if (acc) return acc;
   }
-  const acc = (await firstAccount(conn, ['4101', '4001'], null)) || (await conn('chart_of_accounts').where({ type: 'Income' }).orderBy('code').first());
-  if (!acc || acc.type !== 'Income') throw new LedgerError('No income account found in the chart of accounts');
-  return acc;
+  return requireAccount(conn, INCOME);
 }
 
 /** Ledger account behind a bank account: the explicit link, else a best-effort name match. */

@@ -1,7 +1,13 @@
 import type { Knex } from "knex";
+import { databaseHasCompanyData } from "../src/lib/preserve";
 
 export async function seed(knex: Knex): Promise<void> {
-  // Deletes ALL existing entries
+  // An existing company database is never wiped, renamed, or overwritten.
+  if (await databaseHasCompanyData(knex)) {
+    console.warn('Seed refused: this database already has company data. Nothing was deleted or renamed.');
+    return;
+  }
+
   await knex("settings").del();
   await knex("leave_requests").del();
   await knex("taxes").del();

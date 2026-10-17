@@ -5,11 +5,13 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import db from '../db';
 import { sendSMS, isSmsConfigured, normalizePhone } from '../utils/sms';
+import { isEmailDeliveryConfigured, sendEmail } from '../utils/email';
 import { authenticateToken, invalidateUserCache, AuthRequest } from '../middleware/auth';
 import { getJwtSecret } from '../lib/secrets';
 import { validatePassword, hashToken, tokenMatches, PASSWORD_POLICY } from '../lib/passwords';
 import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
+import { usesEmailOtp } from '../lib/superAdmin';
 
 const router = Router();
 
@@ -36,14 +38,21 @@ const signToken = (user: any) => jwt.sign(
   { expiresIn: '24h' }
 );
 
+const storedName = (employee?: any, user?: any) => {
+  const name = String(employee?.name || user?.name || '').trim();
+  return name || null;
+};
+
 const publicUser = (user: any, employee?: any) => ({
   id: user.id,
   email: user.email,
   role: user.role,
   phone: user.phone,
   employee_id: user.employee_id,
-  name: employee?.name || null,
-  must_change_password: !!user.must_change_password,
+  name: storedName(employee, user),
+  // An email-code account never sits behind the password-change wall.
+  must_change_password: !!user.must_change_password && !usesEmailOtp(user),
+  otp_login: usesEmailOtp(user),
   last_login_at: user.last_login_at || null,
 });
 
@@ -63,6 +72,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await db('users').whereRaw('lower(email) = ?', [email]).first();
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (usesEmailOtp(user)) {
+      return res.status(400).json({
+        message: 'This account signs in with an email code, not a password.',
+        code: 'OTP_REQUIRED',
+      });
     }
 
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -188,11 +204,12 @@ router.patch('/profile', authenticateToken, async (req: AuthRequest, res) => {
     const userUpdates: Record<string, any> = {};
     if (email !== undefined) userUpdates.email = email;
     if (phone !== undefined) userUpdates.phone = phone || null;
+    if (name !== undefined) userUpdates.name = name;
     const employeeUpdates: Record<string, any> = {};
     if (name !== undefined) employeeUpdates.name = name;
     if (phone !== undefined) employeeUpdates.phone = phone || null;
 
-    const before = { email: user.email, phone: user.phone };
+    const before = { email: user.email, phone: user.phone, name: user.name };
     await db.transaction(async trx => {
       if (Object.keys(userUpdates).length) await trx('users').where({ id: user.id }).update({ ...userUpdates, updated_at: trx.fn.now() });
       if (user.employee_id && Object.keys(employeeUpdates).length) {
@@ -208,6 +225,131 @@ router.patch('/profile', authenticateToken, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('PATCH /auth/profile failed:', error);
     res.status(500).json({ message: 'Could not update your profile' });
+  }
+});
+
+const otpRequestLimiter = limiter(15, 5, 'Too many code requests. Try again in 15 minutes.');
+const otpVerifyLimiter = limiter(15, 10, 'Too many code attempts. Try again in 15 minutes.');
+
+type CodeDelivery = 'email' | 'sms' | 'screen' | 'failed' | 'unconfigured';
+
+async function deliverLoginCode(user: { email: string; phone?: string | null }, code: string): Promise<CodeDelivery> {
+  const text = `Your bytzforge sign-in code is: ${code}. Valid for ${RESET_CODE_MINUTES} minutes. Do not share it.`;
+  if (isEmailDeliveryConfigured()) {
+    const sent = await sendEmail(user.email, 'Your bytzforge sign-in code', text);
+    return sent ? 'email' : 'failed';
+  }
+  if (user.phone && await isSmsConfigured()) {
+    const sms = await sendSMS(user.phone, text);
+    return sms.success ? 'sms' : 'failed';
+  }
+  return 'unconfigured';
+}
+
+router.post('/login-method', loginLimiter, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  try {
+    const user = await db('users').whereRaw('lower(email) = ?', [email]).first('otp_login', 'is_active');
+    const method = user && user.is_active !== false && usesEmailOtp(user) ? 'otp' : 'password';
+    res.json({ method });
+  } catch (error) {
+    console.error('POST /auth/login-method failed:', error);
+    res.status(500).json({ message: 'Could not check this account' });
+  }
+});
+
+router.post('/otp/request', otpRequestLimiter, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+
+  try {
+    const user = await db('users').whereRaw('lower(email) = ?', [email]).first();
+    if (!user || !usesEmailOtp(user)) {
+      return res.status(400).json({ message: 'This account signs in with a password.' });
+    }
+    if (user.is_active === false) {
+      return res.status(403).json({ message: 'This account has been deactivated. Contact an administrator.' });
+    }
+
+    const code = crypto.randomInt(100000, 1000000).toString();
+    await db('users').where({ id: user.id }).update({
+      login_otp_hash: hashToken(code),
+      login_otp_expires: new Date(Date.now() + RESET_CODE_MINUTES * 60 * 1000),
+      login_otp_attempts: 0,
+    });
+
+    const delivery = await deliverLoginCode(user, code);
+    if (delivery === 'failed') {
+      await db('users').where({ id: user.id }).update({ login_otp_hash: null, login_otp_expires: null });
+      return res.status(502).json({ message: 'We could not send the sign-in code. Try again shortly.' });
+    }
+    if (delivery === 'unconfigured') {
+      if (process.env.NODE_ENV === 'production') {
+        await db('users').where({ id: user.id }).update({ login_otp_hash: null, login_otp_expires: null });
+        return res.status(503).json({ message: 'Email delivery is not configured, so a sign-in code cannot be sent.' });
+      }
+      console.log(`Local sign-in code for ${user.email}: ${code}`);
+      return res.json({
+        message: 'Email delivery is not configured in this environment. Use the sign-in code shown on this screen. It expires in 10 minutes.',
+        delivery: 'screen',
+        dev_code: code,
+      });
+    }
+
+    const message = delivery === 'sms'
+      ? `A 6-digit sign-in code was sent by SMS. It expires in ${RESET_CODE_MINUTES} minutes.`
+      : `A 6-digit sign-in code was sent to ${user.email}. It expires in ${RESET_CODE_MINUTES} minutes.`;
+    res.json({ message, delivery });
+  } catch (error) {
+    console.error('POST /auth/otp/request failed:', error);
+    res.status(500).json({ message: 'Could not send a sign-in code' });
+  }
+});
+
+router.post('/otp/verify', otpVerifyLimiter, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const code = String(req.body?.code || '').trim();
+  if (!email || !code) return res.status(400).json({ message: 'Email and code are required' });
+
+  try {
+    const user = await db('users').whereRaw('lower(email) = ?', [email]).first();
+    const invalid = () => res.status(400).json({ message: 'Invalid or expired code' });
+    if (!user || !usesEmailOtp(user)) return invalid();
+    if (user.is_active === false) {
+      return res.status(403).json({ message: 'This account has been deactivated. Contact an administrator.' });
+    }
+    if (!user.login_otp_hash || !user.login_otp_expires || new Date(user.login_otp_expires) < new Date()) {
+      return invalid();
+    }
+    if ((user.login_otp_attempts || 0) >= MAX_RESET_ATTEMPTS) {
+      await db('users').where({ id: user.id }).update({ login_otp_hash: null, login_otp_expires: null, login_otp_attempts: 0 });
+      return res.status(400).json({ message: 'Too many incorrect codes. Request a new code.' });
+    }
+    if (!tokenMatches(code, user.login_otp_hash)) {
+      await db('users').where({ id: user.id }).increment('login_otp_attempts', 1);
+      return invalid();
+    }
+
+    const lastLogin = new Date();
+    await db('users').where({ id: user.id }).update({
+      login_otp_hash: null,
+      login_otp_expires: null,
+      login_otp_attempts: 0,
+      failed_login_attempts: 0,
+      locked_until: null,
+      must_change_password: false,
+      last_login_at: lastLogin,
+    });
+    invalidateUserCache(user.id);
+    (req as AuthRequest).user = { id: user.id, email: user.email, role: user.role };
+    await logAudit(req as AuthRequest, 'login', 'user', user.id, undefined, { via: 'email_otp' });
+    const employee = user.employee_id ? await db('employees').where({ id: user.employee_id }).first('name') : null;
+    const sessionUser = { ...user, must_change_password: false, last_login_at: lastLogin, otp_login: true };
+    res.json({ token: signToken(sessionUser), user: publicUser(sessionUser, employee) });
+  } catch (error) {
+    console.error('POST /auth/otp/verify failed:', error);
+    res.status(500).json({ message: 'Could not sign in with that code' });
   }
 });
 

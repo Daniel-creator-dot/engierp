@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { AccountSpec, nameContradicts, pickAccount } from './accountIdentity';
 import { Conn, LedgerError, JournalLine, postJournal, round2 } from './ledger';
 import {
   casualOvertimeRate, casualWhtLabel, computeCasualPay, computePay, effectiveTaxTreatment, isCasualWage,
@@ -32,6 +33,59 @@ export const PAYROLL_ACCOUNT_DEFAULT_CODES: Record<keyof PayrollAccounts, string
   casual_payment_account_id: '1101',
 };
 
+const NOT_AN_EXPENSE_ROLE = /payable|receivable|depreciat|cash on hand|bank/i;
+const NOT_A_LIABILITY_ROLE = /receivable|cash|revenue|depreciat/i;
+const NOT_CASH = /depreciat|receivable|inventory|equipment|vehicle|building|furniture|prepay|withholding|payable|vat input|staff advance/i;
+
+/** Default codes are kept only when the account's stored name still matches the role. */
+const PAYROLL_ACCOUNT_SPECS: Record<keyof PayrollAccounts, AccountSpec> = {
+  salary_expense_account_id: {
+    key: 'salary_expense', type: 'Expense', label: 'Salaries expense',
+    nameHints: ['salaries – office', 'salaries - office', 'salaries & wages', 'salaries and wages', 'office staff', 'salaries'],
+    codes: ['6101', '5105'], contradicts: NOT_AN_EXPENSE_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  site_labour_account_id: {
+    key: 'site_labour', type: 'Expense', label: 'Site labour',
+    nameHints: ['labour – site', 'labour - site', 'site workers', 'direct labour', 'site labour', 'labour'],
+    codes: ['5102', '5001'], contradicts: NOT_AN_EXPENSE_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  employer_ssnit_account_id: {
+    key: 'employer_ssnit', type: 'Expense', label: 'Employer SSNIT',
+    nameHints: ['salaries – office', 'salaries - office', 'salaries & wages', 'salaries and wages', 'employer ssnit', 'ssnit expense', 'salaries'],
+    codes: ['6101', '5105'], contradicts: NOT_AN_EXPENSE_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  paye_payable_account_id: {
+    key: 'paye_payable', type: 'Liability', label: 'PAYE payable',
+    nameHints: ['paye payable', 'paye tax', 'paye'],
+    codes: ['2103', '2004'], contradicts: NOT_A_LIABILITY_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  ssnit_payable_account_id: {
+    key: 'ssnit_payable', type: 'Liability', label: 'SSNIT payable',
+    nameHints: ['ssnit payable', 'ssnit'],
+    codes: ['2104', '2005'], contradicts: NOT_A_LIABILITY_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  other_deductions_account_id: {
+    key: 'other_deductions', type: 'Liability', label: 'Other payroll deductions',
+    nameHints: ['accrued expenses', 'other deductions', 'accrued'],
+    codes: ['2106', '2002'], contradicts: NOT_A_LIABILITY_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  bank_account_id: {
+    key: 'payroll_bank', type: 'Asset', label: 'Payroll bank',
+    nameHints: ['bank – salary', 'bank - salary', 'salary account', 'bank –', 'bank -', 'bank'],
+    codes: ['1103', '1102', '1002'], contradicts: NOT_CASH, codePolicy: 'hint-only', prefer: 'code',
+  },
+  casual_wht_payable_account_id: {
+    key: 'casual_wht', type: 'Liability', label: 'Casual withholding tax',
+    nameHints: ['withholding tax payable', 'withholding tax'],
+    codes: ['2102'], contradicts: NOT_A_LIABILITY_ROLE, codePolicy: 'hint-only', prefer: 'code',
+  },
+  casual_payment_account_id: {
+    key: 'casual_payment', type: 'Asset', label: 'Casual payment',
+    nameHints: ['cash on hand', 'petty cash', 'mobile money', 'cash'],
+    codes: ['1101', '1001'], contradicts: NOT_CASH, codePolicy: 'hint-or-safe', prefer: 'name',
+  },
+};
+
 export const PAYROLL_ACCOUNT_LABELS: Record<keyof PayrollAccounts, string> = {
   salary_expense_account_id: 'Salaries expense (office staff)',
   site_labour_account_id: 'Site labour expense (project payroll and casual workers)',
@@ -49,20 +103,47 @@ export async function loadPayrollConfig(conn: Conn): Promise<PayrollConfig> {
   return normalisePayrollConfig(row?.value);
 }
 
-/** Stored mapping, with any missing account resolved from the default code in the live chart of accounts. */
+/**
+ * Stored payroll account ids. A missing id is filled from the live chart only
+ * when that account's name still matches the role, then saved so a later code
+ * change cannot retarget the posting. A saved id is kept, including after the
+ * company renames that account. Nothing in the chart is renamed.
+ */
 export async function loadPayrollAccounts(conn: Conn): Promise<PayrollAccounts> {
   const row = await conn('settings').where({ key: 'payroll_accounts' }).first();
   let stored: Record<string, any> = {};
   try { stored = row?.value ? JSON.parse(row.value) : {}; } catch { stored = {}; }
+  const chart = await conn('chart_of_accounts').select('id', 'code', 'name', 'type');
+  const byId = new Map(chart.map((a: any) => [Number(a.id), a]));
   const accounts = {} as PayrollAccounts;
-  for (const key of Object.keys(PAYROLL_ACCOUNT_DEFAULT_CODES) as (keyof PayrollAccounts)[]) {
+  let changed = false;
+
+  for (const key of Object.keys(PAYROLL_ACCOUNT_SPECS) as (keyof PayrollAccounts)[]) {
+    const spec = PAYROLL_ACCOUNT_SPECS[key];
     const id = Number(stored[key]);
-    if (Number.isInteger(id) && id > 0) {
-      accounts[key] = id;
-    } else {
-      const account = await conn('chart_of_accounts').where({ code: PAYROLL_ACCOUNT_DEFAULT_CODES[key] }).first();
-      accounts[key] = account ? account.id : null;
+    const current = Number.isInteger(id) && id > 0 ? byId.get(id) : undefined;
+    if (current && current.type === spec.type && !nameContradicts(current.name, spec.contradicts)) {
+      accounts[key] = Number(current.id);
+      continue;
     }
+    const chosen = pickAccount(chart, spec);
+    if (chosen) {
+      accounts[key] = Number(chosen.id);
+      if (Number(stored[key]) !== Number(chosen.id)) {
+        stored[key] = Number(chosen.id);
+        changed = true;
+      }
+    } else if (current) {
+      accounts[key] = Number(current.id);
+    } else {
+      accounts[key] = null;
+    }
+  }
+
+  if (changed) {
+    const value = JSON.stringify(stored);
+    if (row) await conn('settings').where({ key: 'payroll_accounts' }).update({ value, updated_at: conn.fn.now() });
+    else await conn('settings').insert({ key: 'payroll_accounts', value });
   }
   return accounts;
 }

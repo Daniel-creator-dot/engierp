@@ -37,14 +37,14 @@ async function loadUserState(userId: number): Promise<UserState | null> {
 
   const row = await db('users')
     .where({ id: userId })
-    .first('email', 'role', 'employee_id', 'is_active', 'must_change_password', 'password_changed_at');
+    .first('email', 'role', 'employee_id', 'is_active', 'must_change_password', 'password_changed_at', 'otp_login');
   const state: UserState | null = row
     ? {
         email: row.email,
         role: row.role,
         employee_id: row.employee_id || undefined,
         is_active: row.is_active !== false,
-        must_change_password: !!row.must_change_password,
+        must_change_password: !!row.must_change_password && !row.otp_login,
         password_changed_at: row.password_changed_at ? new Date(row.password_changed_at).getTime() : null,
       }
     : null;

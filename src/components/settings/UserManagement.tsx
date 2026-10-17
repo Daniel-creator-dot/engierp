@@ -32,6 +32,7 @@ interface ManagedUser {
   department?: string | null;
   is_active: boolean;
   must_change_password: boolean;
+  otp_login?: boolean;
   last_login_at?: string | null;
   locked_until?: string | null;
 }
@@ -219,11 +220,12 @@ export default function UserManagement() {
                     <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{roleLabel(u.role)}</Badge>
                     {!u.is_active && <Badge className="bg-red-100 text-red-700 border-none text-[10px]">Deactivated</Badge>}
                     {u.is_active && locked && <Badge className="bg-amber-100 text-amber-800 border-none text-[10px]">Locked</Badge>}
-                    {u.is_active && u.must_change_password && <Badge className="bg-blue-100 text-blue-700 border-none text-[10px]">Awaiting first sign-in</Badge>}
+                    {u.is_active && u.otp_login && <Badge className="bg-violet-100 text-violet-800 border-none text-[10px]">Email code</Badge>}
+                    {u.is_active && u.must_change_password && !u.otp_login && <Badge className="bg-blue-100 text-blue-700 border-none text-[10px]">Awaiting first sign-in</Badge>}
                     {isAdmin && (
                       <>
                         <Button variant="ghost" size="icon" title="Edit" onClick={() => openEdit(u)} className="h-8 w-8 rounded-full"><Pencil className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" title="Reset password" disabled={busyId === u.id} onClick={() => setConfirm({ user: u, action: 'reset' })} className="h-8 w-8 rounded-full"><KeyRound className="w-4 h-4" /></Button>
+                        {!u.otp_login && <Button variant="ghost" size="icon" title="Reset password" disabled={busyId === u.id} onClick={() => setConfirm({ user: u, action: 'reset' })} className="h-8 w-8 rounded-full"><KeyRound className="w-4 h-4" /></Button>}
                         {u.is_active ? (
                           <Button variant="ghost" size="icon" title="Deactivate" disabled={busyId === u.id || u.id === currentUser?.id} onClick={() => setConfirm({ user: u, action: 'deactivate' })} className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50"><UserX className="w-4 h-4" /></Button>
                         ) : (

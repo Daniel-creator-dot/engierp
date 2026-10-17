@@ -14,7 +14,7 @@ import {
   toIsoDate,
   PERIOD_LOCK_KEY,
 } from '../lib/ledger';
-import { CREDIT_NOTE_METHOD, getAccountingConfig, getSettingValue, pick, saveSettingValue, statusFor } from '../lib/accounting';
+import { CREDIT_NOTE_METHOD, getAccountingConfig, getSettingValue, openingEquityAccount, pick, saveSettingValue, statusFor } from '../lib/accounting';
 import { createInvoice, recordPayment } from '../lib/accountingDocs';
 import { createBillWithApprovalLimit, createRequest, notifyAdminsOfRequest, pendingRequestMap } from '../lib/approvals';
 import reportsRouter from './accounting-reports';
@@ -463,6 +463,8 @@ async function openingBalanceState(asOf?: string) {
     ? await db('ledger_entries as le').join('chart_of_accounts as c', 'le.account_id', 'c.id').where('le.journal_id', journal.id)
         .select('le.account_id', 'c.type', 'c.code', 'le.debit', 'le.credit')
     : [];
+  const equity = await db('chart_of_accounts').where({ type: 'Equity' }).where('name', 'ilike', '%opening balance equity%').orderBy('code').first()
+    || await db('chart_of_accounts').where({ code: '3900', type: 'Equity' }).first();
   const date = asOf || (journal ? toIsoDate(journal.date) : null);
   const others = db('journal_entries').whereNot('reference_type', 'opening_balance');
   const [before] = date ? await others.clone().where('date', '<=', date).count({ n: 'id' }) : [{ n: 0 }];
@@ -470,7 +472,7 @@ async function openingBalanceState(asOf?: string) {
   return {
     journal: journal ? { id: journal.id, date: toIsoDate(journal.date) } : null,
     balances: lines
-      .filter((l: any) => l.code !== '3900')
+      .filter((l: any) => equity ? Number(l.account_id) !== Number(equity.id) : l.code !== '3900')
       .map((l: any) => ({ account_id: l.account_id, amount: naturalBalance(l.type, Number(l.debit) - Number(l.credit)) })),
     entries_on_or_before: Number(before.n),
     entries_after: Number(after.n),
@@ -495,8 +497,7 @@ router.post('/opening-balances', async (req, res) => {
       .filter((b: any) => b.account_id && b.amount !== 0);
 
     const journalId = await db.transaction(async (trx) => {
-      const obe = await trx('chart_of_accounts').where({ code: '3900' }).first();
-      if (!obe) throw new LedgerError('Opening Balance Equity account (3900) is missing');
+      const obe = await openingEquityAccount(trx);
 
       const accounts = await trx('chart_of_accounts').whereIn('id', entries.map((e: any) => e.account_id));
       const byId = new Map(accounts.map((a: any) => [a.id, a]));

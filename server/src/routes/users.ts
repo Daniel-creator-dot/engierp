@@ -16,13 +16,13 @@ const isRole = (role: unknown): role is typeof ROLES[number] => typeof role === 
 
 const USER_FIELDS = [
   'users.id', 'users.email', 'users.role', 'users.phone', 'users.employee_id', 'users.is_active',
-  'users.must_change_password', 'users.last_login_at', 'users.locked_until', 'users.created_at',
+  'users.must_change_password', 'users.otp_login', 'users.last_login_at', 'users.locked_until', 'users.created_at',
 ];
 
 const loadUser = (id: number | string) => db('users')
   .leftJoin('employees', 'users.employee_id', 'employees.id')
   .where('users.id', id)
-  .first([...USER_FIELDS, 'employees.name as name', 'employees.department as department']);
+  .first([...USER_FIELDS, db.raw('coalesce(employees.name, users.name) as name'), 'employees.department as department']);
 
 async function activeAdminCount(excludeId?: number) {
   const q = db('users').where({ role: 'admin', is_active: true });
@@ -49,7 +49,7 @@ router.get('/', authenticateToken, authorizeRole(['admin', 'hr']), async (_req, 
   try {
     const users = await db('users')
       .leftJoin('employees', 'users.employee_id', 'employees.id')
-      .select([...USER_FIELDS, 'employees.name as name', 'employees.department as department'])
+      .select([...USER_FIELDS, db.raw('coalesce(employees.name, users.name) as name'), 'employees.department as department'])
       .orderBy('users.email');
     res.json(users);
   } catch (error) {
@@ -104,6 +104,7 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
         email,
         role,
         phone: phone || null,
+        name: name || email.split('@')[0],
         password: hashedPassword,
         employee_id: employeeId,
         must_change_password: true,
@@ -223,6 +224,9 @@ router.post('/:id/reset-password', authenticateToken, authorizeRole(['admin']), 
   try {
     const existing = await db('users').where({ id }).first();
     if (!existing) return res.status(404).json({ message: 'User not found' });
+    if (existing.otp_login) {
+      return res.status(400).json({ message: 'This account signs in with an email code, not a password.' });
+    }
 
     const tempPassword = generateTempPassword();
     await db('users').where({ id }).update({

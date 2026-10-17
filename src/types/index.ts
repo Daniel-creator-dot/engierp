@@ -5,11 +5,12 @@ export type Module =
   | 'hr-directory' | 'hr-payroll' | 'hr-attendance' | 'hr-leave' | 'hr-performance' | 'hr-resources'
   | 'projects-active' | 'projects-costing' | 'projects-contracts' | 'projects-wip'
   | 'procurement-pos' | 'procurement-inventory' | 'procurement-suppliers'
+  | 'commercial-boq' | 'commercial-tenders' | 'commercial-variations' | 'commercial-requisitions' | 'commercial-work-orders' | 'commercial-programme' | 'commercial-safety'
   | 'field-ops' | 'assets'
   | 'settings'
   | 'profile';
 
-export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'field-ops' | 'assets' | 'settings';
+export type ParentModule = 'dashboard' | 'accounting' | 'hr' | 'projects' | 'procurement' | 'commercial' | 'field-ops' | 'assets' | 'settings';
 
 export interface Project {
   id: string;

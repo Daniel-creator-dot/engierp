@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
-  Truck
+  Truck,
+  ClipboardList
 } from 'lucide-react';
 import LogoImg from './thisone.png';
 import { Module, ParentModule } from './types';
@@ -49,6 +50,7 @@ import FieldOps from './components/modules/FieldOps';
 import SettingsView from './components/modules/Settings';
 import Profile from './components/modules/Profile';
 import Assets from './components/modules/Assets';
+import Commercial from './components/modules/Commercial';
 
 interface NavItem {
   id: ParentModule;
@@ -58,6 +60,7 @@ interface NavItem {
 }
 
 import { useAuth } from './contexts/AuthContext';
+import { personName } from './lib/personName';
 import Login from './components/Login';
 import ChangePasswordForm from './components/ChangePasswordForm';
 import GlobalSearch from './components/GlobalSearch';
@@ -94,7 +97,7 @@ export default function App() {
     );
   }
 
-  if (user.must_change_password) {
+  if (user.must_change_password && !user.otp_login) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F5F5] p-4">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 space-y-6">
@@ -164,6 +167,20 @@ export default function App() {
         { id: 'procurement-suppliers', label: 'Suppliers' },
       ]
     },
+    {
+      id: 'commercial',
+      label: 'Commercial',
+      icon: ClipboardList,
+      subItems: [
+        { id: 'commercial-boq', label: 'Bill of Quantities' },
+        { id: 'commercial-tenders', label: 'Tenders & Quotes' },
+        { id: 'commercial-variations', label: 'Variations' },
+        { id: 'commercial-requisitions', label: 'Material Requisitions' },
+        { id: 'commercial-work-orders', label: 'Work Orders' },
+        { id: 'commercial-programme', label: 'Programme' },
+        { id: 'commercial-safety', label: 'Safety' },
+      ]
+    },
     { id: 'field-ops', label: 'Field Operations', icon: HardHat },
     { id: 'assets', label: 'Fixed Assets', icon: Truck },
   ];
@@ -192,11 +209,11 @@ export default function App() {
       case 'hr':
         return ['hr', 'projects', 'settings'].includes(item.id);
       case 'accountant':
-        return ['dashboard', 'accounting', 'hr', 'projects', 'procurement', 'assets', 'settings'].includes(item.id);
+        return ['dashboard', 'accounting', 'hr', 'projects', 'procurement', 'commercial', 'assets', 'settings'].includes(item.id);
       case 'pm':
-        return ['projects', 'hr', 'field-ops'].includes(item.id);
+        return ['projects', 'commercial', 'hr', 'field-ops'].includes(item.id);
       case 'procurement':
-        return ['procurement', 'hr'].includes(item.id);
+        return ['procurement', 'commercial', 'hr'].includes(item.id);
       default:
         return false;
     }
@@ -211,6 +228,12 @@ export default function App() {
     // The WIP and job cost endpoints are limited to PM, accountant and admin
     if (item.id === 'projects' && item.subItems && !['admin', 'pm', 'accountant'].includes(user.role)) {
       return { ...item, subItems: item.subItems.filter(sub => sub.id !== 'projects-wip' && sub.id !== 'projects-costing') };
+    }
+    if (item.id === 'commercial' && item.subItems && user.role !== 'admin' && user.role !== 'pm') {
+      const allowed = user.role === 'procurement'
+        ? ['commercial-tenders', 'commercial-requisitions', 'commercial-work-orders']
+        : ['commercial-boq', 'commercial-tenders', 'commercial-variations', 'commercial-work-orders'];
+      return { ...item, subItems: item.subItems.filter(sub => allowed.includes(sub.id)) };
     }
     return item;
   });
@@ -234,6 +257,7 @@ export default function App() {
     if (activeModule.startsWith('hr')) return <HR activeSub={activeModule} />;
     if (activeModule.startsWith('projects')) return <Projects activeSub={activeModule} />;
     if (activeModule.startsWith('procurement')) return <Procurement activeSub={activeModule} />;
+    if (activeModule.startsWith('commercial')) return <Commercial activeSub={activeModule} />;
     if (activeModule === 'field-ops') return <FieldOps />;
     if (activeModule === 'assets') return <Assets />;
     if (activeModule === 'settings') return <SettingsView />;
@@ -258,7 +282,7 @@ export default function App() {
         </span>
       </div>
 
-      <ScrollArea className="flex-1 px-3">
+      <ScrollArea className="min-h-0 flex-1 px-3">
         <nav className="space-y-1">
           {finalNavItems.map((item) => {
             const isActive = isChildActive(item);
@@ -279,6 +303,8 @@ export default function App() {
                       ? 'bg-white text-[#141414]' 
                       : 'hover:bg-white/10 text-white/70'
                   } ${isActive && item.subItems ? 'text-white' : ''}`}
+                  aria-label={item.label}
+                  data-nav={item.label}
                 >
                   <div className="flex items-center gap-3">
                     <item.icon className="w-5 h-5 shrink-0" />
@@ -339,7 +365,7 @@ export default function App() {
       <aside 
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-[#141414] text-white transition-all duration-300 hidden lg:flex flex-col z-50`}
+        } bg-[#141414] text-white transition-all duration-300 hidden lg:flex flex-col min-h-0 overflow-hidden z-50`}
       >
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10">
@@ -353,7 +379,7 @@ export default function App() {
           )}
         </div>
 
-        <ScrollArea className="flex-1 px-3">
+        <ScrollArea className="min-h-0 flex-1 px-3">
           <nav className="space-y-1">
             {finalNavItems.map((item) => {
               const isActive = isChildActive(item);
@@ -364,6 +390,7 @@ export default function App() {
                   <button
                     title={isSidebarOpen ? undefined : item.label}
                     aria-label={item.label}
+                    data-nav={item.label}
                     onClick={() => {
                       if (item.subItems) {
                         // Sub-items only render in the expanded sidebar, so open it rather than toggling invisibly.
@@ -482,7 +509,7 @@ export default function App() {
                     <AvatarFallback className="bg-blue-600 text-white font-bold">{user.email.substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden sm:block">
-                    <p className="text-sm font-semibold leading-none">{user.name || user.email.split('@')[0]}</p>
+                    <p className="text-sm font-semibold leading-none">{personName(user)}</p>
                     <p className="text-xs text-[#8E9299] mt-1 capitalize">{user.role}</p>
                   </div>
                 </Button>

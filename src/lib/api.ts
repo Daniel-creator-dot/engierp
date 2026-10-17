@@ -71,6 +71,9 @@ export default api;
 
 export const authApi = {
   login: (credentials: any) => api.post('/auth/login', credentials),
+  loginMethod: (email: string) => api.post('/auth/login-method', { email }),
+  requestOtp: (email: string) => api.post('/auth/otp/request', { email }),
+  verifyOtp: (email: string, code: string) => api.post('/auth/otp/verify', { email, code }),
   me: () => api.get('/auth/me'),
   forgotPassword: (phone: string) => api.post('/auth/forgot-password', { phone }),
   resetPassword: (data: any) => api.post('/auth/reset-password', data),
@@ -266,6 +269,33 @@ export const projectsApi = {
   getCostAccounts: () => api.get('/projects/cost-accounts'),
   saveBudgetLines: (id: string, lines: Array<{ account_id: number; amount: number; notes?: string }>) =>
     api.put(`/projects/${id}/budget-lines`, { lines }),
+};
+
+export const commercialApi = {
+  summary: () => api.get('/commercial/summary'),
+  getBoq: (project_id?: string) => api.get('/commercial/boq', { params: project_id ? { project_id } : undefined }),
+  addBoqItem: (data: any) => api.post('/commercial/boq', data),
+  deleteBoqItem: (id: number) => api.delete(`/commercial/boq/${id}`),
+  getVariations: () => api.get('/commercial/variations'),
+  addVariation: (data: any) => api.post('/commercial/variations', data),
+  setVariationStatus: (id: string, status: string) => api.patch(`/commercial/variations/${id}`, { status }),
+  getRequisitions: () => api.get('/commercial/requisitions'),
+  addRequisition: (data: any) => api.post('/commercial/requisitions', data),
+  setRequisitionStatus: (id: string, status: string) => api.patch(`/commercial/requisitions/${id}`, { status }),
+  getWorkOrders: () => api.get('/commercial/work-orders'),
+  addWorkOrder: (data: any) => api.post('/commercial/work-orders', data),
+  setWorkOrderStatus: (id: string, status: string) => api.patch(`/commercial/work-orders/${id}`, { status }),
+  getTenders: () => api.get('/commercial/tenders'),
+  addTender: (data: any) => api.post('/commercial/tenders', data),
+  addQuote: (id: string, data: any) => api.post(`/commercial/tenders/${id}/quotes`, data),
+  awardTender: (id: string, supplier_id: string) => api.post(`/commercial/tenders/${id}/award`, { supplier_id }),
+  setTenderStatus: (id: string, status: string) => api.patch(`/commercial/tenders/${id}`, { status }),
+  getMilestones: () => api.get('/commercial/milestones'),
+  addMilestone: (data: any) => api.post('/commercial/milestones', data),
+  setMilestoneStatus: (id: number, status: string) => api.patch(`/commercial/milestones/${id}`, { status }),
+  getIncidents: () => api.get('/commercial/incidents'),
+  addIncident: (data: any) => api.post('/commercial/incidents', data),
+  setIncidentStatus: (id: number, status: string, action_taken?: string) => api.patch(`/commercial/incidents/${id}`, { status, action_taken }),
 };
 
 export const contractsApi = {

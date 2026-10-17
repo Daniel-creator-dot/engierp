@@ -4,6 +4,7 @@ import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 import { pick, orNull } from '../utils/pick';
 import { LedgerError, deleteJournal, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
+import { pickAccount, type AccountSpec } from '../lib/accountIdentity';
 import { logAudit } from '../lib/audit';
 
 const router = Router();
@@ -53,23 +54,44 @@ async function loadAccountMappings(conn: Conn): Promise<AssetAccounts> {
   let saved: Partial<AssetAccounts> = {};
   try { saved = row?.value ? JSON.parse(row.value) : {}; } catch { saved = {}; }
 
-  const byCode = (code: string) => accounts.find((a: any) => a.code === code)?.id ?? null;
   const byName = (pattern: RegExp, types: string[]) =>
     accounts.find((a: any) => types.includes(a.type) && pattern.test(a.name))?.id ?? null;
+  const idFor = (spec: AccountSpec) => pickAccount(accounts, spec)?.id ?? null;
+  const NOT_CASH = /depreciat|receivable|inventory|equipment|vehicle|building|furniture|prepay|payable/i;
 
   const defaults: AssetAccounts = {
     depreciation_expense_id: byName(/depreciation expense/i, ['Expense']),
     disposal_gain_loss_id: byName(/disposal/i, ['Expense', 'Income']),
-    disposal_proceeds_id: byCode('1101'),
-    default_cost_id: byCode('1203'),
-    default_accumulated_id: byCode('1301'),
+    disposal_proceeds_id: idFor({
+      key: 'disposal_proceeds', type: 'Asset', label: 'Disposal proceeds',
+      nameHints: ['cash on hand', 'petty cash', 'cash'], codes: ['1001', '1101'],
+      contradicts: NOT_CASH, codePolicy: 'hint-or-safe', prefer: 'name',
+    }),
+    default_cost_id: idFor({
+      key: 'asset_cost', type: 'Asset', label: 'Asset cost',
+      nameHints: ['engineering equipment', 'property, plant'], codes: ['1203', '1100'],
+      contradicts: /depreciat|cash|bank|receivable/i, codePolicy: 'hint-only', prefer: 'name',
+    }),
+    default_accumulated_id: idFor({
+      key: 'accumulated_depreciation', type: 'Asset', label: 'Accumulated depreciation',
+      nameHints: ['acc dep – equipment', 'acc dep - equipment', 'accumulated depreciation'], codes: ['1301', '1101'],
+      contradicts: /cash on hand|receivable|revenue|bank/i, codePolicy: 'hint-only', prefer: 'name',
+    }),
     categories: {},
   };
   for (const cat of categories) {
     const vehicle = /vehic|truck|car/i.test(cat.name);
     defaults.categories[cat.name] = {
-      cost_id: cat.account_id || (vehicle ? byCode('1204') : null),
-      accumulated_id: vehicle ? byCode('1302') : null,
+      cost_id: cat.account_id || (vehicle ? idFor({
+        key: 'vehicles', type: 'Asset', label: 'Vehicles',
+        nameHints: ['motor vehicles', 'vehicles'], codes: ['1204'],
+        contradicts: /depreciat|cash|receivable/i, codePolicy: 'hint-only', prefer: 'name',
+      }) : null),
+      accumulated_id: vehicle ? idFor({
+        key: 'vehicle_depreciation', type: 'Asset', label: 'Vehicle depreciation',
+        nameHints: ['acc dep – vehicles', 'acc dep - vehicles', 'depreciation – vehicles', 'depreciation - vehicles'], codes: ['1302'],
+        contradicts: /cash|receivable/i, codePolicy: 'hint-only', prefer: 'name',
+      }) : null,
     };
   }
 

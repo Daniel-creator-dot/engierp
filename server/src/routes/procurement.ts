@@ -3,7 +3,8 @@ import type { Knex } from 'knex';
 import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 import { pick, orNull } from '../utils/pick';
-import { LedgerError, findAccountByCode, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
+import { LedgerError, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
+import { payableAccount } from '../lib/accounting';
 import { afterBillCreated, billNeedsApproval, notifyAdminsOfRequest } from '../lib/approvals';
 
 const router = Router();
@@ -687,8 +688,8 @@ router.post('/purchase-orders/:id/convert-to-bill', authenticateToken, authorize
 
       const account = await trx('chart_of_accounts').where({ id: accountId }).first();
       if (!account || !['Expense', 'Asset'].includes(account.type)) throw httpError('Bills must be charged to an expense or asset account');
-      const ap = await findAccountByCode(trx, '2001');
-      if (!ap) throw httpError('Accounts Payable (2001) is missing from the chart of accounts');
+      const ap = await payableAccount(trx);
+      if (!ap) throw httpError('Accounts Payable is missing from the chart of accounts');
       if (ap.id === account.id) throw httpError('Choose a cost account, not Accounts Payable');
 
       const supplier = await trx('suppliers').where({ id: po.supplier_id }).first();

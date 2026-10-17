@@ -1,6 +1,6 @@
 # bytzforge ERP
 
-Construction ERP for Ghana-based contractors: accounting (GL, AR/AP, bank, reports), HR & payroll (PAYE/SSNIT), projects and job costing, procurement, field operations and fixed assets.
+Construction ERP for Ghana-based contractors: accounting (GL, AR/AP, bank, reports), HR & payroll (PAYE/SSNIT), projects and job costing, procurement, commercial control (bill of quantities, tenders, variations, material requisitions, subcontract work orders, programme and site safety), field operations and fixed assets.
 
 - **Frontend:** React 19 + Vite + TypeScript + Tailwind (`src/`)
 - **Backend:** Express + Knex on PostgreSQL (`server/src/`), run with `tsx`
@@ -19,7 +19,11 @@ npm run dev                 # web app on http://localhost:3000
 
 Without `NODE_ENV=production`, the API uses the `development` connection in `knexfile.ts` (local database `eng`). Set `NODE_ENV=production` and `DATABASE_URL` to use a hosted database instead.
 
-On an empty database the API seeds demo data including `admin@engierp.com`; that account must change its password at first sign-in.
+On an empty database the API seeds demo data once. If the database already has users, employees, projects, journals, or a company name, startup leaves every row as it is: nothing is deleted, reseeded, or renamed. Sign in as `admin@engierp.com` or `acc@engierp.com` with password `password123` on a fresh demo database. Both accounts must choose a new password at first sign-in.
+
+`admin@bytzforge.com` is the super admin and signs in with a one-time email code, not a password. Other accounts stay on passwords. When SMTP is not configured and `NODE_ENV` is not `production`, the 6-digit code is shown on the login screen (and printed by the API). In production the code is only emailed, or sent by SMS when that account has a phone and SMS is configured.
+
+The API listens on `0.0.0.0:$PORT`. In development, a relative `VITE_API_URL=/api` is proxied by Vite to that port, so the page and the API share one origin.
 
 Checks to run before pushing (main auto-deploys):
 
@@ -67,8 +71,8 @@ The API and the web app deploy separately.
 | `admin` | Everything, including user management, SMS gateway, branding, audit log, payroll and leave approval. |
 | `accountant` | Accounting, projects, procurement, assets; employee directory and payroll; company profile and tax settings; categories & services. |
 | `hr` | HR (directory, payroll preparation, leave), projects; can create non-admin users. |
-| `pm` | Projects, field operations; own payslips and leave. |
-| `procurement` | Procurement (POs, inventory, suppliers); own payslips and leave. |
+| `pm` | Projects, commercial (BOQ, variations, requisitions, work orders, programme, safety), field operations; own payslips and leave. |
+| `procurement` | Procurement (POs, inventory, suppliers), tenders, material requisitions and work orders; own payslips and leave. |
 
 Every user has a Profile page with their payslips, leave requests, profile details and password change.
 
@@ -76,7 +80,7 @@ Every user has a Profile page with their payslips, leave requests, profile detai
 
 - New users and admin password resets get a random temporary password, shown once to the admin (and sent by SMS when configured). The user must choose a new password at first sign-in.
 - Accounts lock for 15 minutes after 5 failed sign-ins; login, forgot-password and reset endpoints are rate limited per IP.
-- Reset codes are 6 digits, valid for 10 minutes, stored hashed, and invalidated after 5 wrong attempts. They are only ever sent by SMS.
+- Password-reset codes and the super-admin sign-in code are 6 digits, valid for 10 minutes, stored hashed, and invalidated after 5 wrong attempts. Reset codes are sent by SMS. The super-admin sign-in code is emailed, or shown on the login screen only when delivery is not configured and the API is not running in production.
 - Deactivating a user, changing their role or resetting their password takes effect within about 30 seconds, without waiting for their session to expire.
 - Sign-ins, user changes and settings changes are written to the audit log (Settings → Audit Log). Server code can record its own events with `logAudit()` from `server/src/lib/audit.ts`, and send in-app/SMS notifications with `notify()` from `server/src/lib/notify.ts`.
 - Anything interpolated into print windows must go through `escapeHtml()` from `src/lib/html.ts`.

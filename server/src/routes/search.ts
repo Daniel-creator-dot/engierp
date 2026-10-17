@@ -60,6 +60,34 @@ const SEARCHERS: Array<{ type: string; roles: string[]; run: Searcher }> = [
       .map(p => ({ type: 'purchase_order', id: p.id, title: `${p.id} · ${p.supplier || 'Unknown supplier'}`, subtitle: `${Number(p.total_amount || 0).toLocaleString('en-GH', { minimumFractionDigits: 2 })} · ${p.status}`, link: 'procurement-pos' })),
   },
   {
+    type: 'work_order',
+    roles: ['admin', 'accountant', 'pm', 'procurement'],
+    run: async (like, limit) => (await db('work_orders')
+      .join('projects', 'work_orders.project_id', 'projects.id')
+      .where(w => w.whereILike('work_orders.id', like).orWhereILike('work_orders.title', like).orWhereILike('projects.name', like))
+      .orderBy('work_orders.created_at', 'desc').limit(limit)
+      .select('work_orders.id', 'work_orders.title', 'work_orders.status', 'projects.name as project'))
+      .map(w => ({ type: 'work_order', id: w.id, title: `${w.id} · ${w.title}`, subtitle: [w.project, w.status].filter(Boolean).join(' · '), link: 'commercial-work-orders' })),
+  },
+  {
+    type: 'tender',
+    roles: ['admin', 'accountant', 'pm', 'procurement'],
+    run: async (like, limit) => (await db('tenders')
+      .where(w => w.whereILike('id', like).orWhereILike('title', like))
+      .orderBy('created_at', 'desc').limit(limit).select('id', 'title', 'status'))
+      .map(t => ({ type: 'tender', id: t.id, title: `${t.id} · ${t.title}`, subtitle: t.status, link: 'commercial-tenders' })),
+  },
+  {
+    type: 'requisition',
+    roles: ['admin', 'accountant', 'pm', 'procurement'],
+    run: async (like, limit) => (await db('material_requisitions')
+      .join('projects', 'material_requisitions.project_id', 'projects.id')
+      .where(w => w.whereILike('material_requisitions.id', like).orWhereILike('projects.name', like))
+      .orderBy('material_requisitions.created_at', 'desc').limit(limit)
+      .select('material_requisitions.id', 'material_requisitions.status', 'projects.name as project'))
+      .map(r => ({ type: 'requisition', id: r.id, title: `${r.id} · ${r.project}`, subtitle: r.status, link: 'commercial-requisitions' })),
+  },
+  {
     type: 'project',
     roles: ['admin', 'accountant', 'pm', 'hr'],
     run: async (like, limit) => (await db('projects')

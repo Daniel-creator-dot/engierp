@@ -237,7 +237,12 @@ router.patch('/employees/:id', authenticateToken, authorizeRole(HR_ADMIN), async
     const error = normaliseEmployee(updates, true) || checkEmployeeDateOrder({ ...existing, ...updates });
     if (error) return res.status(400).json({ message: error });
     if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Nothing to update' });
-    await db('employees').where({ id }).update({ ...updates, updated_at: db.fn.now() });
+    await db.transaction(async trx => {
+      await trx('employees').where({ id }).update({ ...updates, updated_at: trx.fn.now() });
+      if (typeof updates.name === 'string' && updates.name.trim()) {
+        await trx('users').where({ employee_id: id }).update({ name: updates.name.trim(), updated_at: trx.fn.now() });
+      }
+    });
     logAudit(req, 'update', 'employee', id, pick(existing, Object.keys(updates)), updates);
     res.json({ message: 'Employee file updated' });
   } catch (error) {
