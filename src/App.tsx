@@ -510,7 +510,7 @@ export default function App() {
                   </Avatar>
                   <div className="text-left hidden sm:block">
                     <p className="text-sm font-semibold leading-none">{personName(user)}</p>
-                    <p className="text-xs text-[#8E9299] mt-1 capitalize">{user.role}</p>
+                    <p className="text-xs text-[#8E9299] mt-1 capitalize">{user.email.trim().toLowerCase() === 'admin@bytzforge.com' ? 'Super Admin' : user.role}</p>
                   </div>
                 </Button>
               </DropdownMenuTrigger>

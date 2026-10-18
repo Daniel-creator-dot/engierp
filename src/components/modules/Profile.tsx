@@ -238,7 +238,7 @@ export default function Profile() {
             </Avatar>
             <div className="text-center md:text-left space-y-3 flex-1 min-w-0">
               <div className="space-y-1">
-                <Badge className="bg-blue-100 text-blue-700 border-none font-bold px-3">{user.role.toUpperCase()}</Badge>
+                <Badge className="bg-blue-100 text-blue-700 border-none font-bold px-3">{user.email.trim().toLowerCase() === 'admin@bytzforge.com' ? 'SUPER ADMIN' : user.role.toUpperCase()}</Badge>
                 <h1 className="text-3xl md:text-4xl font-black text-[#141414] tracking-tight truncate">{displayName}</h1>
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1 text-[#8E9299]">
                   <span className="flex items-center gap-2"><Mail className="w-4 h-4" />{user.email}</span>

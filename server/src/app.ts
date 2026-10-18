@@ -21,7 +21,7 @@ import commercialRoutes from './routes/commercial';
 import { syncSchema } from './utils/schemaSync';
 import { initJwtSecret } from './lib/secrets';
 import { databaseHasCompanyData } from './lib/preserve';
-import { demoteOtherAdmins, ensureSuperAdmin } from './lib/superAdmin';
+import { ensureSuperAdmin } from './lib/superAdmin';
 
 dotenv.config();
 
@@ -77,7 +77,6 @@ async function bootstrap() {
     }
 
     await ensureSuperAdmin(db);
-    await demoteOtherAdmins(db);
   } catch (error) {
     console.error('❌ Bootstrap error:', error);
   }

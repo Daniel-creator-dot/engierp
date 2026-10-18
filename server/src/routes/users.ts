@@ -25,6 +25,9 @@ const loadUser = (id: number | string) => db('users')
   .where('users.id', id)
   .first([...USER_FIELDS, db.raw('coalesce(employees.name, users.name) as name'), 'employees.department as department']);
 
+const isSuperAdminEmail = (email: unknown) => String(email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+const requesterIsSuperAdmin = (req: AuthRequest) => isSuperAdminEmail(req.user?.email);
+
 async function activeAdminCount(excludeId?: number) {
   const q = db('users').where({ role: 'admin', is_active: true });
   if (excludeId) q.whereNot({ id: excludeId });
@@ -69,7 +72,9 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
   if (!isRole(role)) return res.status(400).json({ message: `Role must be one of: ${ROLES.join(', ')}` });
-  if (role === 'admin') return res.status(403).json({ message: 'Only admin@bytzforge.com is the super admin. Choose another role.' });
+  if (role === 'admin' && !requesterIsSuperAdmin(req)) {
+    return res.status(403).json({ message: 'Only the super admin can create an admin account.' });
+  }
   if (phone && normalizePhone(phone).length < 9) return res.status(400).json({ message: 'Enter a valid phone number' });
 
   try {
@@ -143,11 +148,12 @@ router.patch('/:id', authenticateToken, authorizeRole(['admin']), async (req: Au
     if (req.body?.role !== undefined) {
       if (!isRole(req.body.role)) return res.status(400).json({ message: `Role must be one of: ${ROLES.join(', ')}` });
       const email = String(existing.email || '').toLowerCase();
-      if (email === SUPER_ADMIN_EMAIL && req.body.role !== 'admin') {
+      if (isSuperAdminEmail(email) && req.body.role !== 'admin') {
         return res.status(400).json({ message: 'The super admin role cannot be removed.' });
       }
-      if (req.body.role === 'admin' && email !== SUPER_ADMIN_EMAIL) {
-        return res.status(403).json({ message: 'Only admin@bytzforge.com is the super admin.' });
+      const touchesAdmin = req.body.role === 'admin' || existing.role === 'admin';
+      if (touchesAdmin && !requesterIsSuperAdmin(req)) {
+        return res.status(403).json({ message: 'Only the super admin can change an admin account.' });
       }
       if (existing.role === 'admin' && req.body.role !== 'admin') {
         if ((await activeAdminCount(id)) === 0) return res.status(400).json({ message: 'At least one active admin is required' });
@@ -162,7 +168,7 @@ router.patch('/:id', authenticateToken, authorizeRole(['admin']), async (req: Au
     if (req.body?.email !== undefined) {
       const email = String(req.body.email || '').trim().toLowerCase();
       const currentEmail = String(existing.email || '').toLowerCase();
-      if (currentEmail === SUPER_ADMIN_EMAIL && email !== SUPER_ADMIN_EMAIL) {
+      if (isSuperAdminEmail(currentEmail) && email !== SUPER_ADMIN_EMAIL) {
         return res.status(400).json({ message: 'The super admin email cannot be changed.' });
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
@@ -202,6 +208,10 @@ router.post('/:id/deactivate', authenticateToken, authorizeRole(['admin']), asyn
     const existing = await db('users').where({ id }).first();
     if (!existing) return res.status(404).json({ message: 'User not found' });
     if (id === req.user?.id) return res.status(400).json({ message: 'You cannot deactivate your own account' });
+    if (isSuperAdminEmail(existing.email)) return res.status(400).json({ message: 'The super admin account cannot be deactivated.' });
+    if (existing.role === 'admin' && !requesterIsSuperAdmin(req)) {
+      return res.status(403).json({ message: 'Only the super admin can deactivate an admin account.' });
+    }
     if (existing.role === 'admin' && (await activeAdminCount(id)) === 0) {
       return res.status(400).json({ message: 'At least one active admin is required' });
     }
@@ -237,6 +247,9 @@ router.post('/:id/reset-password', authenticateToken, authorizeRole(['admin']), 
     if (!existing) return res.status(404).json({ message: 'User not found' });
     if (existing.otp_login) {
       return res.status(400).json({ message: 'This account signs in with an email code, not a password.' });
+    }
+    if (existing.role === 'admin' && !requesterIsSuperAdmin(req)) {
+      return res.status(403).json({ message: 'Only the super admin can reset an admin password.' });
     }
 
     const tempPassword = generateTempPassword();

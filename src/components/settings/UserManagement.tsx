@@ -25,11 +25,8 @@ const SUPER_ADMIN_EMAIL = 'admin@bytzforge.com';
 const isSuperAdminAccount = (user: { email?: string | null }) =>
   (user.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL;
 
-/** The super admin stays admin. Every other account that was admin is saved as a project manager. */
-const roleForEdit = (user: { email?: string | null; role: string }) => {
-  if (isSuperAdminAccount(user)) return 'admin';
-  return user.role === 'admin' ? 'pm' : user.role;
-};
+const roleForEdit = (user: { email?: string | null; role: string }) =>
+  isSuperAdminAccount(user) ? 'admin' : user.role;
 
 const roleLabel = (user: { role: string; email?: string }) => {
   if (isSuperAdminAccount(user)) return 'Super Admin';
@@ -63,6 +60,7 @@ const NO_EMPLOYEE = '__none__';
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
+  const isSuperAdmin = isSuperAdminAccount(currentUser || {});
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +133,7 @@ export default function UserManagement() {
     try {
       const payload: Record<string, string> = {};
       const superAdmin = isSuperAdminAccount(editing);
-      const role = superAdmin ? 'admin' : (editForm.role === 'admin' ? 'pm' : editForm.role);
+      const role = superAdmin ? 'admin' : editForm.role;
       if (role !== editing.role) payload.role = role;
       if (editForm.phone !== (editing.phone || '')) payload.phone = editForm.phone;
       if (!superAdmin && editForm.email !== editing.email) payload.email = editForm.email;
@@ -188,7 +186,7 @@ export default function UserManagement() {
     }
   };
 
-  const roleOptions = ROLE_OPTIONS.filter(r => r.value !== 'admin');
+  const roleOptions = isSuperAdmin ? ROLE_OPTIONS : ROLE_OPTIONS.filter(r => r.value !== 'admin');
   const unlinkedEmployees = employees.filter(e => !linkedEmployeeIds.has(e.id));
 
   return (
@@ -241,10 +239,10 @@ export default function UserManagement() {
                     {isAdmin && (
                       <>
                         <Button variant="ghost" size="icon" title="Edit" onClick={() => openEdit(u)} className="h-8 w-8 rounded-full"><Pencil className="w-4 h-4" /></Button>
-                        {!u.otp_login && <Button variant="ghost" size="icon" title="Reset password" disabled={busyId === u.id} onClick={() => setConfirm({ user: u, action: 'reset' })} className="h-8 w-8 rounded-full"><KeyRound className="w-4 h-4" /></Button>}
-                        {u.is_active ? (
+                        {!u.otp_login && (isSuperAdmin || u.role !== 'admin') && <Button variant="ghost" size="icon" title="Reset password" disabled={busyId === u.id} onClick={() => setConfirm({ user: u, action: 'reset' })} className="h-8 w-8 rounded-full"><KeyRound className="w-4 h-4" /></Button>}
+                        {u.is_active && !isSuperAdminAccount(u) ? (
                           <Button variant="ghost" size="icon" title="Deactivate" disabled={busyId === u.id || u.id === currentUser?.id} onClick={() => setConfirm({ user: u, action: 'deactivate' })} className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50"><UserX className="w-4 h-4" /></Button>
-                        ) : (
+                        ) : u.is_active ? null : (
                           <Button variant="ghost" size="icon" title="Reactivate" disabled={busyId === u.id} onClick={() => setConfirm({ user: u, action: 'reactivate' })} className="h-8 w-8 rounded-full text-green-700 hover:bg-green-50"><UserCheck className="w-4 h-4" /></Button>
                         )}
                       </>
@@ -312,8 +310,10 @@ export default function UserManagement() {
                     <Label>Role</Label>
                     {isSuperAdminAccount(editing) ? (
                       <div className="flex h-10 items-center rounded-md bg-[#F5F5F5] px-3 text-sm font-medium">Super Admin</div>
+                    ) : !isSuperAdmin && editing.role === 'admin' ? (
+                      <div className="flex h-10 items-center rounded-md bg-[#F5F5F5] px-3 text-sm font-medium">Admin</div>
                     ) : (
-                      <Select value={editForm.role === 'admin' ? 'pm' : editForm.role} onValueChange={v => setEditForm({ ...editForm, role: v === 'admin' ? 'pm' : v })}>
+                      <Select value={editForm.role} onValueChange={v => setEditForm({ ...editForm, role: v })}>
                         <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
                         <SelectContent>{roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                       </Select>
