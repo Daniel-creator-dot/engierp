@@ -8,6 +8,7 @@ import { getJwtSecretSource } from '../lib/secrets';
 import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { sendSMS, isSmsConfigured, normalizePhone } from '../utils/sms';
+import { SUPER_ADMIN_EMAIL } from '../lib/superAdmin';
 
 const router = Router();
 
@@ -68,7 +69,7 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
   if (!isRole(role)) return res.status(400).json({ message: `Role must be one of: ${ROLES.join(', ')}` });
-  if (role === 'admin' && req.user?.role !== 'admin') return res.status(403).json({ message: 'Only administrators can create admin accounts' });
+  if (role === 'admin') return res.status(403).json({ message: 'Only admin@bytzforge.com is the super admin. Choose another role.' });
   if (phone && normalizePhone(phone).length < 9) return res.status(400).json({ message: 'Enter a valid phone number' });
 
   try {
@@ -141,8 +142,14 @@ router.patch('/:id', authenticateToken, authorizeRole(['admin']), async (req: Au
     const updates: Record<string, any> = {};
     if (req.body?.role !== undefined) {
       if (!isRole(req.body.role)) return res.status(400).json({ message: `Role must be one of: ${ROLES.join(', ')}` });
+      const email = String(existing.email || '').toLowerCase();
+      if (email === SUPER_ADMIN_EMAIL && req.body.role !== 'admin') {
+        return res.status(400).json({ message: 'The super admin role cannot be removed.' });
+      }
+      if (req.body.role === 'admin' && email !== SUPER_ADMIN_EMAIL) {
+        return res.status(403).json({ message: 'Only admin@bytzforge.com is the super admin.' });
+      }
       if (existing.role === 'admin' && req.body.role !== 'admin') {
-        if (id === req.user?.id) return res.status(400).json({ message: 'You cannot remove your own admin role' });
         if ((await activeAdminCount(id)) === 0) return res.status(400).json({ message: 'At least one active admin is required' });
       }
       updates.role = req.body.role;
@@ -154,6 +161,10 @@ router.patch('/:id', authenticateToken, authorizeRole(['admin']), async (req: Au
     }
     if (req.body?.email !== undefined) {
       const email = String(req.body.email || '').trim().toLowerCase();
+      const currentEmail = String(existing.email || '').toLowerCase();
+      if (currentEmail === SUPER_ADMIN_EMAIL && email !== SUPER_ADMIN_EMAIL) {
+        return res.status(400).json({ message: 'The super admin email cannot be changed.' });
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
       if (await db('users').whereRaw('lower(email) = ?', [email]).whereNot({ id }).first('id')) {
         return res.status(409).json({ message: 'That email is already used by another account' });

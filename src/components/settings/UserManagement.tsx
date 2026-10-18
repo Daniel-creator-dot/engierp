@@ -20,7 +20,21 @@ export const ROLE_OPTIONS = [
   { value: 'procurement', label: 'Procurement' },
 ];
 
-const roleLabel = (role: string) => ROLE_OPTIONS.find(r => r.value === role)?.label || role;
+const SUPER_ADMIN_EMAIL = 'admin@bytzforge.com';
+
+const isSuperAdminAccount = (user: { email?: string | null }) =>
+  (user.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+
+/** The super admin stays admin. Every other account that was admin is saved as a project manager. */
+const roleForEdit = (user: { email?: string | null; role: string }) => {
+  if (isSuperAdminAccount(user)) return 'admin';
+  return user.role === 'admin' ? 'pm' : user.role;
+};
+
+const roleLabel = (user: { role: string; email?: string }) => {
+  if (isSuperAdminAccount(user)) return 'Super Admin';
+  return ROLE_OPTIONS.find(r => r.value === user.role)?.label || user.role;
+};
 
 interface ManagedUser {
   id: number;
@@ -111,7 +125,7 @@ export default function UserManagement() {
 
   const openEdit = (u: ManagedUser) => {
     setEditing(u);
-    setEditForm({ role: u.role, phone: u.phone || '', email: u.email, employee_id: u.employee_id || NO_EMPLOYEE });
+    setEditForm({ role: roleForEdit(u), phone: u.phone || '', email: u.email, employee_id: u.employee_id || NO_EMPLOYEE });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -120,9 +134,11 @@ export default function UserManagement() {
     setSaving(true);
     try {
       const payload: Record<string, string> = {};
-      if (editForm.role !== editing.role) payload.role = editForm.role;
+      const superAdmin = isSuperAdminAccount(editing);
+      const role = superAdmin ? 'admin' : (editForm.role === 'admin' ? 'pm' : editForm.role);
+      if (role !== editing.role) payload.role = role;
       if (editForm.phone !== (editing.phone || '')) payload.phone = editForm.phone;
-      if (editForm.email !== editing.email) payload.email = editForm.email;
+      if (!superAdmin && editForm.email !== editing.email) payload.email = editForm.email;
       const employeeId = editForm.employee_id === NO_EMPLOYEE ? '' : editForm.employee_id;
       if (employeeId !== (editing.employee_id || '')) payload.employee_id = employeeId;
       if (!Object.keys(payload).length) {
@@ -172,7 +188,7 @@ export default function UserManagement() {
     }
   };
 
-  const roleOptions = isAdmin ? ROLE_OPTIONS : ROLE_OPTIONS.filter(r => r.value !== 'admin');
+  const roleOptions = ROLE_OPTIONS.filter(r => r.value !== 'admin');
   const unlinkedEmployees = employees.filter(e => !linkedEmployeeIds.has(e.id));
 
   return (
@@ -217,7 +233,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{roleLabel(u.role)}</Badge>
+                    <Badge variant="outline" className="rounded-lg font-bold uppercase text-[10px]">{roleLabel(u)}</Badge>
                     {!u.is_active && <Badge className="bg-red-100 text-red-700 border-none text-[10px]">Deactivated</Badge>}
                     {u.is_active && locked && <Badge className="bg-amber-100 text-amber-800 border-none text-[10px]">Locked</Badge>}
                     {u.is_active && u.otp_login && <Badge className="bg-violet-100 text-violet-800 border-none text-[10px]">Email code</Badge>}
@@ -289,15 +305,19 @@ export default function UserManagement() {
                 <DialogDescription>Role changes take effect within a minute, without the user signing out.</DialogDescription>
               </DialogHeader>
               <div className="py-4 space-y-4">
-                <div className="space-y-2"><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required className="bg-[#F5F5F5] border-none" /></div>
+                <div className="space-y-2"><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required disabled={isSuperAdminAccount(editing)} className="bg-[#F5F5F5] border-none" /></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Phone</Label><Input value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="bg-[#F5F5F5] border-none" /></div>
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select value={editForm.role} onValueChange={v => setEditForm({ ...editForm, role: v })}>
-                      <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                    {isSuperAdminAccount(editing) ? (
+                      <div className="flex h-10 items-center rounded-md bg-[#F5F5F5] px-3 text-sm font-medium">Super Admin</div>
+                    ) : (
+                      <Select value={editForm.role === 'admin' ? 'pm' : editForm.role} onValueChange={v => setEditForm({ ...editForm, role: v === 'admin' ? 'pm' : v })}>
+                        <SelectTrigger className="bg-[#F5F5F5] border-none"><SelectValue /></SelectTrigger>
+                        <SelectContent>{roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">

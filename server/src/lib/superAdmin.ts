@@ -45,3 +45,18 @@ export async function ensureSuperAdmin(knex: Knex): Promise<void> {
   await knex('users').where({ id: existing.id }).update({ ...updates, updated_at: knex.fn.now() });
   console.log(`ℹ️  Super admin ${SUPER_ADMIN_EMAIL} confirmed as an admin with email-code sign-in.`);
 }
+
+/**
+ * admin@bytzforge.com is the only admin. Anyone else who was given that role
+ * keeps their account and becomes a project manager. Other roles are left as they are.
+ */
+export async function demoteOtherAdmins(knex: Knex): Promise<void> {
+  if (!(await knex.schema.hasTable('users'))) return;
+  const changed = await knex('users')
+    .where({ role: 'admin' })
+    .whereRaw('lower(email) <> ?', [SUPER_ADMIN_EMAIL])
+    .update({ role: 'pm', updated_at: knex.fn.now() });
+  if (Number(changed) > 0) {
+    console.log(`ℹ️  Removed admin access from ${changed} account(s). ${SUPER_ADMIN_EMAIL} remains the only admin.`);
+  }
+}
