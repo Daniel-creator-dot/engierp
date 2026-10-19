@@ -264,10 +264,11 @@ function journalLinesFrom(body: any): JournalLine[] {
     .map((i: any) => ({ account_id: Number(i.account_id), debit: round2(i.debit), credit: round2(i.credit) }));
 }
 
-async function findDuplicateJournal(date: string, description: string, total: number, excludeId?: number | string) {
-  const q = db('journal_entries as j')
+async function findDuplicateJournal(conn: typeof db, date: string, description: string, total: number, excludeId?: number | string) {
+  const q = conn('journal_entries as j')
     .where('j.date', date)
     .whereRaw('LOWER(TRIM(j.description)) = LOWER(TRIM(?))', [description])
+    .where(builder => builder.whereNull('j.status').orWhereNot('j.status', 'reversed'))
     .whereRaw('(SELECT COALESCE(SUM(le.debit), 0) FROM ledger_entries le WHERE le.journal_id = j.id) = ?', [total])
     .select('j.id');
   if (excludeId) q.whereNot('j.id', excludeId);
@@ -282,17 +283,20 @@ router.post('/journal', async (req, res) => {
     const lines = journalLinesFrom(req.body);
     const total = assertBalanced(lines);
 
-    if (!req.body?.force) {
-      const dup = await findDuplicateJournal(date, description, total);
-      if (dup) {
-        return res.status(409).json({ duplicate: true, journal_id: dup.id, message: `Journal #${dup.id} already has the same date, description and amount. Post anyway?` });
+    const lockKey = `manual-journal:${date}:${description.toLowerCase()}:${total.toFixed(2)}`;
+    const posted = await db.transaction(async (trx) => {
+      await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?)::bigint)', [lockKey]);
+      if (!req.body?.force) {
+        const dup = await findDuplicateJournal(trx, date, description, total);
+        if (dup) return { duplicate: dup.id as number };
       }
+      const id = await postJournal(trx, { date, description, reference_type: 'manual', project_id: req.body?.project_id || null, lines });
+      return { id };
+    });
+    if ('duplicate' in posted) {
+      return res.status(409).json({ duplicate: true, journal_id: posted.duplicate, message: `Journal #${posted.duplicate} already has the same date, description and amount. Post anyway?` });
     }
-
-    const journalId = await db.transaction((trx) =>
-      postJournal(trx, { date, description, reference_type: 'manual', project_id: req.body?.project_id || null, lines })
-    );
-    res.status(201).json({ message: 'Journal entry posted successfully', id: journalId });
+    res.status(201).json({ message: 'Journal entry posted successfully', id: posted.id });
   } catch (error) {
     sendError(res, error, 'Error posting journal entry');
   }

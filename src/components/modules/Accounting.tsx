@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Plus,
@@ -227,6 +227,8 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   const [isLedgerLoading, setIsLedgerLoading] = useState(false);
   const [editingJournal, setEditingJournal] = useState<{ date: string; description: string; project_id?: string | null } | null>(null);
   const [journalFormKey, setJournalFormKey] = useState(0);
+  const [postingJournal, setPostingJournal] = useState(false);
+  const journalPostLock = useRef(false);
   const [taxComponents, setTaxComponents] = useState<{ code: string; name: string; rate: number }[]>([]);
   const [invoiceApplyTax, setInvoiceApplyTax] = useState(true);
   const [billPaymentWhtRate, setBillPaymentWhtRate] = useState('0');
@@ -762,6 +764,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
   // General Ledger
   const handlePostJournal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (journalPostLock.current) return;
+    journalPostLock.current = true;
+    setPostingJournal(true);
     const formData = new FormData(e.target as HTMLFormElement);
     const projectId = formData.get('project_id') as string;
     const data: any = {
@@ -794,6 +799,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
       if (activeSub === 'accounting-transactions') fetchLedger();
     } catch (error: any) {
       toast.error(errorText(error, 'Failed to post journal entry'));
+    } finally {
+      journalPostLock.current = false;
+      setPostingJournal(false);
     }
   };
 
@@ -3533,9 +3541,9 @@ export default function Accounting({ activeSub = 'accounting-transactions', user
                   <Button
                     type="submit"
                     className={`h-12 px-8 w-full sm:w-auto rounded-2xl font-black text-white shadow-xl transition-all ${balanced ? 'bg-blue-600 hover:bg-blue-500' : 'bg-white/10 cursor-not-allowed'}`}
-                    disabled={!balanced}
+                    disabled={!balanced || postingJournal}
                   >
-                    {balanced ? (editingJournalId ? 'SEND FOR APPROVAL' : 'AUTHORIZE & POST') : 'LEDGER UNBALANCED'}
+                    {postingJournal ? 'POSTING...' : balanced ? (editingJournalId ? 'SEND FOR APPROVAL' : 'AUTHORIZE & POST') : 'LEDGER UNBALANCED'}
                   </Button>
                 </DialogFooter>
               );
