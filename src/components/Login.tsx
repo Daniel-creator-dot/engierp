@@ -29,10 +29,9 @@ export default function Login() {
   useEffect(() => {
     if (mode !== 'login') return;
     const value = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      setOtpAccount(false);
-      return;
-    }
+    // Drop any previous account's code prompt immediately. Only the super admin email should switch back to a code.
+    setOtpAccount(false);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
@@ -68,15 +67,14 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const address = email.trim().toLowerCase();
-    let useOtp = otpAccount;
-    if (!useOtp) {
-      try {
-        const response = await authApi.loginMethod(address);
-        useOtp = response.data.method === 'otp';
-        setOtpAccount(useOtp);
-      } catch {
-        useOtp = false;
-      }
+    let useOtp = false;
+    try {
+      const response = await authApi.loginMethod(address);
+      useOtp = response.data.method === 'otp';
+      setOtpAccount(useOtp);
+    } catch {
+      useOtp = false;
+      setOtpAccount(false);
     }
     if (useOtp) {
       await requestCode(address);
@@ -187,7 +185,7 @@ export default function Login() {
                 <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-[#8E9299]" /><Input type="email" placeholder="you@company.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 pl-10 bg-[#F5F5F5] border-none rounded-xl" /></div>
               </div>
               {otpAccount ? (
-                <p className="text-sm text-[#8E9299]">This account signs in with a one-time email code. Password sign-in is not used.</p>
+                <p className="text-sm text-[#8E9299]">{email.trim().toLowerCase()} signs in with a one-time email code. Other accounts use a password.</p>
               ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
