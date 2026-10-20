@@ -1323,6 +1323,20 @@ router.post('/appraisals', authenticateToken, authorizeRole(HR_ADMIN), async (re
 
 // Attendance is locked for a worker once pay based on it is approved: the month for staff in an approved monthly
 // run, or the exact period for a casual worker's approved pay.
+async function payrollLockedIds(conn: Conn, date: string, employeeIds: string[]) {
+  if (employeeIds.length === 0) return new Set<string>();
+  const d = new Date(`${date}T00:00:00Z`);
+  const month = MONTHS[d.getUTCMonth()];
+  const locked = await conn('payroll')
+    .whereIn('employee_id', employeeIds)
+    .whereIn('status', ['Approved', 'Paid'])
+    .where(q => q
+      .where(c => c.where('pay_type', 'casual').where('period_start', '<=', date).where('period_end', '>=', date))
+      .orWhere(m => m.whereNull('pay_type').whereNotNull('run_id').where({ month, year: d.getUTCFullYear() })))
+    .select('employee_id');
+  return new Set(locked.map((row: { employee_id: string }) => String(row.employee_id)));
+}
+
 async function assertPayrollOpen(conn: Conn, date: string, employeeIds: string[]) {
   const d = new Date(`${date}T00:00:00Z`);
   const month = MONTHS[d.getUTCMonth()];
@@ -1403,6 +1417,138 @@ router.put('/attendance', authenticateToken, authorizeRole(ATTENDANCE_EDIT), asy
     res.json({ message: `Attendance saved for ${rows.length} employee(s)` });
   } catch (error) {
     handle(res, error, 'Error saving attendance');
+  }
+});
+
+// A filled site timesheet: one row per worker per day. Blank days are not sent.
+// Days already covered by approved pay are skipped; everything else is saved for casual pay.
+router.post('/attendance/import', authenticateToken, authorizeRole(ATTENDANCE_EDIT), async (req: AuthRequest, res) => {
+  try {
+    const raw: any[] = Array.isArray(req.body?.entries) ? req.body.entries : [];
+    if (raw.length === 0) return res.status(400).json({ message: 'The timesheet has no hours to save' });
+    if (raw.length > 2000) return res.status(400).json({ message: 'Upload at most 2,000 day rows at a time' });
+    const today = toIsoDate(null);
+    const problems: { row: number; message: string }[] = [];
+    const pending = raw.map((entry, index) => {
+      const row = Number(entry?.row) || index + 2;
+      const date = String(entry?.date || '').slice(0, 10);
+      const attendance = ATTENDANCE_TYPES.includes(entry?.attendance) ? entry.attendance : 'Present';
+      const worked = attendance === 'Present' || attendance === 'Half Day';
+      const hours = worked ? Number(entry?.hours) || 0 : 0;
+      const overtime = worked ? Number(entry?.overtime_hours) || 0 : 0;
+      if (!isValidIsoDate(date)) problems.push({ row, message: 'Date is missing or not YYYY-MM-DD' });
+      else if (date > today) problems.push({ row, message: `${date} is in the future` });
+      else if (hours < 0 || overtime < 0 || hours > 24 || overtime > 24 || hours + overtime > 24) {
+        problems.push({ row, message: 'Hours and overtime together must be between 0 and 24' });
+      }
+      return {
+        row,
+        employee_id: cleanName(entry?.employee_id),
+        name: cleanName(entry?.name),
+        date,
+        project_id: entry?.project_id ? String(entry.project_id).trim() : null,
+        hours, overtime, attendance,
+        description: entry?.description ? String(entry.description).slice(0, 500) : null,
+      };
+    });
+    if (problems.length) return res.status(400).json({ message: problems[0].message, problems });
+
+    const saved = await db.transaction(async trx => {
+      const employees = await trx('employees').select('id', 'name');
+      const byId = new Map(employees.map((e: { id: string; name: string }) => [String(e.id).toLowerCase(), e]));
+      const byName = new Map<string, { id: string; name: string }>();
+      for (const employee of employees) {
+        const key = cleanName(employee.name).toLowerCase();
+        if (!byName.has(key)) byName.set(key, employee);
+      }
+      const projects = await trx('projects').select('id');
+      const projectIds = new Map(projects.map((p: { id: string }) => [String(p.id).toLowerCase(), String(p.id)]));
+
+      const resolved: {
+        row: number; employee_id: string; name: string; date: string; project_id: string | null;
+        hours: number; overtime: number; attendance: string; description: string | null;
+      }[] = [];
+      for (const entry of pending) {
+        const employee = entry.employee_id ? byId.get(entry.employee_id.toLowerCase()) : byName.get(entry.name.toLowerCase());
+        if (!employee) {
+          problems.push({ row: entry.row, message: entry.employee_id ? `Staff ID ${entry.employee_id} was not found` : `No employee named ${entry.name}` });
+          continue;
+        }
+        let projectId: string | null = null;
+        if (entry.project_id) {
+          projectId = projectIds.get(entry.project_id.toLowerCase()) || null;
+          if (!projectId) {
+            problems.push({ row: entry.row, message: `Project ${entry.project_id} was not found` });
+            continue;
+          }
+        }
+        resolved.push({ ...entry, employee_id: employee.id, name: employee.name, project_id: projectId });
+      }
+      if (problems.length) throw new HttpError(problems[0].message, 400);
+
+      const skipped: { row: number; employee_id: string; name: string; date: string; message: string }[] = [];
+      const accepted = [];
+      const byDate = new Map<string, typeof resolved>();
+      const seen = new Set<string>();
+      for (const entry of resolved) {
+        const stamp = `${entry.employee_id}|${entry.date}|${entry.project_id || ''}`;
+        if (seen.has(stamp)) continue;
+        seen.add(stamp);
+        byDate.set(entry.date, [...(byDate.get(entry.date) || []), entry]);
+      }
+      for (const [date, group] of byDate) {
+        const locked = await payrollLockedIds(trx, date, [...new Set(group.map(e => e.employee_id))]);
+        for (const entry of group) {
+          if (locked.has(entry.employee_id)) {
+            skipped.push({ row: entry.row, employee_id: entry.employee_id, name: entry.name, date, message: `Pay covering ${date} is already approved for ${entry.name}` });
+            continue;
+          }
+          accepted.push(entry);
+        }
+      }
+      for (const entry of accepted) {
+        const del = trx('timesheets').where({ employee_id: entry.employee_id, date: entry.date });
+        if (entry.project_id) del.where({ project_id: entry.project_id });
+        else del.whereNull('project_id');
+        await del.del();
+      }
+      if (accepted.length) {
+        await trx('timesheets').insert(accepted.map(entry => ({
+          employee_id: entry.employee_id,
+          project_id: entry.project_id,
+          date: entry.date,
+          attendance: entry.attendance,
+          hours: entry.hours,
+          overtime_hours: entry.overtime,
+          description: entry.description,
+          status: 'Recorded',
+          recorded_by: req.user?.id ?? null,
+        })));
+      }
+      await logAudit(req, 'import', 'timesheet', null, undefined, {
+        saved: accepted.length,
+        skipped: skipped.length,
+        workers: new Set(accepted.map(e => e.employee_id)).size,
+      }, trx);
+      return { accepted, skipped };
+    });
+
+    if (saved.accepted.length === 0) {
+      return res.status(400).json({
+        message: saved.skipped[0]?.message || 'Nothing in the timesheet could be saved',
+        saved: 0,
+        skipped: saved.skipped,
+      });
+    }
+    const workers = new Set(saved.accepted.map(e => e.employee_id)).size;
+    res.json({
+      message: `Saved ${saved.accepted.length} day${saved.accepted.length === 1 ? '' : 's'} for ${workers} worker${workers === 1 ? '' : 's'}${saved.skipped.length ? `. ${saved.skipped.length} skipped because pay is already approved` : ''}.`,
+      saved: saved.accepted.length,
+      workers,
+      skipped: saved.skipped,
+    });
+  } catch (error) {
+    handle(res, error, 'Error importing the timesheet');
   }
 });
 

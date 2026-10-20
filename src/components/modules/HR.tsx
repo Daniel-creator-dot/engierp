@@ -17,7 +17,7 @@ interface HRProps {
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   'hr-directory': { title: 'Human Capital Management', subtitle: 'Personnel records, statutory data and bank details.' },
   'hr-payroll': { title: 'Payroll', subtitle: 'Monthly runs, statutory deductions and payslips.' },
-  'hr-attendance': { title: 'Attendance & Timesheets', subtitle: 'Daily site and office attendance feeding payroll and project labour cost.' },
+  'hr-attendance': { title: 'Attendance & Timesheets', subtitle: 'Download the weekly site timesheet, upload the hours, then run casual pay.' },
   'hr-leave': { title: 'Leave Management', subtitle: 'Requests, approvals and annual balances.' },
   'hr-performance': { title: 'Performance', subtitle: 'Appraisals and review history.' },
 };

@@ -135,6 +135,7 @@ export const hrApi = {
   getAttendanceRoster: () => api.get('/hr/attendance/roster'),
   getAttendance: (date: string, projectId?: string) => api.get('/hr/attendance', { params: { date, project_id: projectId || undefined } }),
   saveAttendance: (data: { date: string; project_id?: string | null; entries: any[] }) => api.put('/hr/attendance', data),
+  importAttendance: (data: { entries: any[] }) => api.post('/hr/attendance/import', data),
   getAttendanceSummary: (month: string, year: number) => api.get('/hr/attendance/summary', { params: { month, year } }),
 };
 

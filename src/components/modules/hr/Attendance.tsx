@@ -29,6 +29,7 @@ import { MONTHS } from '../../../lib/payrollCalc';
 import { formatDate, todayIso } from '../../../lib/dates';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { AttendanceRow, Employee, Setting } from './types';
+import SiteTimesheet from './SiteTimesheet';
 import {
   ATTENDANCE_EDIT_ROLES,
   ATTENDANCE_VIEW_ROLES,
@@ -136,6 +137,7 @@ export default function Attendance() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [roster, setRoster] = useState<RosterEmployee[]>([]);
   const [standardHours, setStandardHours] = useState(8);
+  const [casualDayHours, setCasualDayHours] = useState(8);
   const [symbol, setSymbol] = useState('GH₵');
 
   const [date, setDate] = useState(todayIso());
@@ -170,6 +172,8 @@ export default function Attendance() {
           const config = JSON.parse(getSetting(settings, 'payroll_config') || '{}');
           const hrs = Number(config?.standard_hours_per_day);
           if (hrs > 0 && hrs <= 24) setStandardHours(hrs);
+          const casualHrs = Number(config?.casual_hours_per_day);
+          if (casualHrs > 0 && casualHrs <= 24) setCasualDayHours(casualHrs);
         } catch {
           // Malformed payroll config: keep the 8-hour default.
         }
@@ -436,7 +440,7 @@ export default function Attendance() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-[#141414]">Attendance & timesheets</h2>
-          <p className="text-sm text-[#8E9299]">Daily site and office register, with monthly hours and labour cost.</p>
+          <p className="text-sm text-[#8E9299]">Daily register, or a weekly site timesheet that fills hours for casual pay.</p>
         </div>
         <TabsList className="bg-white rounded-xl shadow-sm h-11">
           <TabsTrigger value="register" className="rounded-lg">Daily register</TabsTrigger>
@@ -445,6 +449,14 @@ export default function Attendance() {
       </div>
 
       <TabsContent value="register" className="space-y-6 mt-0">
+        <SiteTimesheet
+          canEdit={canEdit}
+          projects={projects}
+          roster={roster}
+          fullDay={casualDayHours}
+          initialDate={date}
+          onImported={loadSheet}
+        />
         <Card className="border-none shadow-sm rounded-2xl">
           <CardContent className="p-5 grid gap-4 md:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
             <div className="grid gap-2">
