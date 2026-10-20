@@ -15,6 +15,7 @@ import {
   PERIOD_LOCK_KEY,
 } from '../lib/ledger';
 import { CREDIT_NOTE_METHOD, getAccountingConfig, getSettingValue, openingEquityAccount, pick, saveSettingValue, statusFor } from '../lib/accounting';
+import { duplicateName, lockName } from '../lib/uniqueName';
 import { createInvoice, recordPayment } from '../lib/accountingDocs';
 import { createBillWithApprovalLimit, createRequest, notifyAdminsOfRequest, pendingRequestMap } from '../lib/approvals';
 import reportsRouter from './accounting-reports';
@@ -218,9 +219,15 @@ function validateAccountFields(data: any, partial: boolean) {
 router.post('/coa', async (req, res) => {
   try {
     const data = validateAccountFields(pick(req.body, ['code', 'name', 'type'] as const), false);
-    const clash = await db('chart_of_accounts').where({ code: data.code }).first();
-    if (clash) throw new LedgerError(`Account code ${data.code} is already used by ${clash.name}`);
-    const [created] = await db('chart_of_accounts').insert({ ...data, balance: 0 }).returning('*');
+    const created = await db.transaction(async trx => {
+      await lockName(trx, `coa:${data.type}`, data.name);
+      const codeClash = await trx('chart_of_accounts').where({ code: data.code }).first();
+      if (codeClash) throw new LedgerError(`Account code ${data.code} is already used by ${codeClash.name}`);
+      const nameClash = await duplicateName(trx, 'chart_of_accounts', data.name, { type: data.type });
+      if (nameClash) throw new LedgerError(nameClash, 409);
+      const [row] = await trx('chart_of_accounts').insert({ ...data, balance: 0 }).returning('*');
+      return row;
+    });
     res.status(201).json(created);
   } catch (error) {
     sendError(res, error, 'Error creating account');
@@ -232,9 +239,18 @@ router.patch('/coa/:id', async (req, res) => {
     const { id } = req.params;
     const data = validateAccountFields(pick(req.body, ['code', 'name', 'type'] as const), true);
     if (Object.keys(data).length === 0) throw new LedgerError('Nothing to update');
+    const existing = await db('chart_of_accounts').where({ id }).first();
+    if (!existing) throw new LedgerError('Account not found', 404);
     if (data.code) {
       const clash = await db('chart_of_accounts').where({ code: data.code }).whereNot({ id }).first();
       if (clash) throw new LedgerError(`Account code ${data.code} is already used by ${clash.name}`);
+    }
+    if (data.name || data.type) {
+      const nameClash = await duplicateName(db, 'chart_of_accounts', data.name || existing.name, {
+        type: data.type || existing.type,
+        excludeId: id,
+      });
+      if (nameClash) throw new LedgerError(nameClash, 409);
     }
     await db('chart_of_accounts').where({ id }).update({ ...data, updated_at: db.fn.now() });
     res.json({ message: 'Account updated' });

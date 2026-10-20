@@ -9,6 +9,8 @@ import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { sendSMS, isSmsConfigured, normalizePhone } from '../utils/sms';
 import { SUPER_ADMIN_EMAIL } from '../lib/superAdmin';
+import { LedgerError } from '../lib/ledger';
+import { cleanName, lockName, personNameClash } from '../lib/uniqueName';
 
 const router = Router();
 
@@ -23,7 +25,7 @@ const USER_FIELDS = [
 const loadUser = (id: number | string) => db('users')
   .leftJoin('employees', 'users.employee_id', 'employees.id')
   .where('users.id', id)
-  .first([...USER_FIELDS, db.raw('coalesce(employees.name, users.name) as name'), 'employees.department as department']);
+  .first([...USER_FIELDS, 'users.name', 'employees.name as employee_name', 'employees.department as department']);
 
 const isSuperAdminEmail = (email: unknown) => String(email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL;
 const requesterIsSuperAdmin = (req: AuthRequest) => isSuperAdminEmail(req.user?.email);
@@ -53,7 +55,7 @@ router.get('/', authenticateToken, authorizeRole(['admin', 'hr']), async (_req, 
   try {
     const users = await db('users')
       .leftJoin('employees', 'users.employee_id', 'employees.id')
-      .select([...USER_FIELDS, db.raw('coalesce(employees.name, users.name) as name'), 'employees.department as department'])
+      .select([...USER_FIELDS, 'users.name', 'employees.name as employee_name', 'employees.department as department'])
       .orderBy('users.email');
     res.json(users);
   } catch (error) {
@@ -66,7 +68,7 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = req.body?.role;
   const phone = String(req.body?.phone || '').trim();
-  const name = String(req.body?.name || '').trim();
+  const name = cleanName(req.body?.name);
   const department = String(req.body?.department || '').trim() || 'General';
   const linkEmployeeId = String(req.body?.employee_id || '').trim();
 
@@ -93,11 +95,20 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
 
     const created = await db.transaction(async trx => {
       let employeeId = linkEmployeeId;
+      let accountName = name;
+      if (employeeId && !accountName) {
+        const linkedEmployee = await trx('employees').where({ id: employeeId }).first('name');
+        accountName = cleanName(linkedEmployee?.name) || email.split('@')[0];
+      }
+      if (!accountName) accountName = email.split('@')[0];
+      await lockName(trx, 'person', accountName);
+      const clash = await personNameClash(trx, accountName, { employeeId: employeeId || null });
+      if (clash) throw new LedgerError(clash, 409);
       if (!employeeId) {
         employeeId = await newEmployeeId();
         await trx('employees').insert({
           id: employeeId,
-          name: name || email.split('@')[0],
+          name: accountName,
           role: role.toUpperCase(),
           department,
           salary: 0,
@@ -110,7 +121,7 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
         email,
         role,
         phone: phone || null,
-        name: name || email.split('@')[0],
+        name: accountName,
         password: hashedPassword,
         employee_id: employeeId,
         must_change_password: true,
@@ -133,6 +144,7 @@ router.post('/', authenticateToken, authorizeRole(['admin', 'hr']), async (req: 
       message: smsSent ? 'User created; the temporary password was also sent by SMS.' : 'User created. Share the temporary password with them securely.',
     });
   } catch (error) {
+    if (error instanceof LedgerError) return res.status(error.status).json({ message: error.message });
     console.error('POST /settings/users failed:', error);
     res.status(500).json({ message: 'Error creating user' });
   }

@@ -5,6 +5,7 @@ import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/aut
 import { pick, orNull } from '../utils/pick';
 import { LedgerError, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
 import { payableAccount } from '../lib/accounting';
+import { duplicateName, lockName } from '../lib/uniqueName';
 import { afterBillCreated, billNeedsApproval, notifyAdminsOfRequest } from '../lib/approvals';
 
 const router = Router();
@@ -73,8 +74,14 @@ router.post('/suppliers', authenticateToken, authorizeRole(BUYER_ROLES), async (
   try {
     const data = cleanSupplier(req.body);
     if (!data.name || !data.category) return res.status(400).json({ message: 'Supplier name and category are required' });
-    const id = await nextCode(db, 'suppliers', 'SUP-');
-    await db('suppliers').insert({ id, rating: 0, ...data });
+    const id = await db.transaction(async trx => {
+      await lockName(trx, 'suppliers', data.name);
+      const clash = await duplicateName(trx, 'suppliers', data.name);
+      if (clash) throw httpError(clash, 409);
+      const newId = await nextCode(trx, 'suppliers', 'SUP-');
+      await trx('suppliers').insert({ id: newId, rating: 0, ...data });
+      return newId;
+    });
     res.status(201).json({ id, message: 'Supplier registered' });
   } catch (error) {
     sendError(res, error, 'Error registering supplier');
@@ -86,6 +93,10 @@ router.patch('/suppliers/:id', authenticateToken, authorizeRole(BUYER_ROLES), as
     const updates = cleanSupplier(req.body);
     if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Nothing to update' });
     if (updates.name === '' || updates.category === '') return res.status(400).json({ message: 'Supplier name and category cannot be blank' });
+    if (updates.name) {
+      const clash = await duplicateName(db, 'suppliers', updates.name, { excludeId: req.params.id });
+      if (clash) return res.status(409).json({ message: clash });
+    }
     const count = await db('suppliers').where({ id: req.params.id }).update({ ...updates, updated_at: db.fn.now() });
     if (!count) return res.status(404).json({ message: 'Supplier not found' });
     res.json({ message: 'Supplier updated' });
@@ -242,6 +253,9 @@ router.post('/inventory', authenticateToken, authorizeRole(STOCK_ROLES), async (
     if (!Number.isFinite(opening) || opening < 0) return res.status(400).json({ message: 'Opening quantity must be zero or more' });
 
     const id = await db.transaction(async (trx) => {
+      await lockName(trx, 'inventory', data.name);
+      const clash = await duplicateName(trx, 'inventory_items', data.name);
+      if (clash) throw httpError(clash, 409);
       const newId = await nextCode(trx, 'inventory_items', 'STK-');
       await trx('inventory_items').insert({ id: newId, category: 'Materials', reorder_level: 10, ...data, quantity: 0 });
       if (opening > 0) {
@@ -263,6 +277,10 @@ router.patch('/inventory/:id', authenticateToken, authorizeRole(STOCK_ROLES), as
     const updates = cleanInventory(req.body);
     if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Nothing to update. Change quantities with a stock movement.' });
     if (updates.name === '' || updates.unit === '') return res.status(400).json({ message: 'Item name and unit cannot be blank' });
+    if (updates.name) {
+      const clash = await duplicateName(db, 'inventory_items', updates.name, { excludeId: req.params.id });
+      if (clash) return res.status(409).json({ message: clash });
+    }
     const count = await db('inventory_items').where({ id: req.params.id }).update({ ...updates, updated_at: db.fn.now() });
     if (!count) return res.status(404).json({ message: 'Inventory item not found' });
     res.json({ message: 'Inventory item updated' });

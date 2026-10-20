@@ -6,6 +6,7 @@ import { sendSMS } from '../utils/sms';
 import { logAudit } from '../lib/audit';
 import { notify } from '../lib/notify';
 import { Conn, LedgerError, reverseJournal, round2, sendError, toIsoDate } from '../lib/ledger';
+import { cleanName, lockName, personNameClash } from '../lib/uniqueName';
 import {
   casualOvertimeRate, casualRowValues, effectiveTaxTreatment, isCasualWage, loadPayrollAccounts, loadPayrollConfig,
   parseBreakdown, parseItems, payrollRowValues, postPayroll,
@@ -72,7 +73,11 @@ function assertPeriod(month: unknown, year: unknown) {
 const isUniqueViolation = (error: any) => error?.code === '23505';
 
 function handle(res: Response, error: any, fallback: string) {
-  if (isUniqueViolation(error)) return res.status(409).json({ message: 'That record already exists for this period.' });
+  if (isUniqueViolation(error)) {
+    const constraint = String(error?.constraint || '');
+    if (constraint.includes('name')) return res.status(409).json({ message: 'That name is already on file. Use the existing record instead of adding it again.' });
+    return res.status(409).json({ message: 'That record already exists for this period.' });
+  }
   return sendError(res, error, fallback);
 }
 
@@ -95,6 +100,7 @@ function normaliseEmployee(data: Record<string, any>, partial: boolean): string 
   for (const key of Object.keys(data)) {
     if (typeof data[key] === 'string') data[key] = data[key].trim();
   }
+  if (typeof data.name === 'string') data.name = cleanName(data.name);
   for (const field of REQUIRED_EMPLOYEE_FIELDS) {
     if ((!partial || field in data) && !data[field]) return `${field === 'joinDate' ? 'Commencement date' : field[0].toUpperCase() + field.slice(1)} is required`;
   }
@@ -192,6 +198,9 @@ router.post('/employees', authenticateToken, authorizeRole(HR_ADMIN), async (req
     const error = normaliseEmployee(employee, false) || checkEmployeeDateOrder(employee);
     if (error) return res.status(400).json({ message: error });
     const created = await db.transaction(async trx => {
+      await lockName(trx, 'employees', String(employee.name));
+      const clash = await personNameClash(trx, String(employee.name));
+      if (clash) throw new HttpError(clash, 409);
       const id = await nextEmployeeId(trx);
       await trx('employees').insert({ ...employee, id });
       await logAudit(req, 'create', 'employee', id, undefined, employee, trx);
@@ -238,10 +247,12 @@ router.patch('/employees/:id', authenticateToken, authorizeRole(HR_ADMIN), async
     if (error) return res.status(400).json({ message: error });
     if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Nothing to update' });
     await db.transaction(async trx => {
-      await trx('employees').where({ id }).update({ ...updates, updated_at: trx.fn.now() });
-      if (typeof updates.name === 'string' && updates.name.trim()) {
-        await trx('users').where({ employee_id: id }).update({ name: updates.name.trim(), updated_at: trx.fn.now() });
+      if (typeof updates.name === 'string' && cleanName(updates.name).toLowerCase() !== cleanName(existing.name).toLowerCase()) {
+        await lockName(trx, 'employees', updates.name);
+        const clash = await personNameClash(trx, updates.name, { employeeId: id });
+        if (clash) throw new HttpError(clash, 409);
       }
+      await trx('employees').where({ id }).update({ ...updates, updated_at: trx.fn.now() });
     });
     logAudit(req, 'update', 'employee', id, pick(existing, Object.keys(updates)), updates);
     res.json({ message: 'Employee file updated' });
@@ -260,7 +271,8 @@ router.post('/employees/bulk', authenticateToken, authorizeRole(HR_ADMIN), async
     const existing = await db('employees').select('name', 'ssnit', 'ghana_card');
     const seenSsnit = new Map<string, string>(existing.filter(e => e.ssnit).map(e => [normaliseSsnit(e.ssnit), `existing employee ${e.name}`]));
     const seenCard = new Map<string, string>(existing.filter(e => e.ghana_card).map(e => [String(e.ghana_card).toUpperCase(), `existing employee ${e.name}`]));
-    const existingNames = new Set(existing.map(e => String(e.name).trim().toLowerCase()));
+    const existingNames = new Set(existing.map(e => cleanName(e.name).toLowerCase()));
+    const loginNames = await db('users').whereNotNull('name').select('name', 'email');
 
     const results = rows.map((raw, index) => {
       const data = pick(raw || {}, EMPLOYEE_FIELDS);
@@ -278,7 +290,11 @@ router.post('/employees/bulk', authenticateToken, authorizeRole(HR_ADMIN), async
         if (seenCard.has(key)) errors.push(`Ghana Card ID already used by ${seenCard.get(key)}`);
         else seenCard.set(key, `row ${index + 2}`);
       }
-      if (data.name && existingNames.has(String(data.name).toLowerCase())) warnings.push('An employee with this name already exists');
+      const nameKey = cleanName(data.name).toLowerCase();
+      if (nameKey && existingNames.has(nameKey)) errors.push('An employee with this name already exists');
+      else if (nameKey) existingNames.add(nameKey);
+      const login = nameKey ? loginNames.find(u => cleanName(u.name).toLowerCase() === nameKey) : undefined;
+      if (login) errors.push(`That name is already used by the login ${login.email}`);
       if (!data.ssnit && data.wage_type !== 'Daily') warnings.push('No SSNIT number');
       if (data.wage_type === 'Daily' && Number(data.salary) > 1000) warnings.push('Daily rate above GH₵ 1,000 looks like a monthly salary');
       if (data.wage_type === 'Hourly' && Number(data.salary) > 500) warnings.push('Hourly rate above GH₵ 500 looks like a monthly salary');

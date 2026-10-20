@@ -40,6 +40,7 @@ interface ManagedUser {
   phone?: string | null;
   employee_id?: string | null;
   name?: string | null;
+  employee_name?: string | null;
   department?: string | null;
   is_active: boolean;
   must_change_password: boolean;
@@ -224,6 +225,7 @@ export default function UserManagement() {
                       <p className="font-bold truncate">{u.name || u.email}</p>
                       <p className="text-xs text-[#8E9299] truncate">
                         {u.name ? `${u.email} · ` : ''}{u.phone || 'No phone'}{u.employee_id ? ` · ${u.employee_id}` : ''}
+                        {u.employee_name && u.employee_name.trim().toLowerCase() !== (u.name || '').trim().toLowerCase() ? ` · Staff file: ${u.employee_name}` : ''}
                       </p>
                       <p className="text-[11px] text-[#8E9299]">
                         {u.last_login_at ? `Last sign-in ${formatDistanceToNow(new Date(u.last_login_at), { addSuffix: true })}` : 'Never signed in'}

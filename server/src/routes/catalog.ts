@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Knex } from 'knex';
 import db from '../db';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
+import { duplicateName, lockName } from '../lib/uniqueName';
 
 const router = Router();
 
@@ -230,9 +231,20 @@ router.post('/services', authenticateToken, authorizeRole(MANAGERS), async (req,
     if (!data.name) return res.status(400).json({ message: 'Service name is required' });
     if (data.default_price < 0) return res.status(400).json({ message: 'Default price cannot be negative' });
 
-    const [inserted] = await db('services').insert({ ...data, is_active: true }).returning('*');
+    const inserted = await db.transaction(async trx => {
+      await lockName(trx, 'services', data.name);
+      const clash = await duplicateName(trx, 'services', data.name);
+      if (clash) {
+        const error: any = new Error(clash);
+        error.status = 409;
+        throw error;
+      }
+      const [row] = await trx('services').insert({ ...data, is_active: true }).returning('*');
+      return row;
+    });
     res.status(201).json(inserted);
   } catch (error: any) {
+    if (error?.status === 409) return res.status(409).json({ message: error.message });
     if (isUniqueViolation(error)) return res.status(409).json({ message: 'A service with this name already exists' });
     console.error('Error creating service:', error);
     res.status(500).json({ message: 'Error creating service' });
@@ -244,6 +256,10 @@ router.patch('/services/:id', authenticateToken, authorizeRole(MANAGERS), async 
     const data = readServiceBody(req.body);
     if (data.name === '') return res.status(400).json({ message: 'Service name is required' });
     if (data.default_price < 0) return res.status(400).json({ message: 'Default price cannot be negative' });
+    if (data.name) {
+      const clash = await duplicateName(db, 'services', data.name, { excludeId: Number(req.params.id) });
+      if (clash) return res.status(409).json({ message: clash });
+    }
 
     const [updated] = await db('services')
       .where({ id: req.params.id })

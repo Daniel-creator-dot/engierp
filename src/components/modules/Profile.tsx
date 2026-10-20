@@ -130,11 +130,13 @@ export default function Profile() {
   }, [leave]);
 
   if (!user) return null;
-  const displayName = (employee?.name || personName(user)).trim();
+  const displayName = personName(user);
+  const staffName = (employee?.name || '').trim();
+  const staffNameDiffers = Boolean(staffName) && staffName.toLowerCase() !== displayName.toLowerCase();
   const currency = company.currency || 'GHS';
 
   const openEdit = () => {
-    setEditForm({ name: employee?.name || user.name || '', phone: user.phone || employee?.phone || '', email: user.email });
+    setEditForm({ name: user.name || '', phone: user.phone || '', email: user.email });
     setEditOpen(true);
   };
 
@@ -142,11 +144,9 @@ export default function Profile() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload: { name?: string; phone?: string; email?: string } = { phone: editForm.phone, email: editForm.email };
-      if (employee) payload.name = editForm.name;
+      const payload = { name: editForm.name, phone: editForm.phone, email: editForm.email };
       const res = await authApi.updateProfile(payload);
       applySession(res.data.token, res.data.user);
-      if (employee) setEmployee({ ...employee, name: editForm.name, phone: editForm.phone });
       setEditOpen(false);
       toast.success('Profile updated');
     } catch (error) {
@@ -240,6 +240,7 @@ export default function Profile() {
               <div className="space-y-1">
                 <Badge className="bg-blue-100 text-blue-700 border-none font-bold px-3">{user.email.trim().toLowerCase() === 'admin@bytzforge.com' ? 'SUPER ADMIN' : user.role.toUpperCase()}</Badge>
                 <h1 className="text-3xl md:text-4xl font-black text-[#141414] tracking-tight truncate">{displayName}</h1>
+                {staffNameDiffers && <p className="text-sm text-[#8E9299]">Staff file: {staffName}</p>}
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1 text-[#8E9299]">
                   <span className="flex items-center gap-2"><Mail className="w-4 h-4" />{user.email}</span>
                   {user.phone && <span className="flex items-center gap-2"><Phone className="w-4 h-4" />{user.phone}</span>}
@@ -379,12 +380,10 @@ export default function Profile() {
           <form onSubmit={saveProfile}>
             <DialogHeader>
               <DialogTitle>Edit Profile</DialogTitle>
-              <DialogDescription>Changing your email changes the address you sign in with.</DialogDescription>
+              <DialogDescription>This updates your sign-in name only. HR keeps the employee file.</DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
-              {employee && (
-                <div className="space-y-2"><Label>Full name</Label><Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required className="bg-[#F5F5F5] border-none rounded-xl" /></div>
-              )}
+              <div className="space-y-2"><Label>Full name</Label><Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required className="bg-[#F5F5F5] border-none rounded-xl" /></div>
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required className="bg-[#F5F5F5] border-none rounded-xl" /></div>
               <div className="space-y-2">
                 <Label>Phone</Label>

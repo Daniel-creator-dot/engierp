@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Knex } from 'knex';
 import db from '../db';
+import { duplicateName, lockName } from '../lib/uniqueName';
 import { authenticateToken, authorizeRole, AuthRequest } from '../middleware/auth';
 import { pick, orNull } from '../utils/pick';
 
@@ -128,22 +129,35 @@ router.post('/', authenticateToken, authorizeRole(['pm', 'accountant', 'admin'])
     const data = cleanProject(req.body);
     if (!data.name || !data.client) return res.status(400).json({ message: 'Project name and client are required' });
 
-    const existing = await db('projects').where({ id }).first();
-    if (existing) return res.status(409).json({ message: `Project code ${id} is already in use` });
-
-    const project = {
-      id,
-      ...data,
-      status: data.status || 'Planning',
-      budget: data.budget ?? 0,
-      startDate: data.startDate || new Date().toISOString().slice(0, 10),
-      endDate: data.endDate || 'TBD',
-      manager: data.manager || req.user?.email || 'Unassigned',
-    };
-    await db('projects').insert(project);
+    const project = await db.transaction(async trx => {
+      await lockName(trx, 'projects', data.name);
+      const existing = await trx('projects').where({ id }).first();
+      if (existing) {
+        const error: any = new Error(`Project code ${id} is already in use`);
+        error.status = 409;
+        throw error;
+      }
+      const nameClash = await duplicateName(trx, 'projects', data.name);
+      if (nameClash) {
+        const error: any = new Error(nameClash);
+        error.status = 409;
+        throw error;
+      }
+      const row = {
+        id,
+        ...data,
+        status: data.status || 'Planning',
+        budget: data.budget ?? 0,
+        startDate: data.startDate || new Date().toISOString().slice(0, 10),
+        endDate: data.endDate || 'TBD',
+        manager: data.manager || req.user?.email || 'Unassigned',
+      };
+      await trx('projects').insert(row);
+      return row;
+    });
     res.status(201).json(project);
   } catch (error: any) {
-    if (error.status === 400) return res.status(400).json({ message: error.message });
+    if (error.status === 400 || error.status === 409) return res.status(error.status).json({ message: error.message });
     console.error('Error creating project:', error);
     res.status(500).json({ message: 'Error creating project' });
   }
@@ -155,6 +169,10 @@ router.patch('/:id', authenticateToken, authorizeRole(['pm', 'accountant', 'admi
     const { id } = req.params;
     const updates = cleanProject(req.body);
     if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'Nothing to update' });
+    if (updates.name) {
+      const nameClash = await duplicateName(db, 'projects', updates.name, { excludeId: id });
+      if (nameClash) return res.status(409).json({ message: nameClash });
+    }
     const count = await db('projects').where({ id }).update({ ...updates, updated_at: db.fn.now() });
     if (!count) return res.status(404).json({ message: 'Project not found' });
     res.json({ message: 'Project updated' });

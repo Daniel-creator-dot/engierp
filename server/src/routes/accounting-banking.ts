@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db';
 import { LedgerError, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
 import { bankLedgerAccount, pick } from '../lib/accounting';
+import { duplicateName } from '../lib/uniqueName';
 
 // Mounted inside routes/accounting.ts, which already enforces admin/accountant access.
 const router = Router();
@@ -47,9 +48,12 @@ router.post('/bank-accounts', async (req, res) => {
       let coaId = await validateCoaLink(data.coa_account_id);
       if (!coaId) {
         const last4 = String(data.account_number || '').slice(-4);
+        const ledgerName = `Bank – ${data.bank_name}${last4 ? ` ${last4}` : ''}`;
+        const nameClash = await duplicateName(trx, 'chart_of_accounts', ledgerName, { type: 'Asset' });
+        if (nameClash) throw new LedgerError(nameClash, 409);
         const [acc] = await trx('chart_of_accounts').insert({
           code: await nextBankCode(),
-          name: `Bank – ${data.bank_name}${last4 ? ` ${last4}` : ''}`,
+          name: ledgerName,
           type: 'Asset',
           balance: 0,
         }).returning('*');

@@ -10,6 +10,7 @@ import { authenticateToken, invalidateUserCache, AuthRequest } from '../middlewa
 import { getJwtSecret } from '../lib/secrets';
 import { validatePassword, hashToken, tokenMatches, PASSWORD_POLICY } from '../lib/passwords';
 import { logAudit } from '../lib/audit';
+import { cleanName, personNameClash } from '../lib/uniqueName';
 import { notify } from '../lib/notify';
 import { usesEmailOtp } from '../lib/superAdmin';
 
@@ -38,18 +39,18 @@ const signToken = (user: any) => jwt.sign(
   { expiresIn: '24h' }
 );
 
-const storedName = (employee?: any, user?: any) => {
-  const name = String(employee?.name || user?.name || '').trim();
+const storedName = (user?: any) => {
+  const name = cleanName(user?.name);
   return name || null;
 };
 
-const publicUser = (user: any, employee?: any) => ({
+const publicUser = (user: any, _employee?: any) => ({
   id: user.id,
   email: user.email,
   role: user.role,
   phone: user.phone,
   employee_id: user.employee_id,
-  name: storedName(employee, user),
+  name: storedName(user),
   // An email-code account never sits behind the password-change wall.
   must_change_password: !!user.must_change_password && !usesEmailOtp(user),
   otp_login: usesEmailOtp(user),
@@ -184,7 +185,7 @@ router.get('/profile', authenticateToken, async (req: AuthRequest, res) => {
 });
 
 router.patch('/profile', authenticateToken, async (req: AuthRequest, res) => {
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
+  const name = typeof req.body?.name === 'string' ? cleanName(req.body.name) : undefined;
   const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : undefined;
 
@@ -204,18 +205,16 @@ router.patch('/profile', authenticateToken, async (req: AuthRequest, res) => {
     const userUpdates: Record<string, any> = {};
     if (email !== undefined) userUpdates.email = email;
     if (phone !== undefined) userUpdates.phone = phone || null;
-    if (name !== undefined) userUpdates.name = name;
-    const employeeUpdates: Record<string, any> = {};
-    if (name !== undefined) employeeUpdates.name = name;
-    if (phone !== undefined) employeeUpdates.phone = phone || null;
+    if (name !== undefined) {
+      const clash = await personNameClash(db, name, { employeeId: user.employee_id, userId: user.id });
+      if (clash) return res.status(409).json({ message: clash });
+      userUpdates.name = name;
+    }
 
     const before = { email: user.email, phone: user.phone, name: user.name };
     await db.transaction(async trx => {
       if (Object.keys(userUpdates).length) await trx('users').where({ id: user.id }).update({ ...userUpdates, updated_at: trx.fn.now() });
-      if (user.employee_id && Object.keys(employeeUpdates).length) {
-        await trx('employees').where({ id: user.employee_id }).update({ ...employeeUpdates, updated_at: trx.fn.now() });
-      }
-      await logAudit(req, 'profile_updated', 'user', user.id, before, { ...userUpdates, ...employeeUpdates }, trx);
+      await logAudit(req, 'profile_updated', 'user', user.id, before, userUpdates, trx);
     });
     invalidateUserCache(user.id);
 

@@ -6,6 +6,7 @@ import { pick, orNull } from '../utils/pick';
 import { LedgerError, deleteJournal, postJournal, round2, sendError, toIsoDate } from '../lib/ledger';
 import { pickAccount, type AccountSpec } from '../lib/accountIdentity';
 import { logAudit } from '../lib/audit';
+import { duplicateName, lockName } from '../lib/uniqueName';
 
 const router = Router();
 
@@ -259,6 +260,9 @@ router.post('/', authenticateToken, authorizeRole(FINANCE_ROLES), async (req: Au
       return res.status(400).json({ message: 'Residual value cannot be more than the cost' });
     }
     const id = await db.transaction(async (trx) => {
+      await lockName(trx, 'equipment', data.name);
+      const clash = await duplicateName(trx, 'equipment', data.name);
+      if (clash) throw httpError(clash, 409);
       const newId = await nextEquipmentId(trx);
       await trx('equipment').insert({ status: 'Available', ...data, id: newId, accumulated_depreciation: 0 });
       return newId;
@@ -286,6 +290,10 @@ router.patch('/:id', authenticateToken, authorizeRole(FINANCE_ROLES), async (req
       }
       const cost = updates.initial_cost ?? Number(asset.initial_cost || 0);
       const residual = updates.residual_value ?? Number(asset.residual_value || 0);
+      if (updates.name) {
+        const clash = await duplicateName(trx, 'equipment', updates.name, { excludeId: asset.id });
+        if (clash) throw httpError(clash, 409);
+      }
       if (residual > cost) throw httpError('Residual value cannot be more than the cost');
       if (cost < Number(asset.accumulated_depreciation || 0)) {
         throw httpError('Cost cannot be less than the depreciation already charged');
